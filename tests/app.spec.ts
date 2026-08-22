@@ -1,0 +1,152 @@
+import { test, expect, type Page } from '@playwright/test';
+
+// Start each test on a clean slate: local mode + empty storage.
+test.beforeEach(async ({ page }) => {
+  page.on('dialog', (d) => d.accept()); // auto-accept the delete confirm()
+  await page.goto('/?local');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await expect(page.getByTestId('open-settings')).toBeVisible(); // app mounted
+});
+
+/** Create a note and return the ProseMirror editor locator. */
+async function createNote(page: Page) {
+  await page.getByTestId('new-note').click();
+  await expect(page.getByTestId('note-pane')).toBeVisible();
+  return page.locator('.ProseMirror');
+}
+
+async function typeInEditor(page: Page, text: string) {
+  const pm = page.locator('.ProseMirror');
+  await pm.click();
+  await pm.pressSequentially(text);
+}
+
+test('starts with an empty state', async ({ page }) => {
+  await expect(page.getByTestId('empty-state')).toBeVisible();
+  await expect(page.getByTestId('pane-empty')).toBeVisible();
+  await expect(page.getByTestId('note-item')).toHaveCount(0);
+});
+
+test('creates a note and opens the editor', async ({ page }) => {
+  await createNote(page);
+  await expect(page.getByTestId('note-item')).toHaveCount(1);
+  await expect(page.getByTestId('pane-empty')).toBeHidden();
+  await expect(page.locator('.ProseMirror')).toBeVisible();
+});
+
+test('typing a title updates the sidebar live (reactivity regression)', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Groceries');
+  await expect(page.getByTestId('note-title')).toHaveText('Groceries');
+});
+
+test('typing in the editor is reflected and previewed in the sidebar', async ({ page }) => {
+  await createNote(page);
+  await typeInEditor(page, 'buy milk');
+  await expect(page.locator('.ProseMirror')).toContainText('buy milk');
+  await expect(page.getByTestId('note-title')).toHaveText('buy milk');
+});
+
+test('bold formatting wraps the selection', async ({ page }) => {
+  await createNote(page);
+  await typeInEditor(page, 'important');
+  await page.locator('.ProseMirror').press('ControlOrMeta+a');
+  await page.getByTestId('fmt-bold').click();
+  await expect(page.locator('.ProseMirror strong')).toHaveText('important');
+});
+
+test('italic and underline apply', async ({ page }) => {
+  await createNote(page);
+  await typeInEditor(page, 'styled');
+  await page.locator('.ProseMirror').press('ControlOrMeta+a');
+  await page.getByTestId('fmt-italic').click();
+  await page.getByTestId('fmt-underline').click();
+  await expect(page.locator('.ProseMirror em')).toHaveCount(1);
+  await expect(page.locator('.ProseMirror u')).toHaveCount(1);
+});
+
+test('bullet list toggles', async ({ page }) => {
+  await createNote(page);
+  await typeInEditor(page, 'item one');
+  await page.getByTestId('fmt-bullet').click();
+  await expect(page.locator('.ProseMirror ul li')).toHaveCount(1);
+});
+
+test('changing palette updates the note color live (the frozen-UI bug)', async ({ page }) => {
+  await createNote(page);
+  const pane = page.getByTestId('note-pane');
+  await expect(pane).toHaveAttribute('data-palette', 'sunflower');
+  await page.locator('[data-testid="palette-chip"][data-palette="mint"]').click();
+  await expect(pane).toHaveAttribute('data-palette', 'mint');
+  // Mint bg (#CFF3E1) actually paints:
+  await expect(pane).toHaveCSS('background-color', 'rgb(207, 243, 225)');
+  // And the sidebar swatch recolors too:
+  await expect(page.getByTestId('note-swatch')).toHaveCSS('background-color', 'rgb(207, 243, 225)');
+});
+
+test('base font-size slider updates its readout', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('size-slider').fill('28');
+  await expect(page.getByTestId('size-value')).toHaveText('28');
+});
+
+test('opacity slider updates its readout', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('opacity-slider').fill('0.5');
+  await expect(page.getByTestId('opacity-value')).toHaveText('50%');
+});
+
+test('pinning a note marks it active in the list', async ({ page }) => {
+  await createNote(page);
+  const pin = page.getByTestId('note-pin');
+  await expect(pin).not.toHaveClass(/on/);
+  await pin.click();
+  await expect(pin).toHaveClass(/on/);
+  await pin.click();
+  await expect(pin).not.toHaveClass(/on/);
+});
+
+test('selecting a different note switches the editor content', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('First');
+  await page.getByTestId('new-note').click();
+  await page.getByTestId('title-input').fill('Second');
+  await expect(page.getByTestId('note-item')).toHaveCount(2);
+
+  // Click the row titled "First" and confirm the editor pane shows it.
+  await page.getByTestId('note-pick').filter({ hasText: 'First' }).click();
+  await expect(page.getByTestId('title-input')).toHaveValue('First');
+});
+
+test('deleting a note removes it', async ({ page }) => {
+  await createNote(page);
+  await expect(page.getByTestId('note-item')).toHaveCount(1);
+  await page.getByTestId('note-delete').click();
+  await expect(page.getByTestId('note-item')).toHaveCount(0);
+  await expect(page.getByTestId('empty-state')).toBeVisible();
+});
+
+test('settings: switching theme updates the document', async ({ page }) => {
+  await page.getByTestId('open-settings').click();
+  await expect(page.getByTestId('settings-close')).toBeVisible();
+  await page.getByTestId('set-theme').selectOption('dark');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.getByTestId('settings-close').click();
+});
+
+test('settings: default palette applies to newly created notes', async ({ page }) => {
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('set-palette').selectOption('sky');
+  await page.getByTestId('settings-close').click();
+  await createNote(page);
+  await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', 'sky');
+});
+
+test('notes persist across a reload', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Remember me');
+  await expect(page.getByTestId('note-title')).toHaveText('Remember me');
+  await page.goto('/?local'); // full reload
+  await expect(page.getByTestId('note-title')).toHaveText('Remember me');
+});
