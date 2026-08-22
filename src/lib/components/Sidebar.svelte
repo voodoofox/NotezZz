@@ -24,7 +24,14 @@
     {#each store.notes as note (note.id)}
       {@const pal = getPalette(note.paletteId)}
       <div class="item" data-testid="note-item" class:active={note.id === store.activeId} style="--swatch: {pal.bg}">
-        <button class="pick" data-testid="note-pick" onclick={() => (store.activeId = note.id)}>
+        <button
+          class="pick"
+          data-testid="note-pick"
+          onclick={() => {
+            store.activeId = note.id;
+            store.mobileOpen = true;
+          }}
+        >
           <span class="swatch" data-testid="note-swatch" style="background: {pal.bg}"></span>
           <span class="title" data-testid="note-title">{note.title || preview(note.contentHtml)}</span>
         </button>

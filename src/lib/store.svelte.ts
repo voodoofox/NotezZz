@@ -34,6 +34,9 @@ class AppStore {
   syncStatus = $state<'local' | 'loading' | 'saving' | 'synced' | 'error'>('local');
   syncError = $state<string>('');
 
+  /** Phone layout: true while the editor pane is open (list otherwise). */
+  mobileOpen = $state(false);
+
   #backend: StorageBackend | null = null;
   #timers = new Map<string, ReturnType<typeof setTimeout>>();
   #reloading = false;
@@ -92,6 +95,7 @@ class AppStore {
     });
     this.notes = [note, ...this.notes];
     this.activeId = note.id;
+    this.mobileOpen = true; // on phones, jump straight into the new note
     this.#persistNote(note, /* immediate */ true);
     return note;
   }
@@ -139,7 +143,10 @@ class AppStore {
 
   async remove(id: string) {
     this.notes = this.notes.filter((n) => n.id !== id);
-    if (this.activeId === id) this.activeId = this.notes[0]?.id ?? null;
+    if (this.activeId === id) {
+      this.activeId = this.notes[0]?.id ?? null;
+      this.mobileOpen = false; // back to the list after deleting on phones
+    }
     this.#timers.delete(id);
     try {
       await this.#backend?.deleteNote(id);

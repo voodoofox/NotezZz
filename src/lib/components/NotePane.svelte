@@ -20,6 +20,12 @@
     "
   >
     <div class="topbar">
+      <button
+        class="icon back"
+        data-testid="back-to-list"
+        title="Back to notes"
+        onclick={() => (store.mobileOpen = false)}
+      >←</button>
       <input
         class="title"
         data-testid="title-input"
@@ -163,6 +169,17 @@
   .icon.on {
     opacity: 1;
     background: rgba(0, 0, 0, 0.12);
+  }
+  /* Back button only exists in the phone single-pane flow. */
+  .back {
+    display: none;
+    font-size: 20px;
+    opacity: 0.8;
+  }
+  @media (max-width: 700px) {
+    .back {
+      display: block;
+    }
   }
   .controls {
     display: flex;

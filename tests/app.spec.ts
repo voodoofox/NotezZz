@@ -143,6 +143,37 @@ test('settings: default palette applies to newly created notes', async ({ page }
   await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', 'sky');
 });
 
+test.describe('mobile layout', () => {
+  test.use({ viewport: { width: 400, height: 800 } });
+
+  test('single-pane flow: list -> editor -> back', async ({ page }) => {
+    // Narrow viewport starts on the list; the editor pane is hidden.
+    await expect(page.getByTestId('pane-empty')).toBeHidden();
+
+    // Creating a note jumps straight into the editor, list hides.
+    await page.getByTestId('new-note').click();
+    await expect(page.getByTestId('note-pane')).toBeVisible();
+    await expect(page.getByTestId('new-note')).toBeHidden();
+
+    // Back returns to the full-width list.
+    await page.getByTestId('back-to-list').click();
+    await expect(page.getByTestId('note-pane')).toBeHidden();
+    await expect(page.getByTestId('note-item')).toBeVisible();
+
+    // Tapping the note opens the editor again.
+    await page.getByTestId('note-pick').click();
+    await expect(page.getByTestId('note-pane')).toBeVisible();
+  });
+
+  test('deleting on mobile returns to the list', async ({ page }) => {
+    await page.getByTestId('new-note').click();
+    await expect(page.getByTestId('note-pane')).toBeVisible();
+    await page.getByTestId('note-delete').click();
+    await expect(page.getByTestId('note-pane')).toBeHidden();
+    await expect(page.getByTestId('empty-state')).toBeVisible();
+  });
+});
+
 test('notes persist across a reload', async ({ page }) => {
   await createNote(page);
   await page.getByTestId('title-input').fill('Remember me');

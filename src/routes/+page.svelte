@@ -44,7 +44,7 @@
 </script>
 
 {#if authed}
-  <main class="app">
+  <main class="app" class:note-open={store.mobileOpen}>
     <Sidebar />
     <NotePane />
   </main>
@@ -58,5 +58,21 @@
     height: 100vh;
     width: 100vw;
     overflow: hidden;
+  }
+  /* Phone: single-pane flow — the list OR the editor, toggled by .note-open. */
+  @media (max-width: 700px) {
+    .app :global(.sidebar) {
+      width: 100%;
+      border-right: none;
+    }
+    .app :global(.pane) {
+      display: none;
+    }
+    .app.note-open :global(.sidebar) {
+      display: none;
+    }
+    .app.note-open :global(.pane) {
+      display: flex;
+    }
   }
 </style>
