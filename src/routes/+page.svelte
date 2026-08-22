@@ -6,8 +6,18 @@
   import Sidebar from '$lib/components/Sidebar.svelte';
   import NotePane from '$lib/components/NotePane.svelte';
   import SignIn from '$lib/components/SignIn.svelte';
-
+  import ShareIntake from '$lib/components/ShareIntake.svelte';
+  import { page } from '$app/state';
   import { hasPriorAuth, signIn } from '$lib/drive/auth';
+
+  /** Text arriving via the Android share sheet (see routes/share). */
+  let sharedText = $state<string | null>(null);
+
+  // Fullscreen note view is history-backed shallow state, so the system back
+  // button/gesture exits fullscreen instead of leaving the app.
+  $effect(() => {
+    store.mobileOpen = (page.state as { fs?: boolean }).fs === true;
+  });
 
   // Desktop never gates. Web waits for Google sign-in, unless "local mode" is
   // chosen (offline, localStorage) — also used by the E2E test suite via ?local.
@@ -34,6 +44,23 @@
       const { listen } = await import('@tauri-apps/api/event');
       await listen('tray-new-note', () => store.create());
       window.addEventListener('focus', () => void store.reload());
+    }
+
+    // Text shared in from Android lands here after the /share redirect.
+    try {
+      const pending = localStorage.getItem('notezzz:pendingShare');
+      if (pending) sharedText = pending;
+    } catch {
+      /* private mode */
+    }
+  }
+
+  function shareDone() {
+    sharedText = null;
+    try {
+      localStorage.removeItem('notezzz:pendingShare');
+    } catch {
+      /* ignore */
     }
   }
 
@@ -67,6 +94,9 @@
     <Sidebar />
     <NotePane />
   </main>
+  {#if sharedText}
+    <ShareIntake text={sharedText} onDone={shareDone} />
+  {/if}
 {:else if autoSigningIn}
   <div class="connecting">Connecting…</div>
 {:else}

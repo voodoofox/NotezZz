@@ -22,9 +22,13 @@
     }
   `;
 
-  // Apply the app theme to the document root.
+  // Apply the app theme to the document root, and keep the browser/PWA title
+  // bar (theme-color) in step with it.
   $effect(() => {
-    document.documentElement.dataset.theme = store.settings.appTheme;
+    const theme = store.settings.appTheme;
+    document.documentElement.dataset.theme = theme;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#16181d' : '#f4f5f7');
   });
 </script>
 

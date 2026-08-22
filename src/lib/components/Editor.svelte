@@ -138,38 +138,49 @@
   .toolbar {
     display: flex;
     align-items: center;
-    gap: 2px;
-    padding: 4px 6px;
-    flex-wrap: wrap;
+    gap: 3px;
+    padding: 5px 8px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
     background: var(--note-header);
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  }
+  .toolbar::-webkit-scrollbar {
+    display: none;
   }
   .toolbar button,
   .toolbar select {
     font: inherit;
-    font-size: 14px;
+    font-size: 15px;
     color: var(--note-fg);
     background: transparent;
-    border: 1px solid transparent;
-    border-radius: 5px;
-    padding: 2px 7px;
+    border: none;
+    border-radius: 7px;
+    min-width: 32px;
+    height: 30px;
+    padding: 0 8px;
     cursor: pointer;
-    line-height: 1.4;
+    line-height: 1;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
   .toolbar button:hover,
   .toolbar select:hover {
-    background: rgba(0, 0, 0, 0.06);
+    background: rgba(0, 0, 0, 0.07);
   }
   .toolbar button.active {
     background: var(--note-accent);
     color: #fff;
-    border-color: var(--note-accent);
   }
   .sep {
     width: 1px;
-    align-self: stretch;
-    margin: 2px 4px;
-    background: rgba(0, 0, 0, 0.12);
+    height: 20px;
+    margin: 0 5px;
+    background: rgba(0, 0, 0, 0.14);
+    flex-shrink: 0;
   }
   .content {
     flex: 1;

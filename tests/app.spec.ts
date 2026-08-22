@@ -85,16 +85,40 @@ test('changing palette updates the note color live (the frozen-UI bug)', async (
   await expect(page.getByTestId('note-swatch')).toHaveCSS('background-color', 'rgb(224, 243, 233)');
 });
 
-test('base font-size slider updates its readout', async ({ page }) => {
+test('base font-size slider (in tools popover) updates its readout', async ({ page }) => {
   await createNote(page);
+  await page.getByTestId('tools-toggle').click();
   await page.getByTestId('size-slider').fill('28');
   await expect(page.getByTestId('size-value')).toHaveText('28');
+  await expect(page.getByTestId('tools-toggle')).toContainText('28');
 });
 
-test('opacity slider updates its readout', async ({ page }) => {
+test('opacity control is desktop-only (hidden on web)', async ({ page }) => {
   await createNote(page);
-  await page.getByTestId('opacity-slider').fill('0.5');
-  await expect(page.getByTestId('opacity-value')).toHaveText('50%');
+  await page.getByTestId('tools-toggle').click();
+  await expect(page.getByTestId('size-slider')).toBeVisible();
+  await expect(page.getByTestId('opacity-slider')).toHaveCount(0);
+});
+
+test('share intake: shared text goes into a new note', async ({ page }) => {
+  await page.evaluate(() => localStorage.setItem('notezzz:pendingShare', 'shared hello\nline two'));
+  await page.reload();
+  await expect(page.getByTestId('share-overlay')).toBeVisible();
+  await page.getByTestId('share-new').click();
+  await expect(page.getByTestId('share-overlay')).toBeHidden();
+  await expect(page.locator('.ProseMirror')).toContainText('shared hello');
+  await expect(page.locator('.ProseMirror')).toContainText('line two');
+});
+
+test('share intake: append to an existing note', async ({ page }) => {
+  await createNote(page);
+  await typeInEditor(page, 'original');
+  await page.evaluate(() => localStorage.setItem('notezzz:pendingShare', 'appended bit'));
+  await page.reload();
+  await expect(page.getByTestId('share-overlay')).toBeVisible();
+  await page.getByTestId('share-append-item').first().click();
+  await expect(page.locator('.ProseMirror')).toContainText('original');
+  await expect(page.locator('.ProseMirror')).toContainText('appended bit');
 });
 
 test('pinning a note marks it active in the list', async ({ page }) => {
