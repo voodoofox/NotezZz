@@ -36,7 +36,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  defaultPaletteId: 'sunflower',
+  defaultPaletteId: 'paper',
   defaultFontSize: 18,
   appTheme: 'light',
   autostart: false,
@@ -49,7 +49,7 @@ export function newNote(partial: Partial<Note> = {}): Note {
     id: cryptoId(),
     title: '',
     contentHtml: '',
-    paletteId: 'sunflower',
+    paletteId: 'paper',
     fontSize: 18,
     pinned: false,
     opacity: 1,

@@ -34,6 +34,8 @@ export class DriveBackend implements StorageBackend {
 
   #folderId: string | null = null;
   #folderPromise: Promise<string> | null = null;
+  #notesFolderId: string | null = null;
+  #notesFolderPromise: Promise<string> | null = null;
   #settingsId: string | null = null;
   #ids = new Map<string, string>(); // noteId -> Drive fileId
 
@@ -59,6 +61,61 @@ export class DriveBackend implements StorageBackend {
       body: JSON.stringify({ name: FOLDER_NAME, mimeType: FOLDER_MIME }),
     });
     return (await cres.json()).id;
+  }
+
+  /**
+   * Notes live in a `notes/` subfolder — the exact layout the desktop app uses
+   * for its sync folder, so Google Drive for Desktop can mirror one tree that
+   * both sides read/write. (settings.json stays at the NotezZz root.)
+   */
+  async #notesFolder(): Promise<string> {
+    if (this.#notesFolderId) return this.#notesFolderId;
+    if (!this.#notesFolderPromise) this.#notesFolderPromise = this.#resolveNotesFolder();
+    this.#notesFolderId = await this.#notesFolderPromise;
+    return this.#notesFolderId;
+  }
+
+  async #resolveNotesFolder(): Promise<string> {
+    const parent = await this.#folder();
+    const q = encodeURIComponent(
+      `'${parent}' in parents and mimeType='${FOLDER_MIME}' and name='notes' and trashed=false`
+    );
+    const res = await authFetch(`${API}/files?q=${q}&fields=files(id)&orderBy=createdTime`);
+    const { files } = await res.json();
+    let id: string;
+    if (files?.length) {
+      id = files[0].id;
+    } else {
+      const cres = await authFetch(`${API}/files?fields=id`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'notes', mimeType: FOLDER_MIME, parents: [parent] }),
+      });
+      id = (await cres.json()).id;
+    }
+    await this.#migrateFlatNotes(parent, id);
+    return id;
+  }
+
+  /** One-time move of legacy flat note files (NotezZz/*.json) into notes/. */
+  async #migrateFlatNotes(parent: string, notesFolder: string): Promise<void> {
+    try {
+      const q = encodeURIComponent(`'${parent}' in parents and trashed=false`);
+      const res = await authFetch(`${API}/files?q=${q}&fields=files(id,name,mimeType)`);
+      const { files } = await res.json();
+      const strays = (files ?? []).filter(
+        (f: { name: string; mimeType: string }) =>
+          f.mimeType !== FOLDER_MIME && f.name.endsWith('.json') && f.name !== 'settings.json'
+      );
+      for (const f of strays) {
+        await authFetch(
+          `${API}/files/${f.id}?addParents=${notesFolder}&removeParents=${parent}&fields=id`,
+          { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: '{}' }
+        );
+      }
+    } catch {
+      // migration is best-effort; notes stay readable where they are next run
+    }
   }
 
   async #findByName(name: string, folderId: string): Promise<string | null> {
@@ -94,18 +151,14 @@ export class DriveBackend implements StorageBackend {
   }
 
   async listNotes(): Promise<Note[]> {
-    const folderId = await this.#folder();
+    const folderId = await this.#notesFolder();
     const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
     const res = await authFetch(`${API}/files?q=${q}&fields=files(id,name)&pageSize=1000`);
     const { files } = await res.json();
     this.#ids.clear();
-    const noteFiles = (files ?? []).filter((f: { id: string; name: string }) => {
-      if (f.name === 'settings.json') {
-        this.#settingsId = f.id;
-        return false;
-      }
-      return String(f.name).endsWith('.json');
-    });
+    const noteFiles = (files ?? []).filter((f: { id: string; name: string }) =>
+      String(f.name).endsWith('.json')
+    );
     // Download all note files concurrently — sequential fetches make startup
     // painfully slow once there are more than a handful of notes.
     const notes = (
@@ -126,7 +179,7 @@ export class DriveBackend implements StorageBackend {
   }
 
   async saveNote(note: Note): Promise<void> {
-    const folderId = await this.#folder();
+    const folderId = await this.#notesFolder();
     let fileId = this.#ids.get(note.id) ?? (await this.#findByName(`${note.id}.json`, folderId));
     if (fileId) await this.#update(fileId, note);
     else fileId = await this.#create(`${note.id}.json`, folderId, note);
@@ -134,7 +187,7 @@ export class DriveBackend implements StorageBackend {
   }
 
   async deleteNote(id: string): Promise<void> {
-    const folderId = await this.#folder();
+    const folderId = await this.#notesFolder();
     const fileId = this.#ids.get(id) ?? (await this.#findByName(`${id}.json`, folderId));
     if (fileId) await authFetch(`${API}/files/${fileId}`, { method: 'DELETE' });
     this.#ids.delete(id);

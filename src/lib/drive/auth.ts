@@ -31,10 +31,21 @@ declare global {
 }
 
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
+/** Set after the first successful grant; later sign-ins skip the consent UI. */
+const AUTH_FLAG = 'notezzz:hasAuthed';
 
 let accessToken: string | null = null;
 let expiresAt = 0;
 let tokenClient: TokenClient | null = null;
+
+/** True if this browser has completed Google sign-in before. */
+export function hasPriorAuth(): boolean {
+  try {
+    return localStorage.getItem(AUTH_FLAG) === '1';
+  } catch {
+    return false;
+  }
+}
 
 function loadGis(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -66,23 +77,40 @@ async function ensureClient(): Promise<TokenClient> {
   return tokenClient;
 }
 
-/** Interactive sign-in (shows Google consent/account popup). */
+/**
+ * Sign in. The full consent UI only appears on the very first grant; after
+ * that Google silently re-issues tokens (empty prompt), so refreshes don't
+ * walk the user through the account/consent screens again.
+ */
 export function signIn(interactive = true): Promise<string> {
   return new Promise((resolve, reject) => {
+    // Guard: a blocked popup / closed iframe can otherwise hang forever.
+    const timer = setTimeout(() => reject(new Error('Sign-in timed out')), 30_000);
     ensureClient()
       .then((client) => {
         client.callback = (resp: TokenResponse) => {
+          clearTimeout(timer);
           if (resp.error || !resp.access_token) {
             reject(new Error(resp.error ?? 'No access token'));
             return;
           }
           accessToken = resp.access_token;
           expiresAt = Date.now() + (resp.expires_in ?? 3600) * 1000 - 60_000;
+          try {
+            localStorage.setItem(AUTH_FLAG, '1');
+          } catch {
+            /* private mode */
+          }
           resolve(accessToken);
         };
-        client.requestAccessToken({ prompt: interactive ? 'consent' : '' });
+        // consent UI only for a genuinely new user; '' = silent when possible
+        const prompt = interactive && !hasPriorAuth() ? 'consent' : '';
+        client.requestAccessToken({ prompt });
       })
-      .catch(reject);
+      .catch((e) => {
+        clearTimeout(timer);
+        reject(e);
+      });
   });
 }
 

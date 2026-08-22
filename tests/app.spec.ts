@@ -76,13 +76,13 @@ test('bullet list toggles', async ({ page }) => {
 test('changing palette updates the note color live (the frozen-UI bug)', async ({ page }) => {
   await createNote(page);
   const pane = page.getByTestId('note-pane');
-  await expect(pane).toHaveAttribute('data-palette', 'sunflower');
+  await expect(pane).toHaveAttribute('data-palette', 'paper');
   await page.locator('[data-testid="palette-chip"][data-palette="mint"]').click();
   await expect(pane).toHaveAttribute('data-palette', 'mint');
-  // Mint bg (#CFF3E1) actually paints:
-  await expect(pane).toHaveCSS('background-color', 'rgb(207, 243, 225)');
+  // Mint bg (#E0F3E9) actually paints:
+  await expect(pane).toHaveCSS('background-color', 'rgb(224, 243, 233)');
   // And the sidebar swatch recolors too:
-  await expect(page.getByTestId('note-swatch')).toHaveCSS('background-color', 'rgb(207, 243, 225)');
+  await expect(page.getByTestId('note-swatch')).toHaveCSS('background-color', 'rgb(224, 243, 233)');
 });
 
 test('base font-size slider updates its readout', async ({ page }) => {
@@ -146,30 +146,31 @@ test('settings: default palette applies to newly created notes', async ({ page }
 test.describe('mobile layout', () => {
   test.use({ viewport: { width: 400, height: 800 } });
 
-  test('single-pane flow: list -> editor -> back', async ({ page }) => {
-    // Narrow viewport starts on the list; the editor pane is hidden.
-    await expect(page.getByTestId('pane-empty')).toBeHidden();
-
-    // Creating a note jumps straight into the editor, list hides.
+  test('stacked split: list and note both visible', async ({ page }) => {
     await page.getByTestId('new-note').click();
+    // 40/60 split: list (with the new-note button) AND editor pane visible.
     await expect(page.getByTestId('note-pane')).toBeVisible();
-    await expect(page.getByTestId('new-note')).toBeHidden();
-
-    // Back returns to the full-width list.
-    await page.getByTestId('back-to-list').click();
-    await expect(page.getByTestId('note-pane')).toBeHidden();
+    await expect(page.getByTestId('new-note')).toBeVisible();
     await expect(page.getByTestId('note-item')).toBeVisible();
-
-    // Tapping the note opens the editor again.
-    await page.getByTestId('note-pick').click();
-    await expect(page.getByTestId('note-pane')).toBeVisible();
+    // List sits above the pane (stacked layout).
+    const list = await page.getByTestId('note-item').boundingBox();
+    const pane = await page.getByTestId('note-pane').boundingBox();
+    expect(list!.y).toBeLessThan(pane!.y);
   });
 
-  test('deleting on mobile returns to the list', async ({ page }) => {
+  test('fullscreen expands the note and back restores the split', async ({ page }) => {
     await page.getByTestId('new-note').click();
+    await page.getByTestId('note-fullscreen').click();
+    await expect(page.getByTestId('new-note')).toBeHidden(); // list gone
     await expect(page.getByTestId('note-pane')).toBeVisible();
+    await page.getByTestId('exit-fullscreen').click();
+    await expect(page.getByTestId('new-note')).toBeVisible(); // split back
+  });
+
+  test('deleting in fullscreen returns to the split view', async ({ page }) => {
+    await page.getByTestId('new-note').click();
+    await page.getByTestId('note-fullscreen').click();
     await page.getByTestId('note-delete').click();
-    await expect(page.getByTestId('note-pane')).toBeHidden();
     await expect(page.getByTestId('empty-state')).toBeVisible();
   });
 });

@@ -20,12 +20,21 @@
     "
   >
     <div class="topbar">
-      <button
-        class="icon back"
-        data-testid="back-to-list"
-        title="Back to notes"
-        onclick={() => (store.mobileOpen = false)}
-      >←</button>
+      {#if store.mobileOpen}
+        <button
+          class="icon mob"
+          data-testid="exit-fullscreen"
+          title="Back to split view"
+          onclick={() => (store.mobileOpen = false)}
+        >←</button>
+      {:else}
+        <button
+          class="icon mob"
+          data-testid="note-fullscreen"
+          title="Expand note fullscreen"
+          onclick={() => (store.mobileOpen = true)}
+        >⛶</button>
+      {/if}
       <input
         class="title"
         data-testid="title-input"
@@ -170,14 +179,14 @@
     opacity: 1;
     background: rgba(0, 0, 0, 0.12);
   }
-  /* Back button only exists in the phone single-pane flow. */
-  .back {
+  /* Fullscreen/back toggles only exist in the phone layout. */
+  .mob {
     display: none;
-    font-size: 20px;
+    font-size: 19px;
     opacity: 0.8;
   }
   @media (max-width: 700px) {
-    .back {
+    .mob {
       display: block;
     }
   }

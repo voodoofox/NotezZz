@@ -158,8 +158,8 @@
     align-items: center;
     justify-content: center;
     text-align: center;
-    background: #fff4b8;
-    color: #6b6440;
+    background: #fbfaf6;
+    color: #8a8a82;
     border-radius: 12px;
     font-size: 15px;
   }
