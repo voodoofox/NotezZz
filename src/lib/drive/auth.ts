@@ -33,10 +33,32 @@ declare global {
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
 /** Set after the first successful grant; later sign-ins skip the consent UI. */
 const AUTH_FLAG = 'notezzz:hasAuthed';
+/** Cached access token (+expiry). Tokens live ~1h; persisting them means a
+ * share-launch or refresh within that window needs NO Google round-trip. */
+const TOKEN_KEY = 'notezzz:tok';
 
 let accessToken: string | null = null;
 let expiresAt = 0;
 let tokenClient: TokenClient | null = null;
+/** Single-flight: concurrent callers (e.g. parallel 401 retries) share ONE
+ * sign-in attempt instead of each opening its own Google popup. */
+let inflight: Promise<string> | null = null;
+
+// Restore a still-valid token from the previous page load.
+try {
+  if (typeof window !== 'undefined') {
+    const raw = localStorage.getItem(TOKEN_KEY);
+    if (raw) {
+      const { t, e } = JSON.parse(raw) as { t: string; e: number };
+      if (t && e > Date.now()) {
+        accessToken = t;
+        expiresAt = e;
+      }
+    }
+  }
+} catch {
+  /* corrupt/absent — sign in normally */
+}
 
 /** True if this browser has completed Google sign-in before. */
 export function hasPriorAuth(): boolean {
@@ -83,7 +105,11 @@ async function ensureClient(): Promise<TokenClient> {
  * walk the user through the account/consent screens again.
  */
 export function signIn(interactive = true): Promise<string> {
-  return new Promise((resolve, reject) => {
+  // A sign-in is already underway — piggyback on it rather than opening a
+  // second Google popup (parallel Drive requests all 401 at once on expiry).
+  if (inflight) return inflight;
+
+  inflight = new Promise<string>((resolve, reject) => {
     // Guard: a blocked popup / closed iframe can otherwise hang forever.
     const timer = setTimeout(() => reject(new Error('Sign-in timed out')), 30_000);
     ensureClient()
@@ -98,6 +124,7 @@ export function signIn(interactive = true): Promise<string> {
           expiresAt = Date.now() + (resp.expires_in ?? 3600) * 1000 - 60_000;
           try {
             localStorage.setItem(AUTH_FLAG, '1');
+            localStorage.setItem(TOKEN_KEY, JSON.stringify({ t: accessToken, e: expiresAt }));
           } catch {
             /* private mode */
           }
@@ -111,7 +138,10 @@ export function signIn(interactive = true): Promise<string> {
         clearTimeout(timer);
         reject(e);
       });
+  }).finally(() => {
+    inflight = null;
   });
+  return inflight;
 }
 
 /** Return a valid token, refreshing silently if expired. */
@@ -127,4 +157,10 @@ export function isDriveAuthed(): boolean {
 export function signOut(): void {
   accessToken = null;
   expiresAt = 0;
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(AUTH_FLAG);
+  } catch {
+    /* ignore */
+  }
 }

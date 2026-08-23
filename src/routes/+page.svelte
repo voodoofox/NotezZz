@@ -8,7 +8,7 @@
   import SignIn from '$lib/components/SignIn.svelte';
   import ShareIntake from '$lib/components/ShareIntake.svelte';
   import { page } from '$app/state';
-  import { hasPriorAuth, signIn } from '$lib/drive/auth';
+  import { hasPriorAuth, isDriveAuthed, signIn } from '$lib/drive/auth';
 
   /** Text arriving via the Android share sheet (see routes/share). */
   let sharedText = $state<string | null>(null);
@@ -66,6 +66,13 @@
 
   onMount(() => {
     if (authed) return void boot();
+    // A still-valid token survived from a previous launch (persisted, ~1h
+    // lifetime) — boot instantly, no Google round-trip at all.
+    if (autoSigningIn && isDriveAuthed()) {
+      autoSigningIn = false;
+      authed = true;
+      return void boot();
+    }
     if (autoSigningIn) {
       // Silent re-auth for returning users — no Google screens on refresh.
       const timeout = new Promise<never>((_, rej) =>
