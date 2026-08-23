@@ -53,10 +53,13 @@ class AppStore {
     const cloud = this.#backend.kind === 'drive';
     this.syncStatus = cloud ? 'loading' : 'local';
     try {
-      const [notes, settings] = await Promise.all([
-        this.#backend.listNotes(),
-        this.#backend.loadSettings(),
-      ]);
+      // Watchdog: whatever goes wrong below, "Loading…" may never be forever —
+      // surface an error (with its Reconnect button) instead.
+      const load = Promise.all([this.#backend.listNotes(), this.#backend.loadSettings()]);
+      const watchdog = new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error('Loading timed out — check your connection and retry.')), 45_000)
+      );
+      const [notes, settings] = await Promise.race([load, watchdog]);
       this.notes = notes.sort((a, b) => b.updatedAt - a.updatedAt);
       if (settings) this.settings = settings;
       if (!this.activeId && this.notes.length) this.activeId = this.notes[0].id;

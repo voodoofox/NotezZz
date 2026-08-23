@@ -17,6 +17,8 @@ async function authFetch(url: string, opts: RequestInit = {}): Promise<Response>
   const withAuth = (t: string): RequestInit => ({
     ...opts,
     headers: { ...(opts.headers ?? {}), Authorization: `Bearer ${t}` },
+    // A wedged mobile connection must become an error, not an eternal hang.
+    signal: AbortSignal.timeout(20_000),
   });
   let res = await fetch(url, withAuth(token));
   if (res.status === 401) {
