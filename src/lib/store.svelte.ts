@@ -73,6 +73,20 @@ class AppStore {
     console.error('[NotezZz sync]', e);
   }
 
+  /** User-initiated recovery from a sync error: interactive sign-in (allowed,
+   *  it's a real click) followed by a full re-init. */
+  async reconnect() {
+    this.syncStatus = 'loading';
+    this.syncError = '';
+    try {
+      const { signIn } = await import('./drive/auth');
+      await signIn(true);
+      await this.init();
+    } catch (e) {
+      this.#fail(e);
+    }
+  }
+
   /** Save through the backend, tracking cloud sync status. */
   async #save(note: Note) {
     if (!this.#backend) return;

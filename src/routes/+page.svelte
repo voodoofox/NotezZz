@@ -27,7 +27,10 @@
   // Returning users skip the gate: try a silent token grab first.
   let autoSigningIn = $state(!isTauri() && !localMode && hasPriorAuth());
 
+  let booted = false;
   async function boot() {
+    if (booted) return; // silent-auth resolution and a gate click can race
+    booted = true;
     await store.init();
     await restoreStickies(store.notes);
 

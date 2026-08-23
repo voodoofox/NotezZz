@@ -13,6 +13,10 @@ interface TokenClient {
   requestAccessToken: (opts?: { prompt?: '' | 'none' | 'consent' }) => void;
   callback: (resp: TokenResponse) => void;
 }
+interface TokenClientError {
+  type?: string;
+  message?: string;
+}
 // Minimal shape of the global injected by the GIS script.
 declare global {
   interface Window {
@@ -23,6 +27,7 @@ declare global {
             client_id: string;
             scope: string;
             callback: (resp: TokenResponse) => void;
+            error_callback?: (err: TokenClientError) => void;
           }) => TokenClient;
         };
       };
@@ -43,6 +48,9 @@ let tokenClient: TokenClient | null = null;
 /** Single-flight: concurrent callers (e.g. parallel 401 retries) share ONE
  * sign-in attempt instead of each opening its own Google popup. */
 let inflight: Promise<string> | null = null;
+/** Reject hook for the sign-in currently underway — GIS reports blocked /
+ * closed popups through error_callback, not the token callback. */
+let pendingReject: ((e: Error) => void) | null = null;
 
 // Restore a still-valid token from the previous page load.
 try {
@@ -69,22 +77,27 @@ export function hasPriorAuth(): boolean {
   }
 }
 
+let gisPromise: Promise<void> | null = null;
+
 function loadGis(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (window.google?.accounts?.oauth2) return resolve();
-    const existing = document.querySelector(`script[src="${GIS_SRC}"]`);
-    if (existing) {
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', () => reject(new Error('Failed to load Google sign-in')));
-      return;
-    }
-    const s = document.createElement('script');
-    s.src = GIS_SRC;
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error('Failed to load Google sign-in'));
-    document.head.appendChild(s);
-  });
+  if (window.google?.accounts?.oauth2) return Promise.resolve();
+  // Memoize by promise (NOT by DOM tag): listening on an already-loaded/failed
+  // script tag waits for a load event that will never fire again.
+  if (!gisPromise) {
+    gisPromise = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = GIS_SRC;
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => {
+        gisPromise = null; // allow a retry on the next attempt
+        s.remove();
+        reject(new Error('Failed to load Google sign-in'));
+      };
+      document.head.appendChild(s);
+    });
+  }
+  return gisPromise;
 }
 
 async function ensureClient(): Promise<TokenClient> {
@@ -94,6 +107,11 @@ async function ensureClient(): Promise<TokenClient> {
       client_id: GOOGLE_CLIENT_ID,
       scope: GOOGLE_SCOPE,
       callback: () => {}, // replaced per-request below
+      // Fires when the auth popup is blocked or closed — without this the
+      // sign-in promise hangs until its timeout.
+      error_callback: (err) => {
+        pendingReject?.(new Error(err?.message || err?.type || 'Sign-in was interrupted'));
+      },
     });
   }
   return tokenClient;
@@ -110,8 +128,12 @@ export function signIn(interactive = true): Promise<string> {
   if (inflight) return inflight;
 
   inflight = new Promise<string>((resolve, reject) => {
-    // Guard: a blocked popup / closed iframe can otherwise hang forever.
-    const timer = setTimeout(() => reject(new Error('Sign-in timed out')), 30_000);
+    // Guard: even with error_callback, never hang forever.
+    const timer = setTimeout(() => reject(new Error('Sign-in timed out')), 15_000);
+    pendingReject = (e) => {
+      clearTimeout(timer);
+      reject(e);
+    };
     ensureClient()
       .then((client) => {
         client.callback = (resp: TokenResponse) => {
@@ -140,8 +162,20 @@ export function signIn(interactive = true): Promise<string> {
       });
   }).finally(() => {
     inflight = null;
+    pendingReject = null;
   });
   return inflight;
+}
+
+/** Drop the cached token (memory + storage) after the server rejects it. */
+export function markTokenStale(): void {
+  accessToken = null;
+  expiresAt = 0;
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Return a valid token, refreshing silently if expired. */

@@ -6,7 +6,7 @@
 import type { Note, Settings } from '../types';
 import type { StorageBackend } from '../storage/backend';
 import { FOLDER_NAME } from '../googleConfig';
-import { getValidToken, signIn } from './auth';
+import { getValidToken, markTokenStale, signIn } from './auth';
 
 const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
@@ -20,7 +20,13 @@ async function authFetch(url: string, opts: RequestInit = {}): Promise<Response>
   });
   let res = await fetch(url, withAuth(token));
   if (res.status === 401) {
-    const t2 = await signIn(false).catch(() => signIn(true));
+    // Server says the token is dead (revoked / Testing-mode expiry) even if
+    // its local timestamp looked fine. Drop it and retry ONCE silently.
+    // Never fall back to an interactive popup here — background code has no
+    // user gesture, the browser blocks the popup, and everything hangs.
+    // If silent fails we throw; the UI offers a Reconnect button instead.
+    markTokenStale();
+    const t2 = await signIn(false);
     res = await fetch(url, withAuth(t2));
   }
   if (!res.ok) {

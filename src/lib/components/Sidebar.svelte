@@ -53,8 +53,13 @@
       {:else if store.syncStatus === 'error'}Sync error{/if}
     </span>
   </div>
-  {#if store.syncStatus === 'error' && store.syncError}
-    <div class="sync-err" data-testid="sync-error" title={store.syncError}>{store.syncError}</div>
+  {#if store.syncStatus === 'error'}
+    <div class="sync-err" data-testid="sync-error" title={store.syncError}>
+      {store.syncError || 'Sync failed.'}
+      <button class="reconnect" data-testid="reconnect" onclick={() => store.reconnect()}>
+        Reconnect
+      </button>
+    </div>
   {/if}
 </aside>
 
@@ -217,8 +222,20 @@
     font-size: 12px;
     color: #e0245e;
     word-break: break-word;
-    max-height: 80px;
+    max-height: 110px;
     overflow: auto;
     flex-shrink: 0;
+  }
+  .reconnect {
+    display: block;
+    margin-top: 6px;
+    font: inherit;
+    font-size: 13px;
+    padding: 5px 12px;
+    border: none;
+    border-radius: 7px;
+    background: var(--app-accent);
+    color: #fff;
+    cursor: pointer;
   }
 </style>
