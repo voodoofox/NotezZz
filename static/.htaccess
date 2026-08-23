@@ -1,0 +1,8 @@
+# SPA fallback: NotezZz is a single-page app — any URL that isn't a real file
+# (e.g. /NotezZz/share, the Android share-target route) must serve index.html
+# so the app's client-side router can handle it.
+RewriteEngine On
+RewriteBase /NotezZz/
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /NotezZz/index.html [L]
