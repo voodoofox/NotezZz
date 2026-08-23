@@ -151,6 +151,11 @@ test('deleting a note removes it', async ({ page }) => {
   await expect(page.getByTestId('empty-state')).toBeVisible();
 });
 
+test('settings shows the version/build stamp', async ({ page }) => {
+  await page.getByTestId('open-settings').click();
+  await expect(page.getByTestId('app-version')).toContainText(/v\d+\.\d+\.\d+ · built \d{4}-/);
+});
+
 test('settings: switching theme updates the document', async ({ page }) => {
   await page.getByTestId('open-settings').click();
   await expect(page.getByTestId('settings-close')).toBeVisible();

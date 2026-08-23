@@ -140,6 +140,10 @@
         {/if}
       </section>
     {/if}
+
+    <p class="version" data-testid="app-version">
+      NotezZz v{__APP_VERSION__} · built {__BUILD_TIME__}
+    </p>
   </div>
 </div>
 
@@ -252,5 +256,12 @@
   .folder button:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+  .version {
+    margin: 22px 0 0;
+    font-size: 12px;
+    color: var(--app-muted);
+    text-align: center;
+    user-select: text;
   }
 </style>
