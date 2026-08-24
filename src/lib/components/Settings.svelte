@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { store } from '$lib/store.svelte';
   import { isTauri } from '$lib/storage/backend';
+  import { getDiag } from '$lib/diag';
   import { chooseSyncFolder, getSyncFolder } from '$lib/desktop';
   import { PALETTES } from '$lib/palettes';
 
@@ -141,6 +142,18 @@
       </section>
     {/if}
 
+    <section>
+      <h3>Diagnostics</h3>
+      <p class="hint diagline">
+        sync: <b>{store.syncStatus}</b>{store.syncError ? ` — ${store.syncError}` : ''}
+      </p>
+      {#if getDiag().length}
+        <pre class="diag">{getDiag().join('\n')}</pre>
+      {:else}
+        <p class="hint">No recent errors.</p>
+      {/if}
+    </section>
+
     <p class="version" data-testid="app-version">
       NotezZz v{__APP_VERSION__} · built {__BUILD_TIME__}
     </p>
@@ -256,6 +269,23 @@
   .folder button:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+  .diagline {
+    word-break: break-word;
+  }
+  .diag {
+    background: var(--app-bg);
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-family: monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 160px;
+    overflow-y: auto;
+    user-select: text;
   }
   .version {
     margin: 22px 0 0;

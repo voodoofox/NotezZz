@@ -1,12 +1,20 @@
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 
 const host = process.env.TAURI_DEV_HOST;
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf-8"));
 // Human-readable build stamp, baked in at build time (shown in Settings).
 const buildStamp = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
+// Written into static/ (config runs before the static copy), so the deployed
+// site carries a version.json that exactly matches this build's __BUILD_TIME__.
+// The app polls it to detect new deploys — entry-chunk hashes are NOT a usable
+// fingerprint (start.*.js is a tiny stub whose hash rarely changes).
+writeFileSync(
+  new URL("./static/version.json", import.meta.url),
+  JSON.stringify({ version: pkg.version, built: buildStamp })
+);
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({

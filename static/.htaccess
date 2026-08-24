@@ -11,7 +11,7 @@ RewriteRule . /NotezZz/index.html [L]
 # PWAs keep running stale builds for hours after a deploy), while hashed
 # bundle assets are immutable and can cache forever.
 <IfModule mod_headers.c>
-  <FilesMatch "^(index\.html|manifest\.webmanifest)$">
+  <FilesMatch "^(index\.html|manifest\.webmanifest|version\.json)$">
     Header set Cache-Control "no-cache, must-revalidate"
   </FilesMatch>
   <FilesMatch "\.(js|css|ttf)$">

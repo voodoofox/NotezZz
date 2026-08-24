@@ -4,6 +4,9 @@
   import { base } from '$app/paths';
   import { store } from '$lib/store.svelte';
   import { isTauri } from '$lib/storage/backend';
+  import { initDiag } from '$lib/diag';
+
+  initDiag(); // start capturing errors as early as possible
   // Vite resolves these to hashed, base-path-aware URLs.
   import fontRegular from '$lib/assets/SofiaSansCondensed.ttf';
   import fontItalic from '$lib/assets/SofiaSansCondensed-Italic.ttf';
@@ -26,24 +29,32 @@
   `;
 
   // Installed PWAs relaunch from HTTP cache and can linger on a stale build.
-  // On launch + whenever the app regains focus, compare our entry-chunk hash
-  // against the server's fresh index.html and reload if a newer build shipped.
+  // On launch + every return to foreground, poll version.json (cache-busted —
+  // the host's front proxy ignores request cache headers) and reload onto the
+  // new build when the stamp differs from our baked-in __BUILD_TIME__.
   onMount(() => {
     if (isTauri() || import.meta.env.DEV) return;
+
+    // Clean the ?v= cache-buster left by a previous self-update reload.
+    const url = new URL(location.href);
+    if (url.searchParams.has('v')) {
+      url.searchParams.delete('v');
+      const qs = url.searchParams.toString();
+      history.replaceState(null, '', url.pathname + (qs ? `?${qs}` : '') + url.hash);
+    }
+
     let busy = false;
     const check = async () => {
       if (busy || document.visibilityState !== 'visible') return;
       busy = true;
       try {
-        const res = await fetch(`${base}/`, { cache: 'no-store' });
-        const html = await res.text();
-        const server = html.match(/entry\/start\.[\w-]+\.js/)?.[0];
-        const local = [...document.querySelectorAll<HTMLLinkElement>('link[href]')]
-          .map((l) => l.href)
-          .find((h) => h.includes('/entry/start.'));
-        if (server && local && !local.includes(server)) {
-          store.flush(); // don't lose in-flight edits to the reload
-          location.reload();
+        const res = await fetch(`${base}/version.json?ts=${Date.now()}`, { cache: 'no-store' });
+        if (res.ok) {
+          const info = (await res.json()) as { built?: string };
+          if (info.built && info.built !== __BUILD_TIME__) {
+            store.flush(); // don't lose in-flight edits to the reload
+            location.replace(`${base}/?v=${encodeURIComponent(info.built)}`);
+          }
         }
       } catch {
         /* offline — try again next focus */

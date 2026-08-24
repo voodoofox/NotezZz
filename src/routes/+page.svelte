@@ -19,6 +19,22 @@
     store.mobileOpen = (page.state as { fs?: boolean }).fs === true;
   });
 
+  // If loading failed because the Google session is dead (revoked token,
+  // blocked silent popup, auth timeout), drop back to the sign-in gate — one
+  // real tap re-auths cleanly, which background code is not allowed to do.
+  $effect(() => {
+    if (
+      store.syncStatus === 'error' &&
+      /401|access token|interrupt|timed out|popup/i.test(store.syncError) &&
+      !isTauri() &&
+      !localMode
+    ) {
+      void import('$lib/drive/auth').then(({ markTokenStale }) => markTokenStale());
+      booted = false;
+      authed = false;
+    }
+  });
+
   // Desktop never gates. Web waits for Google sign-in, unless "local mode" is
   // chosen (offline, localStorage) — also used by the E2E test suite via ?local.
   const localMode =
