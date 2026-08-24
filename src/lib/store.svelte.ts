@@ -8,6 +8,17 @@ import { isTauri } from './storage/backend';
 import { LocalBackend } from './storage/localBackend';
 import { openSticky, closeSticky } from './desktop';
 
+/**
+ * Newest-first, one note per id. Duplicate ids (Drive "(1)" copies, file-sync
+ * artifacts) would crash the keyed note list, so filter them defensively no
+ * matter which backend produced the data.
+ */
+function dedupeById(notes: Note[]): Note[] {
+  const sorted = [...notes].sort((a, b) => b.updatedAt - a.updatedAt);
+  const seen = new Set<string>();
+  return sorted.filter((n) => !seen.has(n.id) && (seen.add(n.id), true));
+}
+
 async function pickBackend(): Promise<StorageBackend> {
   // Desktop: local sync-folder files. Web: Google Drive once signed in,
   // otherwise localStorage (offline/not-yet-authed).
@@ -60,7 +71,7 @@ class AppStore {
         setTimeout(() => rej(new Error('Loading timed out — check your connection and retry.')), 45_000)
       );
       const [notes, settings] = await Promise.race([load, watchdog]);
-      this.notes = notes.sort((a, b) => b.updatedAt - a.updatedAt);
+      this.notes = dedupeById(notes);
       if (settings) this.settings = settings;
       if (!this.activeId && this.notes.length) this.activeId = this.notes[0].id;
       this.syncStatus = cloud ? 'synced' : 'local';
@@ -151,7 +162,7 @@ class AppStore {
       if (n) await this.#backend.saveNote($state.snapshot(n));
     }
     const notes = await this.#backend.listNotes();
-    this.notes = notes.sort((a, b) => b.updatedAt - a.updatedAt);
+    this.notes = dedupeById(notes);
     if (this.activeId && !this.notes.some((n) => n.id === this.activeId)) {
       this.activeId = this.notes[0]?.id ?? null;
     }

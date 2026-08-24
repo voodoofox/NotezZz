@@ -169,20 +169,48 @@ export class DriveBackend implements StorageBackend {
     );
     // Download all note files concurrently — sequential fetches make startup
     // painfully slow once there are more than a handful of notes.
-    const notes = (
+    const fetched = (
       await Promise.all(
         noteFiles.map(async (f: { id: string; name: string }) => {
           try {
             const c = await authFetch(`${API}/files/${f.id}?alt=media`);
             const note = (await c.json()) as Note;
-            if (note?.id) this.#ids.set(note.id, f.id);
-            return note && !note.deleted ? note : null;
+            return note ? { note, fileId: f.id } : null;
           } catch {
             return null; // one corrupt/unreadable file must not sink the list
           }
         })
       )
-    ).filter((n: Note | null): n is Note => n !== null);
+    ).filter((x): x is { note: Note; fileId: string } => x !== null);
+
+    // Dedupe by note id — a save racing the folder migration can leave
+    // "name.json" + "name (1).json" both holding the same note. Duplicate ids
+    // crash Svelte's keyed list, so keep the newest and delete the strays.
+    const byId = new Map<string, { note: Note; fileId: string }>();
+    const stale: string[] = [];
+    for (const item of fetched) {
+      const prev = byId.get(item.note.id);
+      if (!prev) {
+        byId.set(item.note.id, item);
+      } else if (item.note.updatedAt > prev.note.updatedAt) {
+        stale.push(prev.fileId);
+        byId.set(item.note.id, item);
+      } else {
+        stale.push(item.fileId);
+      }
+    }
+    if (stale.length) {
+      void Promise.allSettled(
+        stale.map((id) => authFetch(`${API}/files/${id}`, { method: 'DELETE' }))
+      );
+    }
+
+    this.#ids.clear();
+    const notes: Note[] = [];
+    for (const { note, fileId } of byId.values()) {
+      this.#ids.set(note.id, fileId);
+      if (!note.deleted) notes.push(note);
+    }
     return notes.sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
