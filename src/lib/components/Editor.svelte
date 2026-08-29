@@ -239,4 +239,19 @@
   .content :global(.ProseMirror img.ProseMirror-selectednode) {
     outline: 2px solid var(--note-accent);
   }
+  /* Phones: formatting tools live at the BOTTOM (thumb-reach, and Android's
+     text-selection bubble — which always appears above the selection — can
+     never cover them). Extra top padding keeps the bubble for the first line
+     over empty space instead of the palette row. */
+  @media (max-width: 700px) {
+    .toolbar {
+      order: 2;
+      border-bottom: none;
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    .content {
+      order: 1;
+      padding-top: 22px;
+    }
+  }
 </style>
