@@ -121,6 +121,38 @@ test('share intake: append to an existing note', async ({ page }) => {
   await expect(page.locator('.ProseMirror')).toContainText('appended bit');
 });
 
+test('drawing: a sketch becomes an image in the note', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('fmt-draw').click();
+  const surface = page.getByTestId('draw-surface');
+  await expect(surface).toBeVisible();
+
+  // Draw a squiggle.
+  const box = (await surface.boundingBox())!;
+  await page.mouse.move(box.x + 100, box.y + 120);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 220, box.y + 200, { steps: 12 });
+  await page.mouse.move(box.x + 320, box.y + 130, { steps: 12 });
+  await page.mouse.up();
+
+  await page.getByTestId('draw-done').click();
+  await expect(surface).toBeHidden();
+  const img = page.locator('.ProseMirror img');
+  await expect(img).toHaveCount(1);
+  expect(await img.getAttribute('src')).toContain('data:image/svg+xml');
+
+  // The sketch survives a reload (persisted in contentHtml).
+  await page.goto('/?local');
+  await expect(page.locator('.ProseMirror img')).toHaveCount(1);
+});
+
+test('drawing: cancel inserts nothing', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('fmt-draw').click();
+  await page.getByTestId('draw-cancel').click();
+  await expect(page.locator('.ProseMirror img')).toHaveCount(0);
+});
+
 test('pinning a note marks it active in the list', async ({ page }) => {
   await createNote(page);
   const pin = page.getByTestId('note-pin');

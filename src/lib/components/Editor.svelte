@@ -3,7 +3,9 @@
   import { Editor } from '@tiptap/core';
   import StarterKit from '@tiptap/starter-kit';
   import { TextStyle } from '@tiptap/extension-text-style';
+  import { Image } from '@tiptap/extension-image';
   import { FontSize } from '../editor/fontSize';
+  import DrawPad from './DrawPad.svelte';
 
   interface Props {
     html: string;
@@ -18,6 +20,14 @@
   let editor = $state<Editor | null>(null);
   // Bumped on every transaction so toolbar active-states stay reactive.
   let tick = $state(0);
+  let showDraw = $state(false);
+
+  function drawDone(svgDataUrl: string | null) {
+    showDraw = false;
+    if (svgDataUrl && editor) {
+      editor.chain().focus().insertContent({ type: 'image', attrs: { src: svgDataUrl } }).run();
+    }
+  }
   // Plain (non-reactive) guard: the last HTML pushed to or received from the
   // editor. Without this, the sync effect fights the editor's own onUpdate —
   // ProseMirror's serialized HTML never exactly equals the stored string, so
@@ -31,7 +41,7 @@
     syncedHtml = html;
     editor = new Editor({
       element,
-      extensions: [StarterKit, TextStyle, FontSize],
+      extensions: [StarterKit, TextStyle, FontSize, Image.configure({ allowBase64: true })],
       content: html || '<p></p>',
       onTransaction: () => (tick += 1),
       onUpdate: ({ editor }) => {
@@ -108,6 +118,10 @@
 
     <span class="sep"></span>
 
+    <button data-testid="fmt-draw" title="Draw a sketch" onclick={() => (showDraw = true)}>✏️</button>
+
+    <span class="sep"></span>
+
     <select
       data-testid="fmt-size"
       title="Font size"
@@ -127,6 +141,10 @@
 
   <div class="content" style="font-size: {baseSize}px" bind:this={element}></div>
 </div>
+
+{#if showDraw}
+  <DrawPad onDone={drawDone} />
+{/if}
 
 <style>
   .editor {
@@ -202,5 +220,13 @@
   }
   .content :global(.ProseMirror:focus) {
     outline: none;
+  }
+  .content :global(.ProseMirror img) {
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+  }
+  .content :global(.ProseMirror img.ProseMirror-selectednode) {
+    outline: 2px solid var(--note-accent);
   }
 </style>
