@@ -39,6 +39,8 @@ async function pickBackend(): Promise<StorageBackend> {
 
 /** Local mirror of Drive notes so startup renders instantly from cache. */
 const CACHE_KEY = 'notezzz:cache:notes';
+/** Cached settings — theme/palette apply immediately, not after the network. */
+const SETTINGS_CACHE_KEY = 'notezzz:cache:settings';
 
 class AppStore {
   notes = $state<Note[]>([]);
@@ -70,8 +72,9 @@ class AppStore {
     this.#backend = await pickBackend();
     const cloud = this.#backend.kind === 'drive';
     this.syncStatus = cloud ? 'loading' : 'local';
-    // Cloud mode: paint cached notes instantly; the Drive refresh replaces
-    // them when it lands. Kills the startup loading screen.
+    // Cloud mode: paint cached notes + settings instantly; the Drive refresh
+    // replaces them when it lands. Kills the startup loading screen and the
+    // late theme/palette flip.
     if (cloud && !this.notes.length) {
       try {
         const cached = JSON.parse(localStorage.getItem(CACHE_KEY) ?? '[]') as Note[];
@@ -80,6 +83,8 @@ class AppStore {
           if (!this.activeId) this.activeId = this.notes[0]?.id ?? null;
           this.loaded = true;
         }
+        const cachedSettings = localStorage.getItem(SETTINGS_CACHE_KEY);
+        if (cachedSettings) this.settings = { ...this.settings, ...JSON.parse(cachedSettings) };
       } catch {
         /* corrupt cache — network load will rebuild it */
       }
@@ -108,6 +113,7 @@ class AppStore {
     if (this.#backend?.kind !== 'drive') return;
     try {
       localStorage.setItem(CACHE_KEY, JSON.stringify($state.snapshot(this.notes)));
+      localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify($state.snapshot(this.settings)));
     } catch {
       /* quota — cache is best-effort */
     }
@@ -234,6 +240,7 @@ class AppStore {
 
   async saveSettings(patch: Partial<Settings>) {
     this.settings = { ...this.settings, ...patch };
+    this.#cacheNotes();
     try {
       await this.#backend?.saveSettings(this.settings);
     } catch (e) {

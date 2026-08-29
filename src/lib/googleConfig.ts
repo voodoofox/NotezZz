@@ -11,7 +11,9 @@
 export const GOOGLE_CLIENT_ID =
   '570390928051-1tmck90tci0fo7jhvrsibrug6bd96elg.apps.googleusercontent.com';
 
-export const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+// openid+email lets the app learn WHICH account signed in, so later silent
+// renewals carry a login hint and skip Google's account-chooser screen.
+export const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/drive.file openid email';
 
 /** Folder the app creates in the user's Drive to hold all note files. */
 export const FOLDER_NAME = 'NotezZz';

@@ -10,7 +10,7 @@ interface TokenResponse {
   expires_in?: number;
 }
 interface TokenClient {
-  requestAccessToken: (opts?: { prompt?: '' | 'none' | 'consent' }) => void;
+  requestAccessToken: (opts?: { prompt?: '' | 'none' | 'consent'; hint?: string }) => void;
   callback: (resp: TokenResponse) => void;
 }
 interface TokenClientError {
@@ -41,6 +41,30 @@ const AUTH_FLAG = 'notezzz:hasAuthed';
 /** Cached access token (+expiry). Tokens live ~1h; persisting them means a
  * share-launch or refresh within that window needs NO Google round-trip. */
 const TOKEN_KEY = 'notezzz:tok';
+/** The signed-in account's email — passed as a hint so Google renews the
+ * session silently instead of showing the account chooser every launch. */
+const ACCT_KEY = 'notezzz:acct';
+
+function accountHint(): string | undefined {
+  try {
+    return localStorage.getItem(ACCT_KEY) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Learn which account we got (fire-and-forget; needs the email scope). */
+function rememberAccount(token: string): void {
+  if (accountHint()) return;
+  void fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((info: { email?: string } | null) => {
+      if (info?.email) localStorage.setItem(ACCT_KEY, info.email);
+    })
+    .catch(() => {});
+}
 
 let accessToken: string | null = null;
 let expiresAt = 0;
@@ -150,11 +174,13 @@ export function signIn(interactive = true): Promise<string> {
           } catch {
             /* private mode */
           }
+          rememberAccount(accessToken);
           resolve(accessToken);
         };
-        // consent UI only for a genuinely new user; '' = silent when possible
+        // consent UI only for a genuinely new user; '' + account hint = fully
+        // silent renewal (no account chooser) while the Google session lives.
         const prompt = interactive && !hasPriorAuth() ? 'consent' : '';
-        client.requestAccessToken({ prompt });
+        client.requestAccessToken({ prompt, hint: accountHint() });
       })
       .catch((e) => {
         clearTimeout(timer);
@@ -194,6 +220,7 @@ export function signOut(): void {
   try {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(AUTH_FLAG);
+    localStorage.removeItem(ACCT_KEY);
   } catch {
     /* ignore */
   }
