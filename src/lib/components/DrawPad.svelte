@@ -4,7 +4,14 @@
   // transparent-background SVG data URL that gets embedded in the note.
   import { getStroke } from 'perfect-freehand';
 
-  let { onDone }: { onDone: (svgDataUrl: string | null) => void } = $props();
+  interface Props {
+    onDone: (svgDataUrl: string | null) => void;
+    /** The note's background — the pad draws on the real thing. */
+    bg?: string;
+    /** The note's text color — guaranteed-contrast default ink. */
+    ink?: string;
+  }
+  let { onDone, bg, ink }: Props = $props();
 
   interface Stroke {
     points: [number, number, number][];
@@ -12,13 +19,27 @@
     size: number;
   }
 
-  const COLORS = ['#1f2328', '#e0245e', '#2f8fe0', '#2fa579', '#f2b705', '#8b5cf6'];
+  // Default ink = the note's own text color, so dark notes start with light
+  // ink and vice versa — never invisible ink. Props are captured once by
+  // design: the pad is remounted fresh on every open.
+  // svelte-ignore state_referenced_locally
+  const inkAtOpen = ink;
+  const COLORS = [
+    ...(inkAtOpen ? [inkAtOpen] : []),
+    '#1f2328',
+    '#ffffff',
+    '#e0245e',
+    '#2f8fe0',
+    '#2fa579',
+    '#f2b705',
+  ].filter((c, i, a) => a.indexOf(c) === i);
   const SIZES = [4, 8, 14];
 
   let strokes = $state<Stroke[]>([]);
   let current = $state<Stroke | null>(null);
-  let color = $state(COLORS[0]);
+  let color = $state(inkAtOpen || '#1f2328');
   let penSize = $state(SIZES[1]);
+  let tool = $state<'pen' | 'erase'>('pen');
   let surface: SVGSVGElement;
 
   const OPTS = { thinning: 0.55, smoothing: 0.6, streamline: 0.5 };
@@ -37,19 +58,39 @@
     return [e.clientX - r.left, e.clientY - r.top, e.pressure || 0.5];
   }
 
+  /** Stroke eraser: remove any stroke passing near the pointer. */
+  function eraseAt([x, y]: [number, number, number]) {
+    const r = 18;
+    strokes = strokes.filter(
+      (s) => !s.points.some(([px, py]) => (px - x) ** 2 + (py - y) ** 2 < r * r)
+    );
+  }
+
+  let erasing = false;
+
   function down(e: PointerEvent) {
     surface.setPointerCapture(e.pointerId);
+    if (tool === 'erase') {
+      erasing = true;
+      eraseAt(pos(e));
+      return;
+    }
     current = { points: [pos(e)], color, size: penSize };
   }
 
   function move(e: PointerEvent) {
-    if (!current) return;
     // Coalesced events give the full-resolution trail on high-Hz styluses.
     const events = e.getCoalescedEvents?.() ?? [e];
+    if (erasing) {
+      for (const ev of events) eraseAt(pos(ev));
+      return;
+    }
+    if (!current) return;
     for (const ev of events) current.points.push(pos(ev));
   }
 
   function up() {
+    erasing = false;
     if (current && current.points.length > 1) strokes.push(current);
     current = null;
   }
@@ -116,6 +157,22 @@
         </button>
       {/each}
     </div>
+    <div class="tools">
+      <button
+        class="op"
+        class:sel={tool === 'pen'}
+        data-testid="tool-pen"
+        title="Pen"
+        onclick={() => (tool = 'pen')}
+      >✏️</button>
+      <button
+        class="op"
+        class:sel={tool === 'erase'}
+        data-testid="tool-erase"
+        title="Eraser (removes whole strokes)"
+        onclick={() => (tool = 'erase')}
+      >🧽</button>
+    </div>
     <div class="ops">
       <button class="op" onclick={undo} disabled={!strokes.length} title="Undo">↩</button>
       <button class="op" onclick={() => (strokes = [])} disabled={!strokes.length} title="Clear">🗑</button>
@@ -125,10 +182,12 @@
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <svg
     class="surface"
+    class:erase={tool === 'erase'}
     data-testid="draw-surface"
     bind:this={surface}
     role="img"
     aria-label="Drawing area"
+    style={bg ? `background: ${bg}` : ''}
     onpointerdown={down}
     onpointermove={move}
     onpointerup={up}
@@ -206,7 +265,9 @@
     border-radius: 50%;
     display: block;
   }
-  .ops {
+  .tools {
+    display: flex;
+    gap: 8px;
     margin-left: auto;
   }
   .op {
@@ -219,6 +280,11 @@
     color: var(--app-fg);
     cursor: pointer;
   }
+  .op.sel {
+    border-color: var(--app-accent);
+    border-width: 2px;
+    background: color-mix(in srgb, var(--app-accent) 14%, var(--app-bg));
+  }
   .op:disabled {
     opacity: 0.35;
     cursor: default;
@@ -228,9 +294,10 @@
     width: 100%;
     touch-action: none; /* fingers draw, they don't scroll */
     cursor: crosshair;
-    background:
-      radial-gradient(circle, var(--app-border) 1px, transparent 1px) 0 0 / 24px 24px,
-      var(--app-bg);
+    background: var(--app-bg);
+  }
+  .surface.erase {
+    cursor: cell;
   }
   .actions {
     display: flex;

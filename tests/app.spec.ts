@@ -146,6 +146,31 @@ test('drawing: a sketch becomes an image in the note', async ({ page }) => {
   await expect(page.locator('.ProseMirror img')).toHaveCount(1);
 });
 
+test('drawing: eraser removes a stroke', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('fmt-draw').click();
+  const surface = page.getByTestId('draw-surface');
+  const box = (await surface.boundingBox())!;
+
+  // Draw a line…
+  await page.mouse.move(box.x + 100, box.y + 150);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 250, box.y + 150, { steps: 10 });
+  await page.mouse.up();
+  await expect(page.getByTestId('draw-done')).toBeEnabled();
+
+  // …then erase through it.
+  await page.getByTestId('tool-erase').click();
+  await page.mouse.move(box.x + 170, box.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 170, box.y + 200, { steps: 10 });
+  await page.mouse.up();
+
+  // No strokes left -> Done disables again.
+  await expect(page.getByTestId('draw-done')).toBeDisabled();
+  await page.getByTestId('draw-cancel').click();
+});
+
 test('drawing: cancel inserts nothing', async ({ page }) => {
   await createNote(page);
   await page.getByTestId('fmt-draw').click();

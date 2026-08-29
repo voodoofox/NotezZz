@@ -21,6 +21,16 @@
   // Bumped on every transaction so toolbar active-states stay reactive.
   let tick = $state(0);
   let showDraw = $state(false);
+  let drawBg = $state<string | undefined>();
+  let drawInk = $state<string | undefined>();
+
+  function openDraw() {
+    // Draw on the note's real colors, with guaranteed-contrast default ink.
+    const cs = getComputedStyle(element);
+    drawBg = cs.getPropertyValue('--note-bg').trim() || undefined;
+    drawInk = cs.getPropertyValue('--note-fg').trim() || undefined;
+    showDraw = true;
+  }
 
   function drawDone(svgDataUrl: string | null) {
     showDraw = false;
@@ -118,7 +128,7 @@
 
     <span class="sep"></span>
 
-    <button data-testid="fmt-draw" title="Draw a sketch" onclick={() => (showDraw = true)}>✏️</button>
+    <button data-testid="fmt-draw" title="Draw a sketch" onclick={openDraw}>✏️</button>
 
     <span class="sep"></span>
 
@@ -143,7 +153,7 @@
 </div>
 
 {#if showDraw}
-  <DrawPad onDone={drawDone} />
+  <DrawPad onDone={drawDone} bg={drawBg} ink={drawInk} />
 {/if}
 
 <style>

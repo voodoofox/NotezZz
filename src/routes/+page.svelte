@@ -8,7 +8,7 @@
   import SignIn from '$lib/components/SignIn.svelte';
   import ShareIntake from '$lib/components/ShareIntake.svelte';
   import { page } from '$app/state';
-  import { hasPriorAuth, isDriveAuthed, signIn } from '$lib/drive/auth';
+  import { hasPriorAuth } from '$lib/drive/auth';
 
   /** Text arriving via the Android share sheet (see routes/share). */
   let sharedText = $state<string | null>(null);
@@ -37,11 +37,11 @@
 
   // Desktop never gates. Web waits for Google sign-in, unless "local mode" is
   // chosen (offline, localStorage) — also used by the E2E test suite via ?local.
+  // Returning Drive users boot straight into the app (cached notes paint
+  // instantly, token renews in the background) — no "Connecting…" screen.
   const localMode =
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('local');
-  let authed = $state(isTauri() || localMode);
-  // Returning users skip the gate: try a silent token grab first.
-  let autoSigningIn = $state(!isTauri() && !localMode && hasPriorAuth());
+  let authed = $state(isTauri() || localMode || hasPriorAuth());
 
   let booted = false;
   async function boot() {
@@ -84,29 +84,7 @@
   }
 
   onMount(() => {
-    if (authed) return void boot();
-    // A still-valid token survived from a previous launch (persisted, ~1h
-    // lifetime) — boot instantly, no Google round-trip at all.
-    if (autoSigningIn && isDriveAuthed()) {
-      autoSigningIn = false;
-      authed = true;
-      return void boot();
-    }
-    if (autoSigningIn) {
-      // Silent re-auth for returning users — no Google screens on refresh.
-      const timeout = new Promise<never>((_, rej) =>
-        setTimeout(() => rej(new Error('timeout')), 8000)
-      );
-      Promise.race([signIn(false), timeout])
-        .then(() => {
-          authed = true;
-          void boot();
-        })
-        .catch(() => {
-          /* fall back to the sign-in gate */
-        })
-        .finally(() => (autoSigningIn = false));
-    }
+    if (authed) void boot();
   });
 
   function onSignedIn() {
@@ -123,21 +101,11 @@
   {#if sharedText}
     <ShareIntake text={sharedText} onDone={shareDone} />
   {/if}
-{:else if autoSigningIn}
-  <div class="connecting">Connecting…</div>
 {:else}
   <SignIn {onSignedIn} onLocal={() => (authed = true)} />
 {/if}
 
 <style>
-  .connecting {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    color: var(--app-muted);
-    font-size: 18px;
-  }
   .app {
     display: flex;
     height: 100vh;

@@ -26,13 +26,19 @@ async function pickBackend(): Promise<StorageBackend> {
     const { FsBackend } = await import('./storage/fsBackend');
     return new FsBackend();
   }
-  const { isDriveAuthed } = await import('./drive/auth');
-  if (isDriveAuthed()) {
+  const { isDriveAuthed, hasPriorAuth } = await import('./drive/auth');
+  // hasPriorAuth: even if the cached token expired, this browser IS a Drive
+  // user — go Drive and let the token renew silently, instead of silently
+  // dropping into an (empty) localStorage mode that looks like data loss.
+  if (isDriveAuthed() || hasPriorAuth()) {
     const { DriveBackend } = await import('./drive/driveBackend');
     return new DriveBackend();
   }
   return new LocalBackend();
 }
+
+/** Local mirror of Drive notes so startup renders instantly from cache. */
+const CACHE_KEY = 'notezzz:cache:notes';
 
 class AppStore {
   notes = $state<Note[]>([]);
@@ -52,6 +58,7 @@ class AppStore {
   #timers = new Map<string, ReturnType<typeof setTimeout>>();
   #reloading = false;
   #inflight = 0;
+  #lastReload = 0;
 
   active = $derived(this.notes.find((n) => n.id === this.activeId) ?? null);
 
@@ -63,6 +70,20 @@ class AppStore {
     this.#backend = await pickBackend();
     const cloud = this.#backend.kind === 'drive';
     this.syncStatus = cloud ? 'loading' : 'local';
+    // Cloud mode: paint cached notes instantly; the Drive refresh replaces
+    // them when it lands. Kills the startup loading screen.
+    if (cloud && !this.notes.length) {
+      try {
+        const cached = JSON.parse(localStorage.getItem(CACHE_KEY) ?? '[]') as Note[];
+        if (cached.length) {
+          this.notes = dedupeById(cached);
+          if (!this.activeId) this.activeId = this.notes[0]?.id ?? null;
+          this.loaded = true;
+        }
+      } catch {
+        /* corrupt cache — network load will rebuild it */
+      }
+    }
     try {
       // Watchdog: whatever goes wrong below, "Loading…" may never be forever —
       // surface an error (with its Reconnect button) instead.
@@ -75,10 +96,21 @@ class AppStore {
       if (settings) this.settings = settings;
       if (!this.activeId && this.notes.length) this.activeId = this.notes[0].id;
       this.syncStatus = cloud ? 'synced' : 'local';
+      this.#cacheNotes();
     } catch (e) {
       this.#fail(e);
     }
     this.loaded = true;
+  }
+
+  /** Keep the instant-start cache in step with reality (cloud mode only). */
+  #cacheNotes() {
+    if (this.#backend?.kind !== 'drive') return;
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify($state.snapshot(this.notes)));
+    } catch {
+      /* quota — cache is best-effort */
+    }
   }
 
   #fail(e: unknown) {
@@ -105,6 +137,7 @@ class AppStore {
   async #save(note: Note) {
     if (!this.#backend) return;
     if (this.#backend.kind !== 'drive') return void this.#backend.saveNote(note);
+    this.#cacheNotes(); // instant-start cache stays current even if Drive lags
     this.#inflight += 1;
     this.syncStatus = 'saving';
     try {
@@ -143,9 +176,15 @@ class AppStore {
   /** Re-read notes from the backend (e.g. after a sticky window edited a file). */
   async reload() {
     if (!this.#backend || this.#reloading) return;
+    // Focus events fire in bursts (main <-> sticky windows trade focus);
+    // reloading on each is churn the app doesn't need.
+    if (Date.now() - this.#lastReload < 3000) return;
+    this.#lastReload = Date.now();
     this.#reloading = true;
     try {
       await this.#doReload();
+    } catch (e) {
+      this.#fail(e);
     } finally {
       this.#reloading = false;
     }
@@ -161,10 +200,20 @@ class AppStore {
       const n = this.notes.find((x) => x.id === id);
       if (n) await this.#backend.saveNote($state.snapshot(n));
     }
+    const prevPinned = new Set(this.notes.filter((n) => n.pinned).map((n) => n.id));
     const notes = await this.#backend.listNotes();
     this.notes = dedupeById(notes);
     if (this.activeId && !this.notes.some((n) => n.id === this.activeId)) {
       this.activeId = this.notes[0]?.id ?? null;
+    }
+    this.#cacheNotes();
+    // Desktop: honor pin changes that arrived from other devices — a note
+    // pinned on the phone becomes a sticky here on the next refresh.
+    if (isTauri()) {
+      for (const n of this.notes) {
+        if (n.pinned && !prevPinned.has(n.id)) void openSticky(n);
+        if (!n.pinned && prevPinned.has(n.id)) void closeSticky(n.id);
+      }
     }
   }
 
@@ -175,6 +224,7 @@ class AppStore {
       this.mobileOpen = false; // drop out of fullscreen after deleting on phones
     }
     this.#timers.delete(id);
+    this.#cacheNotes();
     try {
       await this.#backend?.deleteNote(id);
     } catch (e) {
