@@ -36,7 +36,16 @@
   ].filter((c, i, a) => a.indexOf(c) === i);
   const SIZES = [4, 8, 14];
 
+  interface PadImage {
+    href: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }
+
   let strokes = $state<Stroke[]>([]);
+  let images = $state<PadImage[]>([]);
   let current = $state<Stroke | null>(null);
   let color = $state(inkAtOpen || '#1f2328');
   let penSize = $state(SIZES[1]);
@@ -100,8 +109,36 @@
     strokes.pop();
   }
 
+  let fileInput = $state<HTMLInputElement | null>(null);
+
+  /** Drop a photo onto the pad (centered, fit to ~70%) to draw over it. */
+  function importImage(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const img = new window.Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+      const k = Math.min(1, 1280 / Math.max(img.width, img.height));
+      canvas.width = Math.round(img.width * k);
+      canvas.height = Math.round(img.height * k);
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const href =
+        file.type === 'image/png' ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.85);
+      const r = surface.getBoundingClientRect();
+      const fit = Math.min((r.width * 0.7) / canvas.width, (r.height * 0.7) / canvas.height, 1);
+      const w = canvas.width * fit;
+      const h = canvas.height * fit;
+      images.push({ href, x: (r.width - w) / 2, y: (r.height - h) / 2, w, h });
+    };
+    img.src = url;
+  }
+
   function finish() {
-    if (!strokes.length) return onDone(null);
+    if (!strokes.length && !images.length) return onDone(null);
     // Crop to the ink's bounding box (with padding) so the inserted image
     // is exactly as big as the sketch, not the whole screen.
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -115,6 +152,12 @@
       }
       return { s, pts };
     });
+    for (const im of images) {
+      minX = Math.min(minX, im.x);
+      minY = Math.min(minY, im.y);
+      maxX = Math.max(maxX, im.x + im.w);
+      maxY = Math.max(maxY, im.y + im.h);
+    }
     const pad = 10;
     const w = Math.max(1, Math.ceil(maxX - minX + pad * 2));
     const h = Math.max(1, Math.ceil(maxY - minY + pad * 2));
@@ -127,7 +170,13 @@
         return `<path d="${d}Z" fill="${s.color}"/>`;
       })
       .join('');
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${paths}</svg>`;
+    const imgTags = images
+      .map(
+        (im) =>
+          `<image href="${im.href}" x="${(im.x - minX + pad).toFixed(1)}" y="${(im.y - minY + pad).toFixed(1)}" width="${im.w.toFixed(1)}" height="${im.h.toFixed(1)}"/>`
+      )
+      .join('');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${imgTags}${paths}</svg>`;
     onDone(`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`);
   }
 </script>
@@ -177,13 +226,20 @@
       ><Icon name="eraser" /></button>
     </div>
     <div class="ops">
+      <button class="op" onclick={() => fileInput?.click()} title="Insert image" aria-label="Insert image">
+        <Icon name="image" />
+      </button>
+      <input type="file" accept="image/*" hidden bind:this={fileInput} onchange={importImage} />
       <button class="op" onclick={undo} disabled={!strokes.length} title="Undo" aria-label="Undo">
         <Icon name="undo" />
       </button>
       <button
         class="op"
-        onclick={() => (strokes = [])}
-        disabled={!strokes.length}
+        onclick={() => {
+          strokes = [];
+          images = [];
+        }}
+        disabled={!strokes.length && !images.length}
         title="Clear"
         aria-label="Clear"
       ><Icon name="trash" /></button>
@@ -204,6 +260,9 @@
     onpointerup={up}
     onpointercancel={up}
   >
+    {#each images as im}
+      <image href={im.href} x={im.x} y={im.y} width={im.w} height={im.h} />
+    {/each}
     {#each strokes as s}
       <path d={pathOf(s)} fill={s.color} />
     {/each}
@@ -214,9 +273,12 @@
 
   <div class="actions">
     <button class="cancel" data-testid="draw-cancel" onclick={() => onDone(null)}>Cancel</button>
-    <button class="done" data-testid="draw-done" onclick={finish} disabled={!strokes.length}>
-      ✓ Done
-    </button>
+    <button
+      class="done"
+      data-testid="draw-done"
+      onclick={finish}
+      disabled={!strokes.length && !images.length}
+    ><Icon name="check" size={17} /> Done</button>
   </div>
 </div>
 
@@ -312,25 +374,41 @@
   .surface.erase {
     cursor: cell;
   }
-  /* Phones: tool rows stretch edge-to-edge — colors on one full row, then
-     sizes/tools/undo-clear evenly distributed across the next. */
+  /* Phones: everything on ONE row, evenly spread edge-to-edge. */
   @media (max-width: 700px) {
     .bar {
-      row-gap: 10px;
-      padding: 10px;
+      flex-wrap: nowrap;
+      justify-content: space-between;
+      gap: 4px;
+      padding: 8px 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .bar::-webkit-scrollbar {
+      display: none;
     }
     .swatches {
-      width: 100%;
-      justify-content: space-between;
-      gap: 0;
+      gap: 5px;
     }
-    .sizes,
+    .dot {
+      width: 22px;
+      height: 22px;
+    }
+    .sizes {
+      gap: 4px;
+    }
+    .sz {
+      width: 30px;
+      height: 30px;
+    }
     .tools,
     .ops {
-      flex: 1 1 0;
-      justify-content: space-evenly;
-      gap: 0;
+      gap: 4px;
       margin-left: 0;
+    }
+    .op {
+      width: 32px;
+      height: 30px;
     }
   }
   .actions {
@@ -350,11 +428,15 @@
     background: var(--app-bg);
     color: var(--app-fg);
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
+  /* Monochrome primary action: inverted fg/bg, no accent. */
   .done {
-    background: var(--app-accent);
-    border-color: var(--app-accent);
-    color: #fff;
+    background: var(--app-fg);
+    border-color: var(--app-fg);
+    color: var(--app-bg);
   }
   .done:disabled {
     opacity: 0.5;

@@ -193,9 +193,10 @@
   .item:hover {
     background: var(--app-bg);
   }
+  /* Monochrome selection — no accent blue. */
   .item.active {
     background: var(--app-bg);
-    border-color: var(--app-accent);
+    border-color: var(--app-fg);
   }
   .pick {
     display: flex;

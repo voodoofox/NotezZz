@@ -86,6 +86,30 @@ test('changing palette updates the note color live (the frozen-UI bug)', async (
   await expect(page.getByTestId('note-swatch')).toHaveCSS('background-color', 'rgb(224, 243, 233)');
 });
 
+test('image import inserts a picture into the note', async ({ page }) => {
+  await createNote(page);
+  // 1x1 red PNG.
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64'
+  );
+  await page.getByTestId('image-input').setInputFiles({
+    name: 'test.png',
+    mimeType: 'image/png',
+    buffer: png,
+  });
+  const img = page.locator('.ProseMirror img');
+  await expect(img).toHaveCount(1);
+  expect(await img.getAttribute('src')).toContain('data:image/png');
+});
+
+test('custom color sliders recolor the note', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('note-color').click();
+  await page.getByTestId('custom-hue').fill('200');
+  await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', /custom:#/);
+});
+
 test('search filters the note list live', async ({ page }) => {
   await createNote(page);
   await page.getByTestId('title-input').fill('Groceries');

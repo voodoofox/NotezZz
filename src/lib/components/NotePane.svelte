@@ -16,8 +16,8 @@
   // toolbar's overflow can't clip them; any outside tap closes them.
   let openPop = $state<'pal' | 'size' | null>(null);
   let popStyle = $state('');
-  let palWrap = $state<HTMLDivElement | null>(null);
-  let sizeWrapEl = $state<HTMLDivElement | null>(null);
+  let palWrap = $state<HTMLElement | null>(null);
+  let sizeWrapEl = $state<HTMLElement | null>(null);
 
   function togglePop(which: 'pal' | 'size') {
     if (openPop === which) return void (openPop = null);
@@ -33,7 +33,27 @@
   }
 
   let isCustom = $derived(note?.paletteId.startsWith('custom:') ?? false);
-  let customHex = $derived(isCustom ? note!.paletteId.slice(7) : '#fbfaf6');
+
+  // Inline custom color: hue + shade sliders apply instantly — no native
+  // color-dialog chain.
+  let custHue = $state(45);
+  let custLight = $state(82);
+
+  function hslToHex(h: number, s: number, l: number): string {
+    const a = (s * Math.min(l, 100 - l)) / 100;
+    const f = (n: number) => {
+      const k = (n + h / 30) % 12;
+      const c = (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))) / 100;
+      return Math.round(255 * c)
+        .toString(16)
+        .padStart(2, '0');
+    };
+    return `#${f(0)}${f(8)}${f(4)}`;
+  }
+
+  function applyCustom() {
+    if (note) store.update(note.id, { paletteId: `custom:${hslToHex(custHue, 70, custLight)}` });
+  }
 
   function deleteNote() {
     if (!note || !confirm('Delete this note?')) return;
@@ -82,6 +102,106 @@
         value={note.title}
         oninput={(e) => store.update(note!.id, { title: (e.currentTarget as HTMLInputElement).value })}
       />
+      <span class="twrap" bind:this={palWrap}>
+        <button
+          class="icon"
+          class:on={openPop === 'pal'}
+          data-testid="note-color"
+          title="Note color"
+          aria-label="Note color"
+          onclick={() => togglePop('pal')}
+        ><Icon name="palette" /></button>
+        {#if openPop === 'pal'}
+          <div class="pop palmenu" style={popStyle}>
+            <div class="pgrid">
+              {#each PALETTES as p}
+                <button
+                  class="pchip"
+                  data-testid="palette-chip"
+                  data-palette={p.id}
+                  style="background: {p.bg}"
+                  title={p.name}
+                  aria-label={p.name}
+                  onclick={() => {
+                    store.update(note!.id, { paletteId: p.id });
+                    openPop = null;
+                  }}
+                >
+                  {#if note.paletteId === p.id}
+                    <span class="pcheck" style="color: {p.fg}"><Icon name="check" size={15} /></span>
+                  {/if}
+                </button>
+              {/each}
+              {#if isCustom}
+                <span class="pchip current" style="background: {pal.bg}">
+                  <span class="pcheck" style="color: {pal.fg}"><Icon name="check" size={15} /></span>
+                </span>
+              {/if}
+            </div>
+            <label class="crow">
+              <input
+                class="hue"
+                type="range" min="0" max="360" step="1"
+                data-testid="custom-hue"
+                aria-label="Custom color hue"
+                bind:value={custHue}
+                oninput={applyCustom}
+              />
+            </label>
+            <label class="crow">
+              <input
+                class="shade"
+                type="range" min="30" max="94" step="1"
+                aria-label="Custom color shade"
+                style="--hue: {custHue}"
+                bind:value={custLight}
+                oninput={applyCustom}
+              />
+            </label>
+          </div>
+        {/if}
+      </span>
+
+      <span class="twrap" bind:this={sizeWrapEl}>
+        <button
+          class="icon aa"
+          class:on={openPop === 'size'}
+          data-testid="tools-toggle"
+          title="Base text size{desktop ? ' & sticker opacity' : ''}"
+          onclick={() => togglePop('size')}
+        >Aa·{note.fontSize}</button>
+        {#if openPop === 'size'}
+          <div class="pop panel" style={popStyle}>
+            <div class="ctl">
+              <div class="crowhead">
+                <span>Text size</span>
+                <span class="val" data-testid="size-value">{note.fontSize}</span>
+              </div>
+              <input
+                type="range" min="12" max="40" step="1"
+                data-testid="size-slider"
+                value={note.fontSize}
+                oninput={(e) => store.update(note!.id, { fontSize: +(e.currentTarget as HTMLInputElement).value })}
+              />
+            </div>
+            {#if desktop}
+              <div class="ctl">
+                <div class="crowhead">
+                  <span>Sticker opacity</span>
+                  <span class="val" data-testid="opacity-value">{Math.round(note.opacity * 100)}%</span>
+                </div>
+                <input
+                  type="range" min="0.2" max="1" step="0.05"
+                  data-testid="opacity-slider"
+                  value={note.opacity}
+                  oninput={(e) => store.update(note!.id, { opacity: +(e.currentTarget as HTMLInputElement).value })}
+                />
+              </div>
+            {/if}
+          </div>
+        {/if}
+      </span>
+
       <button
         class="icon"
         data-testid="pane-pin"
@@ -99,98 +219,12 @@
       ><Icon name="trash" /></button>
     </div>
 
-    {#snippet noteTools()}
-      <div class="tb-wrap" bind:this={palWrap}>
-        <button
-          class="tb-btn"
-          class:active={openPop === 'pal'}
-          data-testid="note-color"
-          title="Note color"
-          aria-label="Note color"
-          onclick={() => togglePop('pal')}
-        ><Icon name="palette" /></button>
-        {#if openPop === 'pal'}
-          <div class="pop palmenu" style={popStyle}>
-            {#each PALETTES as p}
-              <button
-                class="pchip"
-                data-testid="palette-chip"
-                data-palette={p.id}
-                style="background: {p.bg}"
-                title={p.name}
-                aria-label={p.name}
-                onclick={() => {
-                  store.update(note!.id, { paletteId: p.id });
-                  openPop = null;
-                }}
-              >
-                {#if note.paletteId === p.id}
-                  <span class="pcheck" style="color: {p.fg}"><Icon name="check" size={15} /></span>
-                {/if}
-              </button>
-            {/each}
-            <label class="pchip picker" title="Custom color" aria-label="Custom color">
-              <input
-                type="color"
-                data-testid="custom-color"
-                value={customHex}
-                oninput={(e) =>
-                  store.update(note!.id, {
-                    paletteId: `custom:${(e.currentTarget as HTMLInputElement).value}`,
-                  })}
-              />
-              {#if isCustom}
-                <span class="pcheck" style="color: {pal.fg}"><Icon name="check" size={15} /></span>
-              {/if}
-            </label>
-          </div>
-        {/if}
-      </div>
-
-      <div class="tb-wrap" bind:this={sizeWrapEl}>
-        <button
-          class="tb-btn"
-          class:active={openPop === 'size'}
-          data-testid="tools-toggle"
-          title="Base text size{desktop ? ' & sticker opacity' : ''}"
-          onclick={() => togglePop('size')}
-        >Aa·{note.fontSize}</button>
-        {#if openPop === 'size'}
-          <div class="pop panel" style={popStyle}>
-            <label class="ctl">
-              <span>Text size</span>
-              <input
-                type="range" min="12" max="40" step="1"
-                data-testid="size-slider"
-                value={note.fontSize}
-                oninput={(e) => store.update(note!.id, { fontSize: +(e.currentTarget as HTMLInputElement).value })}
-              />
-              <span class="val" data-testid="size-value">{note.fontSize}</span>
-            </label>
-            {#if desktop}
-              <label class="ctl">
-                <span>Sticker opacity</span>
-                <input
-                  type="range" min="0.2" max="1" step="0.05"
-                  data-testid="opacity-slider"
-                  value={note.opacity}
-                  oninput={(e) => store.update(note!.id, { opacity: +(e.currentTarget as HTMLInputElement).value })}
-                />
-                <span class="val" data-testid="opacity-value">{Math.round(note.opacity * 100)}%</span>
-              </label>
-            {/if}
-          </div>
-        {/if}
-      </div>
-    {/snippet}
-
     <div class="editorWrap">
       {#key note.id}
         <Editor
           html={note.contentHtml}
           baseSize={note.fontSize}
           onChange={(html) => store.update(note!.id, { contentHtml: html })}
-          extra={noteTools}
         />
       {/key}
     </div>
@@ -255,32 +289,40 @@
     border: none;
     background: transparent;
     color: var(--note-fg);
-    padding: 6px 8px;
+    height: 34px;
+    min-width: 34px;
+    padding: 0 8px;
     border-radius: 7px;
     cursor: pointer;
     opacity: 0.55;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
   }
   .icon:hover {
     background: rgba(0, 0, 0, 0.08);
     opacity: 1;
   }
+  /* Monochrome active state: invert the note's colors. */
   .icon.on {
     opacity: 1;
-    background: rgba(0, 0, 0, 0.1);
+    background: var(--note-fg);
+    color: var(--note-bg);
   }
   /* Fullscreen/back toggles only exist in the phone layout. */
   .mob {
     display: none;
-    font-size: 19px;
     opacity: 0.8;
   }
   @media (max-width: 700px) {
     .mob {
-      display: block;
+      display: inline-flex;
     }
+  }
+  .twrap {
+    position: relative;
+    display: inline-flex;
   }
   /* Popovers are fixed-positioned via inline style (see popoverStyle). */
   .pop {
@@ -291,10 +333,16 @@
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
   }
   .palmenu {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+    width: 226px;
+  }
+  .pgrid {
     display: grid;
     grid-template-columns: repeat(5, 34px);
     gap: 8px;
-    padding: 12px;
   }
   .pchip {
     width: 34px;
@@ -311,44 +359,79 @@
   .pchip:hover {
     transform: scale(1.08);
   }
+  .pchip.current {
+    cursor: default;
+  }
   .pcheck {
     display: inline-flex;
   }
-  .pchip.picker {
-    background: conic-gradient(#e0245e, #f2b705, #2fa579, #2f8fe0, #8b5cf6, #e0245e);
-    overflow: hidden;
+  /* Inline custom color: hue wheel flattened into a slider + shade. */
+  .crow {
+    display: block;
   }
-  .pchip.picker input {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
+  .crow input[type='range'] {
+    width: 100%;
+    height: 22px;
+    appearance: none;
+    -webkit-appearance: none;
+    border-radius: 11px;
+    outline: none;
     cursor: pointer;
+  }
+  .crow input[type='range']::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--app-panel);
+    border: 2px solid var(--app-fg);
+  }
+  .hue {
+    background: linear-gradient(
+      to right,
+      hsl(0, 70%, 70%),
+      hsl(60, 70%, 70%),
+      hsl(120, 70%, 70%),
+      hsl(180, 70%, 70%),
+      hsl(240, 70%, 70%),
+      hsl(300, 70%, 70%),
+      hsl(360, 70%, 70%)
+    );
+  }
+  .shade {
+    background: linear-gradient(
+      to right,
+      hsl(var(--hue), 70%, 30%),
+      hsl(var(--hue), 70%, 94%)
+    );
   }
   .panel {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 12px 14px;
-    min-width: 240px;
+    gap: 14px;
+    padding: 14px 16px;
+    width: 270px;
   }
   .ctl {
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 8px;
-    font-size: 14px;
   }
-  .ctl > span:first-child {
-    width: 92px;
-    flex-shrink: 0;
+  .crowhead {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    color: var(--app-muted);
   }
   .ctl input[type='range'] {
-    flex: 1;
-    accent-color: var(--app-accent);
+    width: 100%;
+    accent-color: var(--app-fg);
   }
-  .val {
-    min-width: 36px;
-    text-align: right;
-    opacity: 0.75;
+  .icon.aa {
+    font-size: 14px;
+    white-space: nowrap;
+    width: auto;
+    padding: 0 10px;
   }
   .editorWrap {
     flex: 1;

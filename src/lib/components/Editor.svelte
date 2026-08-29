@@ -8,7 +8,6 @@
   import DrawPad from './DrawPad.svelte';
   import Icon from './Icon.svelte';
 
-  import type { Snippet } from 'svelte';
   import { popoverStyle } from '$lib/popover';
 
   interface Props {
@@ -16,11 +15,9 @@
     onChange: (html: string) => void;
     /** Base font size (px) for the note body. */
     baseSize?: number;
-    /** Extra toolbar controls contributed by the host (e.g. note color). */
-    extra?: Snippet;
   }
 
-  let { html, onChange, baseSize = 18, extra }: Props = $props();
+  let { html, onChange, baseSize = 18 }: Props = $props();
 
   let element: HTMLDivElement;
   let editor = $state<Editor | null>(null);
@@ -41,6 +38,44 @@
   // Tapping anywhere else (including the text) closes the size menu.
   function onGlobalPointerDown(e: PointerEvent) {
     if (showSizes && sizeWrap && !sizeWrap.contains(e.target as Node)) showSizes = false;
+  }
+
+  let fileInput = $state<HTMLInputElement | null>(null);
+
+  /** Insert a photo/image, downscaled so notes stay reasonably sized. */
+  async function importImage(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file || !editor) return;
+    const dataUrl = await scaleImage(file, 1280);
+    if (dataUrl) editor.chain().focus().insertContent({ type: 'image', attrs: { src: dataUrl } }).run();
+  }
+
+  function scaleImage(file: File, max: number): Promise<string | null> {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const img = new window.Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const k = Math.min(1, max / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * k);
+        canvas.height = Math.round(img.height * k);
+        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        // PNGs keep transparency; everything else compresses well as JPEG.
+        resolve(
+          file.type === 'image/png'
+            ? canvas.toDataURL('image/png')
+            : canvas.toDataURL('image/jpeg', 0.85)
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      };
+      img.src = url;
+    });
   }
 
   function openDraw() {
@@ -168,7 +203,7 @@
         title="Text size"
         aria-label="Text size"
         onclick={toggleSizes}
-      ><Icon name="textSize" /></button>
+      ><Icon name="textSize" size={22} /></button>
       {#if showSizes}
         <div class="sizemenu" style={sizeMenuStyle}>
           <button
@@ -193,7 +228,20 @@
       {/if}
     </div>
 
-    {#if extra}{@render extra()}{/if}
+    <button
+      data-testid="fmt-image"
+      title="Insert image"
+      aria-label="Insert image"
+      onclick={() => fileInput?.click()}
+    ><Icon name="image" /></button>
+    <input
+      type="file"
+      accept="image/*"
+      data-testid="image-input"
+      hidden
+      bind:this={fileInput}
+      onchange={importImage}
+    />
   </div>
 
   <div class="content" style="font-size: {baseSize}px" bind:this={element}></div>
@@ -267,9 +315,9 @@
   }
   .sopt {
     font: inherit;
-    font-size: 15px;
-    min-width: 64px;
-    padding: 7px 12px;
+    font-size: 17px;
+    min-width: 88px;
+    padding: 10px 16px;
     border: none;
     border-radius: 7px;
     background: transparent;
