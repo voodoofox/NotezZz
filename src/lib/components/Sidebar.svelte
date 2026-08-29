@@ -193,10 +193,19 @@
   .item:hover {
     background: var(--app-bg);
   }
-  /* Monochrome selection — no accent blue. */
+  /* Monochrome selection: full inversion — light theme gets a dark card,
+     dark theme gets a white card with dark text. */
   .item.active {
-    background: var(--app-bg);
+    background: var(--app-fg);
     border-color: var(--app-fg);
+    color: var(--app-bg);
+  }
+  .item.active .pick,
+  .item.active .pin {
+    color: var(--app-bg);
+  }
+  .item.active:hover {
+    background: var(--app-fg);
   }
   .pick {
     display: flex;

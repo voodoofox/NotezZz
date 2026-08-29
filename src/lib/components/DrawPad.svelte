@@ -374,15 +374,26 @@
   .surface.erase {
     cursor: cell;
   }
-  /* Phones: everything on ONE row, evenly spread edge-to-edge. */
+  /* Phones: everything on ONE row, evenly spread edge-to-edge — and the
+     tools live at the BOTTOM, same as the editor toolbar. */
   @media (max-width: 700px) {
+    .surface {
+      order: 1;
+    }
     .bar {
+      order: 2;
+      border-bottom: none;
+      border-top: 1px solid var(--app-border);
       flex-wrap: nowrap;
       justify-content: space-between;
       gap: 4px;
       padding: 8px 8px;
       overflow-x: auto;
       scrollbar-width: none;
+    }
+    .actions {
+      order: 3;
+      padding-bottom: calc(12px + env(safe-area-inset-bottom));
     }
     .bar::-webkit-scrollbar {
       display: none;

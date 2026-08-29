@@ -109,6 +109,7 @@
   .app {
     display: flex;
     height: 100vh;
+    height: 100dvh; /* tracks the keyboard-resized viewport on mobile */
     width: 100vw;
     overflow: hidden;
   }
