@@ -269,7 +269,7 @@
     padding: 0;
   }
   .sz.sel {
-    border-color: var(--app-accent);
+    border-color: var(--app-fg);
     border-width: 2px;
   }
   .sz span {
@@ -294,9 +294,9 @@
     justify-content: center;
   }
   .op.sel {
-    border-color: var(--app-accent);
-    border-width: 2px;
-    background: color-mix(in srgb, var(--app-accent) 14%, var(--app-bg));
+    border-color: var(--app-fg);
+    background: var(--app-fg);
+    color: var(--app-bg);
   }
   .op:disabled {
     opacity: 0.35;

@@ -49,16 +49,8 @@
     {/if}
   </div>
 
-  <div class="sync" data-testid="sync-status" data-status={store.syncStatus}>
-    <span class="dot"></span>
-    <span class="label">
-      {#if store.syncStatus === 'local'}Local only
-      {:else if store.syncStatus === 'loading'}Loading…
-      {:else if store.syncStatus === 'saving'}Saving…
-      {:else if store.syncStatus === 'synced'}Synced to Drive
-      {:else if store.syncStatus === 'error'}Sync error{/if}
-    </span>
-  </div>
+  <!-- Sync is invisible when healthy; only problems earn screen space
+       (full status always available in Settings -> Diagnostics). -->
   {#if store.syncStatus === 'error'}
     <div class="sync-err" data-testid="sync-error" title={store.syncError}>
       {store.syncError || 'Sync failed.'}
@@ -188,7 +180,6 @@
   }
   .pin.on {
     opacity: 1;
-    color: var(--app-accent);
   }
   .empty {
     color: var(--app-muted);
@@ -197,35 +188,9 @@
     margin-top: 30px;
     line-height: 1.5;
   }
-  .sync {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 8px 12px;
-    border-top: 1px solid var(--app-border);
-    font-size: 13px;
-    color: var(--app-muted);
-    flex-shrink: 0;
-  }
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--app-muted);
-    flex-shrink: 0;
-  }
-  .sync[data-status='synced'] .dot {
-    background: #2ea043;
-  }
-  .sync[data-status='saving'] .dot,
-  .sync[data-status='loading'] .dot {
-    background: #d29922;
-  }
-  .sync[data-status='error'] .dot {
-    background: #e0245e;
-  }
   .sync-err {
-    padding: 0 12px 10px;
+    border-top: 1px solid var(--app-border);
+    padding: 8px 12px 10px;
     font-size: 12px;
     color: #e0245e;
     word-break: break-word;

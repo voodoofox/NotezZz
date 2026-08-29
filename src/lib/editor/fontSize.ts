@@ -26,9 +26,21 @@ export const FontSize = Extension.create({
         attributes: {
           fontSize: {
             default: null,
-            parseHTML: (el) => el.style.fontSize || null,
-            renderHTML: (attrs) =>
-              attrs.fontSize ? { style: `font-size: ${attrs.fontSize}` } : {},
+            // Attr is stored as a px label ("24px") but RENDERED as em relative
+            // to the 18px default, so the note's base font-size slider scales
+            // ALL text proportionally — a text zoom, not just unformatted text.
+            parseHTML: (el) => {
+              const v = el.style.fontSize;
+              if (!v) return null;
+              if (v.endsWith('em')) return `${Math.round(parseFloat(v) * 18)}px`;
+              return v;
+            },
+            renderHTML: (attrs) => {
+              if (!attrs.fontSize) return {};
+              const px = parseFloat(attrs.fontSize);
+              if (!Number.isFinite(px)) return {};
+              return { style: `font-size: ${(px / 18).toFixed(4)}em` };
+            },
           },
         },
       },

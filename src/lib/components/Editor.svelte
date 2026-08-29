@@ -24,6 +24,13 @@
   let showDraw = $state(false);
   let drawBg = $state<string | undefined>();
   let drawInk = $state<string | undefined>();
+  let showSizes = $state(false);
+  let sizeWrap = $state<HTMLDivElement | null>(null);
+
+  // Tapping anywhere else (including the text) closes the size menu.
+  function onGlobalPointerDown(e: PointerEvent) {
+    if (showSizes && sizeWrap && !sizeWrap.contains(e.target as Node)) showSizes = false;
+  }
 
   function openDraw() {
     // Draw on the note's real colors, with guaranteed-contrast default ink.
@@ -85,6 +92,8 @@
   }
 </script>
 
+<svelte:window onpointerdown={onGlobalPointerDown} />
+
 <div class="editor">
   <div class="toolbar">
     <button
@@ -141,21 +150,37 @@
 
     <span class="sep"></span>
 
-    <select
-      data-testid="fmt-size"
-      title="Font size"
-      value={currentSize()}
-      onchange={(e) => {
-        const v = (e.currentTarget as HTMLSelectElement).value;
-        if (v) editor?.chain().focus().setFontSize(`${v}px`).run();
-        else editor?.chain().focus().unsetFontSize().run();
-      }}
-    >
-      <option value="">Aa</option>
-      {#each SIZES as s}
-        <option value={s}>{s}</option>
-      {/each}
-    </select>
+    <div class="sizewrap" bind:this={sizeWrap}>
+      <button
+        data-testid="fmt-size"
+        class:active={showSizes}
+        title="Text size"
+        aria-label="Text size"
+        onclick={() => (showSizes = !showSizes)}
+      ><Icon name="textSize" /></button>
+      {#if showSizes}
+        <div class="sizemenu">
+          <button
+            class="sopt"
+            class:cur={currentSize() === ''}
+            onclick={() => {
+              editor?.chain().focus().unsetFontSize().run();
+              showSizes = false;
+            }}
+          >Auto</button>
+          {#each SIZES as s}
+            <button
+              class="sopt"
+              class:cur={currentSize() === String(s)}
+              onclick={() => {
+                editor?.chain().focus().setFontSize(`${s}px`).run();
+                showSizes = false;
+              }}
+            >{s}</button>
+          {/each}
+        </div>
+      {/if}
+    </div>
   </div>
 
   <div class="content" style="font-size: {baseSize}px" bind:this={element}></div>
@@ -186,8 +211,7 @@
   .toolbar::-webkit-scrollbar {
     display: none;
   }
-  .toolbar button,
-  .toolbar select {
+  .toolbar button {
     font: inherit;
     font-size: 15px;
     color: var(--note-fg);
@@ -204,13 +228,50 @@
     align-items: center;
     justify-content: center;
   }
-  .toolbar button:hover,
-  .toolbar select:hover {
+  .toolbar button:hover {
     background: rgba(0, 0, 0, 0.07);
   }
+  /* Monochrome active state: invert the note's own colors. */
   .toolbar button.active {
-    background: var(--note-accent);
-    color: #fff;
+    background: var(--note-fg);
+    color: var(--note-bg);
+  }
+  .sizewrap {
+    position: relative;
+    display: inline-flex;
+  }
+  .sizemenu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    background: var(--app-panel);
+    border: 1px solid var(--app-border);
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
+  }
+  .sopt {
+    font: inherit;
+    font-size: 15px;
+    min-width: 64px;
+    padding: 7px 12px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--app-fg);
+    cursor: pointer;
+    text-align: center;
+  }
+  .sopt:hover {
+    background: var(--app-bg);
+  }
+  .sopt.cur {
+    background: var(--app-fg);
+    color: var(--app-panel);
   }
   .sep {
     width: 1px;
@@ -261,11 +322,21 @@
       gap: 0;
       padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
     }
-    .toolbar button,
-    .toolbar select {
+    .toolbar button {
       flex: 1 1 0;
       min-width: 0;
       height: 42px;
+    }
+    .sizewrap {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+    .sizewrap button {
+      width: 100%;
+    }
+    .sizemenu {
+      top: auto;
+      bottom: calc(100% + 6px); /* bottom toolbar -> menu opens upward */
     }
     .sep {
       display: none;

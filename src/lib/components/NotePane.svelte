@@ -10,6 +10,12 @@
   let pal = $derived(note ? getPalette(note.paletteId) : PALETTES[0]);
   const desktop = isTauri();
 
+  let toolsEl = $state<HTMLDetailsElement | null>(null);
+  // Tapping anywhere outside (e.g. into the text) closes the size popover.
+  function closeToolsOutside(e: PointerEvent) {
+    if (toolsEl?.open && !toolsEl.contains(e.target as Node)) toolsEl.open = false;
+  }
+
   function deleteNote() {
     if (!note || !confirm('Delete this note?')) return;
     const wasFullscreen = store.mobileOpen;
@@ -17,6 +23,8 @@
     if (wasFullscreen) history.back(); // drop the fullscreen history entry
   }
 </script>
+
+<svelte:window onpointerdown={closeToolsOutside} />
 
 {#if note}
   <section
@@ -88,7 +96,7 @@
         {/each}
       </div>
 
-      <details class="tools">
+      <details class="tools" bind:this={toolsEl}>
         <summary data-testid="tools-toggle" title="Text size{desktop ? ' & sticker opacity' : ''}">
           Aa·{note.fontSize}
         </summary>
@@ -203,7 +211,6 @@
   }
   .icon.on {
     opacity: 1;
-    color: var(--note-accent);
     background: rgba(0, 0, 0, 0.1);
   }
   /* Fullscreen/back toggles only exist in the phone layout. */
@@ -240,17 +247,17 @@
     display: none;
   }
   .chip {
-    width: 20px;
-    height: 20px;
-    min-width: 20px;
-    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    border-radius: 6px;
     border: 1px solid rgba(0, 0, 0, 0.14);
     cursor: pointer;
     padding: 0;
     transition: transform 0.1s;
   }
   .chip:hover {
-    transform: scale(1.15);
+    transform: scale(1.12);
   }
   .chip.sel {
     outline: 2px solid var(--note-fg);
@@ -274,8 +281,8 @@
     display: none;
   }
   .tools[open] summary {
-    background: var(--note-accent);
-    color: #fff;
+    background: var(--note-fg);
+    color: var(--note-bg);
   }
   .panel {
     position: absolute;
