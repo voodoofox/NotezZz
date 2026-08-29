@@ -2,6 +2,7 @@
   // Chooser shown after an Android "share to NotezZz": put the shared text in
   // a brand-new note, or append it to the end of an existing one.
   import { store } from '$lib/store.svelte';
+  import Icon from './Icon.svelte';
 
   let { text, onDone }: { text: string; onDone: () => void } = $props();
 
@@ -42,7 +43,9 @@
   <div class="card">
     <div class="head">
       <h2>Add shared text</h2>
-      <button class="x" data-testid="share-cancel" title="Discard" onclick={onDone}>✕</button>
+      <button class="x" data-testid="share-cancel" title="Discard" aria-label="Discard" onclick={onDone}>
+        <Icon name="close" size={18} />
+      </button>
     </div>
     <blockquote class="preview">{text.length > 220 ? text.slice(0, 220) + '…' : text}</blockquote>
 

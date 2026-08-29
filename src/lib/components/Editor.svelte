@@ -6,6 +6,7 @@
   import { Image } from '@tiptap/extension-image';
   import { FontSize } from '../editor/fontSize';
   import DrawPad from './DrawPad.svelte';
+  import Icon from './Icon.svelte';
 
   interface Props {
     html: string;
@@ -90,26 +91,30 @@
       data-testid="fmt-bold"
       class:active={isActive('bold')}
       title="Bold (Ctrl+B)"
+      aria-label="Bold"
       onclick={() => editor?.chain().focus().toggleBold().run()}
-    ><b>B</b></button>
+    ><Icon name="bold" /></button>
     <button
       data-testid="fmt-italic"
       class:active={isActive('italic')}
       title="Italic (Ctrl+I)"
+      aria-label="Italic"
       onclick={() => editor?.chain().focus().toggleItalic().run()}
-    ><i>I</i></button>
+    ><Icon name="italic" /></button>
     <button
       data-testid="fmt-underline"
       class:active={isActive('underline')}
       title="Underline (Ctrl+U)"
+      aria-label="Underline"
       onclick={() => editor?.chain().focus().toggleUnderline().run()}
-    ><u>U</u></button>
+    ><Icon name="underline" /></button>
     <button
       data-testid="fmt-strike"
       class:active={isActive('strike')}
       title="Strikethrough"
+      aria-label="Strikethrough"
       onclick={() => editor?.chain().focus().toggleStrike().run()}
-    ><s>S</s></button>
+    ><Icon name="strike" /></button>
 
     <span class="sep"></span>
 
@@ -117,18 +122,22 @@
       data-testid="fmt-bullet"
       class:active={isActive('bulletList')}
       title="Bullet list"
+      aria-label="Bullet list"
       onclick={() => editor?.chain().focus().toggleBulletList().run()}
-    >•—</button>
+    ><Icon name="bulletList" /></button>
     <button
       data-testid="fmt-ordered"
       class:active={isActive('orderedList')}
       title="Numbered list"
+      aria-label="Numbered list"
       onclick={() => editor?.chain().focus().toggleOrderedList().run()}
-    >1.</button>
+    ><Icon name="orderedList" /></button>
 
     <span class="sep"></span>
 
-    <button data-testid="fmt-draw" title="Draw a sketch" onclick={openDraw}>✏️</button>
+    <button data-testid="fmt-draw" title="Draw a sketch" aria-label="Draw" onclick={openDraw}>
+      <Icon name="draw" />
+    </button>
 
     <span class="sep"></span>
 
@@ -241,13 +250,25 @@
   }
   /* Phones: formatting tools live at the BOTTOM (thumb-reach, and Android's
      text-selection bubble — which always appears above the selection — can
-     never cover them). Extra top padding keeps the bubble for the first line
+     never cover them). Buttons stretch to equal widths filling the full row,
+     Material-style. Extra top padding keeps the bubble for the first line
      over empty space instead of the palette row. */
   @media (max-width: 700px) {
     .toolbar {
       order: 2;
       border-bottom: none;
       border-top: 1px solid rgba(0, 0, 0, 0.08);
+      gap: 0;
+      padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+    }
+    .toolbar button,
+    .toolbar select {
+      flex: 1 1 0;
+      min-width: 0;
+      height: 42px;
+    }
+    .sep {
+      display: none;
     }
     .content {
       order: 1;

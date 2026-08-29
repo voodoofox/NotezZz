@@ -2,6 +2,7 @@
   import { store } from '$lib/store.svelte';
   import { getPalette } from '$lib/palettes';
   import Settings from './Settings.svelte';
+  import Icon from './Icon.svelte';
 
   let showSettings = $state(false);
 
@@ -15,8 +16,12 @@
   <div class="head">
     <span class="brand">NotezZz</span>
     <div class="head-actions">
-      <button class="ico" data-testid="open-settings" onclick={() => (showSettings = true)} title="Settings">⚙</button>
-      <button class="new" data-testid="new-note" onclick={() => store.create()} title="New note">＋</button>
+      <button class="ico" data-testid="open-settings" onclick={() => (showSettings = true)} title="Settings" aria-label="Settings">
+        <Icon name="settings" size={18} />
+      </button>
+      <button class="new" data-testid="new-note" onclick={() => store.create()} title="New note" aria-label="New note">
+        <Icon name="add" size={19} />
+      </button>
     </div>
   </div>
 
@@ -33,8 +38,9 @@
           data-testid="note-pin"
           class:on={note.pinned}
           title={note.pinned ? 'Pinned to desktop (click to unpin)' : 'Pin to desktop as always-on-top sticker'}
+          aria-label="Pin note"
           onclick={() => store.update(note.id, { pinned: !note.pinned })}
-        >📌</button>
+        ><Icon name="pin" size={16} /></button>
       </div>
     {/each}
 
@@ -169,19 +175,20 @@
   .pin {
     border: none;
     background: transparent;
-    font-size: 13px;
+    color: var(--app-fg);
     cursor: pointer;
     padding: 6px 8px;
     border-radius: 6px;
-    filter: grayscale(1);
-    opacity: 0.35;
+    opacity: 0.3;
+    display: inline-flex;
+    align-items: center;
   }
   .pin:hover {
-    opacity: 0.8;
+    opacity: 0.7;
   }
   .pin.on {
-    filter: none;
     opacity: 1;
+    color: var(--app-accent);
   }
   .empty {
     color: var(--app-muted);

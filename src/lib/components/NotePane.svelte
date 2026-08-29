@@ -4,6 +4,7 @@
   import { isTauri } from '$lib/storage/backend';
   import { PALETTES, getPalette } from '$lib/palettes';
   import Editor from './Editor.svelte';
+  import Icon from './Icon.svelte';
 
   let note = $derived(store.active);
   let pal = $derived(note ? getPalette(note.paletteId) : PALETTES[0]);
@@ -35,15 +36,17 @@
           class="icon mob"
           data-testid="exit-fullscreen"
           title="Back to split view"
+          aria-label="Back to split view"
           onclick={() => history.back()}
-        >←</button>
+        ><Icon name="back" /></button>
       {:else}
         <button
           class="icon mob"
           data-testid="note-fullscreen"
           title="Expand note fullscreen"
+          aria-label="Expand note fullscreen"
           onclick={() => pushState('', { fs: true })}
-        >⛶</button>
+        ><Icon name="fullscreen" /></button>
       {/if}
       <input
         class="title"
@@ -57,14 +60,16 @@
         data-testid="pane-pin"
         class:on={note.pinned}
         title={note.pinned ? 'Unpin from desktop' : 'Pin as desktop sticky'}
+        aria-label="Pin note"
         onclick={() => store.update(note!.id, { pinned: !note!.pinned })}
-      >📌</button>
+      ><Icon name="pin" /></button>
       <button
         class="icon danger"
         data-testid="note-delete"
         title="Delete note"
+        aria-label="Delete note"
         onclick={deleteNote}
-      >🗑</button>
+      ><Icon name="trash" /></button>
     </div>
 
     <div class="controls">
@@ -183,11 +188,14 @@
   .icon {
     border: none;
     background: transparent;
-    font-size: 16px;
-    padding: 4px 7px;
-    border-radius: 6px;
+    color: var(--note-fg);
+    padding: 6px 8px;
+    border-radius: 7px;
     cursor: pointer;
     opacity: 0.55;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
   .icon:hover {
     background: rgba(0, 0, 0, 0.08);
@@ -195,7 +203,8 @@
   }
   .icon.on {
     opacity: 1;
-    background: rgba(0, 0, 0, 0.12);
+    color: var(--note-accent);
+    background: rgba(0, 0, 0, 0.1);
   }
   /* Fullscreen/back toggles only exist in the phone layout. */
   .mob {

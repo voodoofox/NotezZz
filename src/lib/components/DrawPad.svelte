@@ -3,6 +3,7 @@
   // ink-like outlines, rendered live as SVG. "Done" hands back a cropped,
   // transparent-background SVG data URL that gets embedded in the note.
   import { getStroke } from 'perfect-freehand';
+  import Icon from './Icon.svelte';
 
   interface Props {
     onDone: (svgDataUrl: string | null) => void;
@@ -163,19 +164,29 @@
         class:sel={tool === 'pen'}
         data-testid="tool-pen"
         title="Pen"
+        aria-label="Pen"
         onclick={() => (tool = 'pen')}
-      >✏️</button>
+      ><Icon name="draw" /></button>
       <button
         class="op"
         class:sel={tool === 'erase'}
         data-testid="tool-erase"
         title="Eraser (removes whole strokes)"
+        aria-label="Eraser"
         onclick={() => (tool = 'erase')}
-      >🧽</button>
+      ><Icon name="eraser" /></button>
     </div>
     <div class="ops">
-      <button class="op" onclick={undo} disabled={!strokes.length} title="Undo">↩</button>
-      <button class="op" onclick={() => (strokes = [])} disabled={!strokes.length} title="Clear">🗑</button>
+      <button class="op" onclick={undo} disabled={!strokes.length} title="Undo" aria-label="Undo">
+        <Icon name="undo" />
+      </button>
+      <button
+        class="op"
+        onclick={() => (strokes = [])}
+        disabled={!strokes.length}
+        title="Clear"
+        aria-label="Clear"
+      ><Icon name="trash" /></button>
     </div>
   </div>
 
@@ -271,14 +282,16 @@
     margin-left: auto;
   }
   .op {
-    width: 38px;
-    height: 34px;
-    font-size: 16px;
+    width: 40px;
+    height: 36px;
     border: 1px solid var(--app-border);
     border-radius: 8px;
     background: var(--app-bg);
     color: var(--app-fg);
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
   .op.sel {
     border-color: var(--app-accent);

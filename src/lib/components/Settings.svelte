@@ -3,6 +3,7 @@
   import { store } from '$lib/store.svelte';
   import { isTauri } from '$lib/storage/backend';
   import { getDiag } from '$lib/diag';
+  import Icon from './Icon.svelte';
   import { chooseSyncFolder, getSyncFolder } from '$lib/desktop';
   import { PALETTES } from '$lib/palettes';
 
@@ -68,7 +69,9 @@
   >
     <div class="head">
       <h2>Settings</h2>
-      <button class="close" data-testid="settings-close" onclick={onClose}>✕</button>
+      <button class="close" data-testid="settings-close" aria-label="Close" onclick={onClose}>
+        <Icon name="close" size={18} />
+      </button>
     </div>
 
     <section>

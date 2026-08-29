@@ -3,6 +3,7 @@
   import { store } from '$lib/store.svelte';
   import { getPalette } from '$lib/palettes';
   import Editor from '$lib/components/Editor.svelte';
+  import Icon from '$lib/components/Icon.svelte';
 
   let noteId = $state<string | null>(null);
   let note = $derived(noteId ? store.notes.find((n) => n.id === noteId) ?? null : null);
@@ -82,7 +83,9 @@
   >
     <header class="bar" data-tauri-drag-region>
       <span class="ttl" data-tauri-drag-region>{note.title || 'Note'}</span>
-      <button class="x" title="Unpin (close sticker)" onclick={unpin}>✕</button>
+      <button class="x" title="Unpin (close sticker)" aria-label="Unpin" onclick={unpin}>
+        <Icon name="close" size={15} />
+      </button>
     </header>
     <div class="body">
       {#key note.id}
@@ -137,10 +140,11 @@
     background: transparent;
     color: var(--note-fg);
     opacity: 0.55;
-    font-size: 14px;
     cursor: pointer;
-    padding: 2px 6px;
+    padding: 3px 6px;
     border-radius: 5px;
+    display: inline-flex;
+    align-items: center;
   }
   .x:hover {
     opacity: 1;
