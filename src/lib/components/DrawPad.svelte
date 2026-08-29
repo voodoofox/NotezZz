@@ -312,6 +312,27 @@
   .surface.erase {
     cursor: cell;
   }
+  /* Phones: tool rows stretch edge-to-edge — colors on one full row, then
+     sizes/tools/undo-clear evenly distributed across the next. */
+  @media (max-width: 700px) {
+    .bar {
+      row-gap: 10px;
+      padding: 10px;
+    }
+    .swatches {
+      width: 100%;
+      justify-content: space-between;
+      gap: 0;
+    }
+    .sizes,
+    .tools,
+    .ops {
+      flex: 1 1 0;
+      justify-content: space-evenly;
+      gap: 0;
+      margin-left: 0;
+    }
+  }
   .actions {
     display: flex;
     justify-content: flex-end;

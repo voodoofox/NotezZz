@@ -5,17 +5,46 @@
   import Icon from './Icon.svelte';
 
   let showSettings = $state(false);
+  let searching = $state(false);
+  let query = $state('');
+  let searchInput = $state<HTMLInputElement | null>(null);
 
   function preview(html: string): string {
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
     return text || 'Empty note';
   }
+
+  /** Live-filtered list: title + note text, case-insensitive. */
+  let visibleNotes = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    if (!searching || !q) return store.notes;
+    return store.notes.filter((n) =>
+      `${n.title} ${n.contentHtml.replace(/<[^>]+>/g, ' ')}`.toLowerCase().includes(q)
+    );
+  });
+
+  function toggleSearch() {
+    searching = !searching;
+    query = '';
+  }
+
+  $effect(() => {
+    if (searching) searchInput?.focus();
+  });
 </script>
 
 <aside class="sidebar">
   <div class="head">
     <span class="brand">NotezZz</span>
     <div class="head-actions">
+      <button
+        class="ico"
+        class:on={searching}
+        data-testid="search-toggle"
+        onclick={toggleSearch}
+        title="Search notes"
+        aria-label="Search notes"
+      ><Icon name="search" size={18} /></button>
       <button class="ico" data-testid="open-settings" onclick={() => (showSettings = true)} title="Settings" aria-label="Settings">
         <Icon name="settings" size={18} />
       </button>
@@ -25,8 +54,20 @@
     </div>
   </div>
 
+  {#if searching}
+    <div class="searchrow">
+      <input
+        class="search"
+        data-testid="search-input"
+        placeholder="Search notes…"
+        bind:this={searchInput}
+        bind:value={query}
+      />
+    </div>
+  {/if}
+
   <div class="list">
-    {#each store.notes as note (note.id)}
+    {#each visibleNotes as note (note.id)}
       {@const pal = getPalette(note.paletteId)}
       <div class="item" data-testid="note-item" class:active={note.id === store.activeId} style="--swatch: {pal.bg}">
         <button class="pick" data-testid="note-pick" onclick={() => (store.activeId = note.id)}>
@@ -111,8 +152,29 @@
   }
   .new:hover,
   .ico:hover {
-    border-color: var(--app-accent);
-    color: var(--app-accent);
+    border-color: var(--app-fg);
+  }
+  .ico.on {
+    background: var(--app-fg);
+    color: var(--app-panel);
+    border-color: var(--app-fg);
+  }
+  .searchrow {
+    padding: 8px 10px 4px;
+  }
+  .search {
+    width: 100%;
+    font: inherit;
+    font-size: 15px;
+    padding: 7px 11px;
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    background: var(--app-bg);
+    color: var(--app-fg);
+    outline: none;
+  }
+  .search:focus {
+    border-color: var(--app-fg);
   }
   .list {
     flex: 1;

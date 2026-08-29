@@ -112,7 +112,7 @@
     width: 100vw;
     overflow: hidden;
   }
-  /* Phone: stacked split — list on top (40%), note below (60%).
+  /* Phone: stacked split — list on top (30%), note below (70%).
      .note-open expands the note fullscreen. */
   @media (max-width: 700px) {
     .app {
@@ -120,12 +120,12 @@
     }
     .app :global(.sidebar) {
       width: 100%;
-      height: 40%;
+      height: 30%;
       border-right: none;
       border-bottom: 2px solid var(--app-border);
     }
     .app :global(.pane) {
-      height: 60%;
+      height: 70%;
       flex: none;
       width: 100%;
     }

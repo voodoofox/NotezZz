@@ -31,5 +31,24 @@ export const PALETTES: Palette[] = [
 export const PALETTE_MAP = new Map(PALETTES.map((p) => [p.id, p]));
 
 export function getPalette(id: string): Palette {
+  if (id?.startsWith('custom:')) return customPalette(id.slice(7));
   return PALETTE_MAP.get(id) ?? PALETTES[0];
+}
+
+/** Any hex from the color picker becomes a full note palette: contrast-safe
+ * text color and a slightly shifted header derived automatically. */
+function customPalette(hex: string): Palette {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255,
+    g = (n >> 8) & 255,
+    b = n & 255;
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  const dark = lum < 0.55;
+  const shift = dark ? 18 : -14; // lighten dark headers, darken light ones
+  const clamp = (v: number) => Math.max(0, Math.min(255, v + shift));
+  const header = `#${[clamp(r), clamp(g), clamp(b)]
+    .map((v) => v.toString(16).padStart(2, '0'))
+    .join('')}`;
+  const fg = dark ? '#ECEDEF' : '#26282B';
+  return { id: `custom:${hex}`, name: 'Custom', bg: hex, header, fg, accent: fg, dark };
 }

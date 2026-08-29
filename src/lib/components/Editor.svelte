@@ -8,14 +8,19 @@
   import DrawPad from './DrawPad.svelte';
   import Icon from './Icon.svelte';
 
+  import type { Snippet } from 'svelte';
+  import { popoverStyle } from '$lib/popover';
+
   interface Props {
     html: string;
     onChange: (html: string) => void;
     /** Base font size (px) for the note body. */
     baseSize?: number;
+    /** Extra toolbar controls contributed by the host (e.g. note color). */
+    extra?: Snippet;
   }
 
-  let { html, onChange, baseSize = 18 }: Props = $props();
+  let { html, onChange, baseSize = 18, extra }: Props = $props();
 
   let element: HTMLDivElement;
   let editor = $state<Editor | null>(null);
@@ -26,6 +31,12 @@
   let drawInk = $state<string | undefined>();
   let showSizes = $state(false);
   let sizeWrap = $state<HTMLDivElement | null>(null);
+  let sizeMenuStyle = $state('');
+
+  function toggleSizes() {
+    if (!showSizes && sizeWrap) sizeMenuStyle = popoverStyle(sizeWrap, 96);
+    showSizes = !showSizes;
+  }
 
   // Tapping anywhere else (including the text) closes the size menu.
   function onGlobalPointerDown(e: PointerEvent) {
@@ -156,10 +167,10 @@
         class:active={showSizes}
         title="Text size"
         aria-label="Text size"
-        onclick={() => (showSizes = !showSizes)}
+        onclick={toggleSizes}
       ><Icon name="textSize" /></button>
       {#if showSizes}
-        <div class="sizemenu">
+        <div class="sizemenu" style={sizeMenuStyle}>
           <button
             class="sopt"
             class:cur={currentSize() === ''}
@@ -181,6 +192,8 @@
         </div>
       {/if}
     </div>
+
+    {#if extra}{@render extra()}{/if}
   </div>
 
   <div class="content" style="font-size: {baseSize}px" bind:this={element}></div>
@@ -241,10 +254,8 @@
     display: inline-flex;
   }
   .sizemenu {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 6px);
-    z-index: 30;
+    /* position:fixed via inline popoverStyle — the toolbar's overflow
+       clipping made absolutely-positioned menus invisible. */
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -333,10 +344,6 @@
     }
     .sizewrap button {
       width: 100%;
-    }
-    .sizemenu {
-      top: auto;
-      bottom: calc(100% + 6px); /* bottom toolbar -> menu opens upward */
     }
     .sep {
       display: none;

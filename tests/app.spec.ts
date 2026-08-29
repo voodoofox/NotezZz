@@ -77,12 +77,30 @@ test('changing palette updates the note color live (the frozen-UI bug)', async (
   await createNote(page);
   const pane = page.getByTestId('note-pane');
   await expect(pane).toHaveAttribute('data-palette', 'paper');
+  await page.getByTestId('note-color').click(); // open the color popover
   await page.locator('[data-testid="palette-chip"][data-palette="mint"]').click();
   await expect(pane).toHaveAttribute('data-palette', 'mint');
   // Mint bg (#E0F3E9) actually paints:
   await expect(pane).toHaveCSS('background-color', 'rgb(224, 243, 233)');
   // And the sidebar swatch recolors too:
   await expect(page.getByTestId('note-swatch')).toHaveCSS('background-color', 'rgb(224, 243, 233)');
+});
+
+test('search filters the note list live', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Groceries');
+  await page.getByTestId('new-note').click();
+  await page.getByTestId('title-input').fill('Work plan');
+  await expect(page.getByTestId('note-item')).toHaveCount(2);
+
+  await page.getByTestId('search-toggle').click();
+  await page.getByTestId('search-input').fill('groc');
+  await expect(page.getByTestId('note-item')).toHaveCount(1);
+  await expect(page.getByTestId('note-title')).toHaveText('Groceries');
+
+  // Toggling search off restores the full list.
+  await page.getByTestId('search-toggle').click();
+  await expect(page.getByTestId('note-item')).toHaveCount(2);
 });
 
 test('base font-size slider (in tools popover) updates its readout', async ({ page }) => {

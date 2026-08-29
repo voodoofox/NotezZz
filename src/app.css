@@ -53,3 +53,46 @@ select,
 textarea {
   font-family: inherit;
 }
+
+/* Toolbar buttons contributed into the editor toolbar from outside components
+   (note color, base text size) — must match Editor's own toolbar buttons. */
+.tb-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.tb-btn {
+  font: inherit;
+  font-size: 14px;
+  color: var(--note-fg);
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  min-width: 32px;
+  height: 30px;
+  padding: 0 8px;
+  cursor: pointer;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.tb-btn:hover {
+  background: rgba(0, 0, 0, 0.07);
+}
+.tb-btn.active {
+  background: var(--note-fg);
+  color: var(--note-bg);
+}
+@media (max-width: 700px) {
+  .tb-wrap {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .tb-wrap .tb-btn {
+    width: 100%;
+    height: 42px;
+  }
+}

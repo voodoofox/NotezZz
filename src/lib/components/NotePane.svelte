@@ -6,15 +6,34 @@
   import Editor from './Editor.svelte';
   import Icon from './Icon.svelte';
 
+  import { popoverStyle } from '$lib/popover';
+
   let note = $derived(store.active);
   let pal = $derived(note ? getPalette(note.paletteId) : PALETTES[0]);
   const desktop = isTauri();
 
-  let toolsEl = $state<HTMLDetailsElement | null>(null);
-  // Tapping anywhere outside (e.g. into the text) closes the size popover.
-  function closeToolsOutside(e: PointerEvent) {
-    if (toolsEl?.open && !toolsEl.contains(e.target as Node)) toolsEl.open = false;
+  // Toolbar popovers (note color / base text size), fixed-positioned so the
+  // toolbar's overflow can't clip them; any outside tap closes them.
+  let openPop = $state<'pal' | 'size' | null>(null);
+  let popStyle = $state('');
+  let palWrap = $state<HTMLDivElement | null>(null);
+  let sizeWrapEl = $state<HTMLDivElement | null>(null);
+
+  function togglePop(which: 'pal' | 'size') {
+    if (openPop === which) return void (openPop = null);
+    const anchor = which === 'pal' ? palWrap : sizeWrapEl;
+    if (anchor) popStyle = popoverStyle(anchor, which === 'pal' ? 216 : 280);
+    openPop = which;
   }
+
+  function closePopsOutside(e: PointerEvent) {
+    if (!openPop) return;
+    const t = e.target as Node;
+    if (!palWrap?.contains(t) && !sizeWrapEl?.contains(t)) openPop = null;
+  }
+
+  let isCustom = $derived(note?.paletteId.startsWith('custom:') ?? false);
+  let customHex = $derived(isCustom ? note!.paletteId.slice(7) : '#fbfaf6');
 
   function deleteNote() {
     if (!note || !confirm('Delete this note?')) return;
@@ -24,7 +43,7 @@
   }
 </script>
 
-<svelte:window onpointerdown={closeToolsOutside} />
+<svelte:window onpointerdown={closePopsOutside} />
 
 {#if note}
   <section
@@ -80,52 +99,90 @@
       ><Icon name="trash" /></button>
     </div>
 
-    <div class="controls">
-      <div class="palettes">
-        {#each PALETTES as p}
-          <button
-            class="chip"
-            data-testid="palette-chip"
-            data-palette={p.id}
-            class:sel={p.id === note.paletteId}
-            style="background: {p.bg}"
-            title={p.name}
-            aria-label={p.name}
-            onclick={() => store.update(note!.id, { paletteId: p.id })}
-          ></button>
-        {/each}
+    {#snippet noteTools()}
+      <div class="tb-wrap" bind:this={palWrap}>
+        <button
+          class="tb-btn"
+          class:active={openPop === 'pal'}
+          data-testid="note-color"
+          title="Note color"
+          aria-label="Note color"
+          onclick={() => togglePop('pal')}
+        ><Icon name="palette" /></button>
+        {#if openPop === 'pal'}
+          <div class="pop palmenu" style={popStyle}>
+            {#each PALETTES as p}
+              <button
+                class="pchip"
+                data-testid="palette-chip"
+                data-palette={p.id}
+                style="background: {p.bg}"
+                title={p.name}
+                aria-label={p.name}
+                onclick={() => {
+                  store.update(note!.id, { paletteId: p.id });
+                  openPop = null;
+                }}
+              >
+                {#if note.paletteId === p.id}
+                  <span class="pcheck" style="color: {p.fg}"><Icon name="check" size={15} /></span>
+                {/if}
+              </button>
+            {/each}
+            <label class="pchip picker" title="Custom color" aria-label="Custom color">
+              <input
+                type="color"
+                data-testid="custom-color"
+                value={customHex}
+                oninput={(e) =>
+                  store.update(note!.id, {
+                    paletteId: `custom:${(e.currentTarget as HTMLInputElement).value}`,
+                  })}
+              />
+              {#if isCustom}
+                <span class="pcheck" style="color: {pal.fg}"><Icon name="check" size={15} /></span>
+              {/if}
+            </label>
+          </div>
+        {/if}
       </div>
 
-      <details class="tools" bind:this={toolsEl}>
-        <summary data-testid="tools-toggle" title="Text size{desktop ? ' & sticker opacity' : ''}">
-          Aa·{note.fontSize}
-        </summary>
-        <div class="panel">
-          <label class="ctl">
-            <span>Text size</span>
-            <input
-              type="range" min="12" max="40" step="1"
-              data-testid="size-slider"
-              value={note.fontSize}
-              oninput={(e) => store.update(note!.id, { fontSize: +(e.currentTarget as HTMLInputElement).value })}
-            />
-            <span class="val" data-testid="size-value">{note.fontSize}</span>
-          </label>
-          {#if desktop}
+      <div class="tb-wrap" bind:this={sizeWrapEl}>
+        <button
+          class="tb-btn"
+          class:active={openPop === 'size'}
+          data-testid="tools-toggle"
+          title="Base text size{desktop ? ' & sticker opacity' : ''}"
+          onclick={() => togglePop('size')}
+        >Aa·{note.fontSize}</button>
+        {#if openPop === 'size'}
+          <div class="pop panel" style={popStyle}>
             <label class="ctl">
-              <span>Sticker opacity</span>
+              <span>Text size</span>
               <input
-                type="range" min="0.2" max="1" step="0.05"
-                data-testid="opacity-slider"
-                value={note.opacity}
-                oninput={(e) => store.update(note!.id, { opacity: +(e.currentTarget as HTMLInputElement).value })}
+                type="range" min="12" max="40" step="1"
+                data-testid="size-slider"
+                value={note.fontSize}
+                oninput={(e) => store.update(note!.id, { fontSize: +(e.currentTarget as HTMLInputElement).value })}
               />
-              <span class="val" data-testid="opacity-value">{Math.round(note.opacity * 100)}%</span>
+              <span class="val" data-testid="size-value">{note.fontSize}</span>
             </label>
-          {/if}
-        </div>
-      </details>
-    </div>
+            {#if desktop}
+              <label class="ctl">
+                <span>Sticker opacity</span>
+                <input
+                  type="range" min="0.2" max="1" step="0.05"
+                  data-testid="opacity-slider"
+                  value={note.opacity}
+                  oninput={(e) => store.update(note!.id, { opacity: +(e.currentTarget as HTMLInputElement).value })}
+                />
+                <span class="val" data-testid="opacity-value">{Math.round(note.opacity * 100)}%</span>
+              </label>
+            {/if}
+          </div>
+        {/if}
+      </div>
+    {/snippet}
 
     <div class="editorWrap">
       {#key note.id}
@@ -133,6 +190,7 @@
           html={note.contentHtml}
           baseSize={note.fontSize}
           onChange={(html) => store.update(note!.id, { contentHtml: html })}
+          extra={noteTools}
         />
       {/key}
     </div>
@@ -224,80 +282,53 @@
       display: block;
     }
   }
-  .controls {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 12px;
-    background: var(--note-header);
-    border-top: 1px solid rgba(0, 0, 0, 0.06);
-    font-size: 14px;
+  /* Popovers are fixed-positioned via inline style (see popoverStyle). */
+  .pop {
+    background: var(--app-panel);
+    color: var(--app-fg);
+    border: 1px solid var(--app-border);
+    border-radius: 12px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
   }
-  .palettes {
-    display: flex;
-    gap: 6px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    padding: 2px;
-    flex: 1;
-    min-width: 0;
+  .palmenu {
+    display: grid;
+    grid-template-columns: repeat(5, 34px);
+    gap: 8px;
+    padding: 12px;
   }
-  .palettes::-webkit-scrollbar {
-    display: none;
-  }
-  .chip {
-    width: 22px;
-    height: 22px;
-    min-width: 22px;
-    border-radius: 6px;
-    border: 1px solid rgba(0, 0, 0, 0.14);
+  .pchip {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    border: 1px solid rgba(0, 0, 0, 0.16);
     cursor: pointer;
     padding: 0;
-    transition: transform 0.1s;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
-  .chip:hover {
-    transform: scale(1.12);
+  .pchip:hover {
+    transform: scale(1.08);
   }
-  .chip.sel {
-    outline: 2px solid var(--note-fg);
-    outline-offset: 1px;
+  .pcheck {
+    display: inline-flex;
   }
-  .tools {
-    flex-shrink: 0;
+  .pchip.picker {
+    background: conic-gradient(#e0245e, #f2b705, #2fa579, #2f8fe0, #8b5cf6, #e0245e);
+    overflow: hidden;
   }
-  .tools summary {
-    list-style: none;
+  .pchip.picker input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
     cursor: pointer;
-    padding: 4px 10px;
-    border-radius: 7px;
-    font-size: 14px;
-    color: var(--note-fg);
-    background: rgba(0, 0, 0, 0.06);
-    user-select: none;
-    white-space: nowrap;
-  }
-  .tools summary::-webkit-details-marker {
-    display: none;
-  }
-  .tools[open] summary {
-    background: var(--note-fg);
-    color: var(--note-bg);
   }
   .panel {
-    position: absolute;
-    right: 10px;
-    top: calc(100% + 4px);
-    z-index: 20;
     display: flex;
     flex-direction: column;
     gap: 10px;
     padding: 12px 14px;
-    background: var(--app-panel);
-    color: var(--app-fg);
-    border: 1px solid var(--app-border);
-    border-radius: 10px;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
     min-width: 240px;
   }
   .ctl {
