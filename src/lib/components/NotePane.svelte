@@ -22,7 +22,7 @@
   function togglePop(which: 'pal' | 'size') {
     if (openPop === which) return void (openPop = null);
     const anchor = which === 'pal' ? palWrap : sizeWrapEl;
-    if (anchor) popStyle = popoverStyle(anchor, which === 'pal' ? 216 : 280);
+    if (anchor) popStyle = popoverStyle(anchor, which === 'pal' ? 226 : 270);
     openPop = which;
   }
 

@@ -110,6 +110,20 @@ test('custom color sliders recolor the note', async ({ page }) => {
   await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', /custom:#/);
 });
 
+test('share intake: search filters append targets', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Groceries');
+  await page.getByTestId('new-note').click();
+  await page.getByTestId('title-input').fill('Work plan');
+  await page.evaluate(() => localStorage.setItem('notezzz:pendingShare', 'find me a home'));
+  await page.reload();
+  await expect(page.getByTestId('share-append-item')).toHaveCount(2);
+  await page.getByTestId('share-search').fill('work');
+  await expect(page.getByTestId('share-append-item')).toHaveCount(1);
+  await expect(page.getByTestId('share-append-item')).toContainText('Work plan');
+  await page.getByTestId('share-cancel').click();
+});
+
 test('search filters the note list live', async ({ page }) => {
   await createNote(page);
   await page.getByTestId('title-input').fill('Groceries');

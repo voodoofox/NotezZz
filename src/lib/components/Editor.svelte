@@ -31,7 +31,7 @@
   let sizeMenuStyle = $state('');
 
   function toggleSizes() {
-    if (!showSizes && sizeWrap) sizeMenuStyle = popoverStyle(sizeWrap, 96);
+    if (!showSizes && sizeWrap) sizeMenuStyle = popoverStyle(sizeWrap, 124);
     showSizes = !showSizes;
   }
 
@@ -247,7 +247,7 @@
         onclick={toggleSizes}
       ><Icon name="textSize" size={22} /></button>
       {#if showSizes}
-        <div class="sizemenu" style={sizeMenuStyle}>
+        <div class="sizemenu" style={sizeMenuStyle} data-testid="size-menu">
           <button
             class="sopt"
             class:cur={currentSize() === ''}
@@ -366,8 +366,8 @@
        clipping made absolutely-positioned menus invisible. */
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding: 6px;
+    gap: 7px;
+    padding: 10px;
     background: var(--app-panel);
     border: 1px solid var(--app-border);
     border-radius: 10px;
@@ -437,7 +437,7 @@
     align-items: center;
     gap: 2px;
     padding: 4px 6px;
-    border-radius: 22px;
+    border-radius: 10px; /* squared-with-rounded-edges, matching the buttons */
     background: var(--app-fg);
     color: var(--app-bg);
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
@@ -448,7 +448,7 @@
     color: inherit;
     min-width: 32px;
     height: 32px;
-    border-radius: 16px;
+    border-radius: 7px;
     cursor: pointer;
     display: inline-flex;
     align-items: center;

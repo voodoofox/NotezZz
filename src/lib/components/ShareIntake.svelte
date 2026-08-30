@@ -6,6 +6,15 @@
 
   let { text, onDone }: { text: string; onDone: () => void } = $props();
 
+  let query = $state('');
+  let targets = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return store.notes;
+    return store.notes.filter((n) =>
+      `${n.title} ${n.contentHtml.replace(/<[^>]+>/g, ' ')}`.toLowerCase().includes(q)
+    );
+  });
+
   function esc(s: string): string {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
@@ -53,8 +62,14 @@
 
     {#if store.notes.length}
       <p class="or">…or append to:</p>
+      <input
+        class="ssearch"
+        data-testid="share-search"
+        placeholder="Search notes…"
+        bind:value={query}
+      />
       <div class="list">
-        {#each store.notes as n (n.id)}
+        {#each targets as n (n.id)}
           <button class="target" data-testid="share-append-item" onclick={() => appendTo(n.id)}>
             {label(n)}
           </button>
@@ -133,10 +148,27 @@
     text-transform: uppercase;
     letter-spacing: 0.4px;
   }
+  .ssearch {
+    width: 100%;
+    font: inherit;
+    font-size: 15px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    background: var(--app-bg);
+    color: var(--app-fg);
+    outline: none;
+  }
+  .ssearch:focus {
+    border-color: var(--app-fg);
+  }
   .list {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    max-height: 40vh;
+    overflow-y: auto;
   }
   .target {
     text-align: left;

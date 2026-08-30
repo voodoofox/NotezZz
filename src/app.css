@@ -29,6 +29,10 @@ html,
 body {
   margin: 0;
   height: 100%;
+  /* No pull-to-refresh / overscroll bounce: the gesture reloads and shifts
+     the viewport so the bottom toolbar lands off-screen. The app already
+     self-updates and re-syncs on focus — the gesture buys nothing. */
+  overscroll-behavior-y: none;
 }
 
 body {
