@@ -58,7 +58,9 @@
     </div>
     <blockquote class="preview">{text.length > 220 ? text.slice(0, 220) + '…' : text}</blockquote>
 
-    <button class="new" data-testid="share-new" onclick={toNew}>＋ New note</button>
+    <button class="new" data-testid="share-new" onclick={toNew}>
+      <Icon name="add" size={17} /> New note
+    </button>
 
     {#if store.notes.length}
       <p class="or">…or append to:</p>
@@ -98,7 +100,7 @@
     background: var(--app-panel);
     color: var(--app-fg);
     border: 1px solid var(--app-border);
-    border-radius: 14px;
+    border-radius: var(--radius-lg);
     padding: 16px 18px 18px;
     box-shadow: 0 14px 44px rgba(0, 0, 0, 0.32);
   }
@@ -122,9 +124,9 @@
   .preview {
     margin: 12px 0;
     padding: 8px 12px;
-    border-left: 3px solid var(--app-accent);
+    border-left: 3px solid var(--app-fg);
     background: var(--app-bg);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     font-size: 15px;
     color: var(--app-muted);
     white-space: pre-wrap;
@@ -136,10 +138,14 @@
     font-size: 16px;
     padding: 10px;
     border: none;
-    border-radius: 9px;
-    background: var(--app-accent);
-    color: #fff;
+    border-radius: var(--radius-md);
+    background: var(--app-fg);
+    color: var(--app-panel);
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
   }
   .or {
     margin: 14px 0 6px;
@@ -155,7 +161,7 @@
     padding: 8px 12px;
     margin-bottom: 8px;
     border: 1px solid var(--app-border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     background: var(--app-bg);
     color: var(--app-fg);
     outline: none;
@@ -176,7 +182,7 @@
     font-size: 15px;
     padding: 9px 11px;
     border: 1px solid var(--app-border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     background: var(--app-bg);
     color: var(--app-fg);
     cursor: pointer;
@@ -185,6 +191,6 @@
     text-overflow: ellipsis;
   }
   .target:hover {
-    border-color: var(--app-accent);
+    border-color: var(--app-fg);
   }
 </style>

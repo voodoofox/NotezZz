@@ -322,7 +322,7 @@
     width: 34px;
     height: 34px;
     border: 1px solid var(--app-border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     background: var(--app-bg);
     display: inline-flex;
     align-items: center;
@@ -347,7 +347,7 @@
     width: 40px;
     height: 36px;
     border: 1px solid var(--app-border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     background: var(--app-bg);
     color: var(--app-fg);
     cursor: pointer;
@@ -434,7 +434,7 @@
     font: inherit;
     font-size: 16px;
     padding: 9px 20px;
-    border-radius: 9px;
+    border-radius: var(--radius-md);
     border: 1px solid var(--app-border);
     background: var(--app-bg);
     color: var(--app-fg);

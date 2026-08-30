@@ -86,7 +86,7 @@
     {/each}
 
     {#if store.loaded && store.notes.length === 0}
-      <p class="empty" data-testid="empty-state">No notes yet.<br />Hit ＋ to create one.</p>
+      <p class="empty" data-testid="empty-state">No notes yet.<br />Hit + to create one.</p>
     {/if}
   </div>
 
@@ -138,7 +138,7 @@
     height: 28px;
     font-size: 18px;
     border: 1px solid var(--app-border);
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
     background: var(--app-bg);
     color: var(--app-fg);
     cursor: pointer;
@@ -168,7 +168,7 @@
     font-size: 15px;
     padding: 7px 11px;
     border: 1px solid var(--app-border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     background: var(--app-bg);
     color: var(--app-fg);
     outline: none;
@@ -187,7 +187,7 @@
     width: 100%;
     margin-bottom: 3px;
     border: 1px solid transparent;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     color: var(--app-fg);
   }
   .item:hover {
@@ -223,7 +223,7 @@
   .swatch {
     width: 14px;
     height: 14px;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     flex-shrink: 0;
     background: var(--swatch);
     border: 1px solid rgba(0, 0, 0, 0.15);
@@ -242,7 +242,7 @@
     color: var(--app-fg);
     cursor: pointer;
     padding: 6px 8px;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     opacity: 0.3;
     display: inline-flex;
     align-items: center;
@@ -264,7 +264,7 @@
     border-top: 1px solid var(--app-border);
     padding: 8px 12px 10px;
     font-size: 12px;
-    color: #e0245e;
+    color: var(--app-danger);
     word-break: break-word;
     max-height: 110px;
     overflow: auto;
@@ -277,9 +277,9 @@
     font-size: 13px;
     padding: 5px 12px;
     border: none;
-    border-radius: 7px;
-    background: var(--app-accent);
-    color: #fff;
+    border-radius: var(--radius-sm);
+    background: var(--app-fg);
+    color: var(--app-panel);
     cursor: pointer;
   }
 </style>

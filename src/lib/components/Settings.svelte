@@ -181,7 +181,7 @@
     background: var(--app-panel);
     color: var(--app-fg);
     border: 1px solid var(--app-border);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     padding: 4px 20px 20px;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
   }
@@ -229,7 +229,7 @@
     background: var(--app-bg);
     color: var(--app-fg);
     border: 1px solid var(--app-border);
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
     padding: 5px 8px;
     font-size: 15px;
   }
@@ -252,7 +252,7 @@
     min-width: 0;
     background: var(--app-bg);
     border: 1px solid var(--app-border);
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
     padding: 7px 9px;
     font-size: 13px;
     overflow: hidden;
@@ -261,10 +261,10 @@
   }
   .folder button,
   .panel button:not(.close) {
-    background: var(--app-accent);
-    color: #fff;
+    background: var(--app-fg);
+    color: var(--app-panel);
     border: none;
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
     padding: 7px 13px;
     font-size: 15px;
     cursor: pointer;
@@ -279,7 +279,7 @@
   .diag {
     background: var(--app-bg);
     border: 1px solid var(--app-border);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     padding: 8px 10px;
     font-family: monospace;
     font-size: 11px;

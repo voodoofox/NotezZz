@@ -114,7 +114,7 @@
     flex-direction: column;
     background: var(--note-bg);
     color: var(--note-fg);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     overflow: hidden;
     box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28);
   }
@@ -142,7 +142,7 @@
     opacity: 0.55;
     cursor: pointer;
     padding: 3px 6px;
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     display: inline-flex;
     align-items: center;
   }
@@ -164,7 +164,7 @@
     text-align: center;
     background: #fbfaf6;
     color: #8a8a82;
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     font-size: 15px;
   }
 </style>

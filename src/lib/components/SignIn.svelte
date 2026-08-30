@@ -50,7 +50,7 @@
     padding: 40px 34px;
     background: var(--app-panel);
     border: 1px solid var(--app-border);
-    border-radius: 16px;
+    border-radius: var(--radius-lg);
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
     max-width: 340px;
   }
@@ -70,9 +70,9 @@
     font-size: 17px;
     padding: 11px 22px;
     border: none;
-    border-radius: 9px;
-    background: var(--app-accent);
-    color: #fff;
+    border-radius: var(--radius-md);
+    background: var(--app-fg);
+    color: var(--app-panel);
     cursor: pointer;
   }
   .google:disabled {
@@ -94,7 +94,7 @@
     color: var(--app-fg);
   }
   .err {
-    color: #d64545;
+    color: var(--app-danger);
     font-size: 14px;
     margin-top: 14px;
   }

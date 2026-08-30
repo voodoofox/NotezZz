@@ -338,7 +338,7 @@
     color: var(--note-fg);
     background: transparent;
     border: none;
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
     min-width: 32px;
     height: 30px;
     padding: 0 8px;
@@ -370,7 +370,7 @@
     padding: 10px;
     background: var(--app-panel);
     border: 1px solid var(--app-border);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
   }
   .sopt {
@@ -379,7 +379,7 @@
     min-width: 88px;
     padding: 10px 16px;
     border: none;
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
     background: transparent;
     color: var(--app-fg);
     cursor: pointer;
@@ -423,10 +423,10 @@
   .content :global(.ProseMirror img) {
     max-width: 100%;
     height: auto;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
   }
   .content :global(.ProseMirror img.ProseMirror-selectednode) {
-    outline: 2px solid var(--note-accent);
+    outline: 2px solid var(--note-fg);
   }
   /* Selection bubble: monochrome inverted pill floating above the selection. */
   .bubble {
@@ -437,7 +437,7 @@
     align-items: center;
     gap: 2px;
     padding: 4px 6px;
-    border-radius: 10px; /* squared-with-rounded-edges, matching the buttons */
+    border-radius: var(--radius-md); /* squared-with-rounded-edges, matching the buttons */
     background: var(--app-fg);
     color: var(--app-bg);
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
@@ -448,7 +448,7 @@
     color: inherit;
     min-width: 32px;
     height: 32px;
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     display: inline-flex;
     align-items: center;

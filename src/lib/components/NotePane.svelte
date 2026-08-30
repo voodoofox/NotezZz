@@ -232,7 +232,9 @@
 {:else}
   <section class="pane empty" data-testid="pane-empty">
     <p>No note selected.</p>
-    <button class="bignew" data-testid="empty-new" onclick={() => store.create()}>＋ New note</button>
+    <button class="bignew" data-testid="empty-new" onclick={() => store.create()}>
+      <Icon name="add" size={18} /> New note
+    </button>
   </section>
 {/if}
 
@@ -259,10 +261,13 @@
     font-size: 17px;
     padding: 9px 18px;
     border: none;
-    border-radius: 9px;
-    background: var(--app-accent);
-    color: #fff;
+    border-radius: var(--radius-md);
+    background: var(--app-fg);
+    color: var(--app-bg);
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
   .topbar {
     display: flex;
@@ -292,7 +297,7 @@
     height: 34px;
     min-width: 34px;
     padding: 0 8px;
-    border-radius: 7px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     opacity: 0.55;
     display: inline-flex;
@@ -329,7 +334,7 @@
     background: var(--app-panel);
     color: var(--app-fg);
     border: 1px solid var(--app-border);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
   }
   .palmenu {
@@ -347,7 +352,7 @@
   .pchip {
     width: 34px;
     height: 34px;
-    border-radius: 9px;
+    border-radius: var(--radius-md);
     border: 1px solid rgba(0, 0, 0, 0.16);
     cursor: pointer;
     padding: 0;
@@ -374,7 +379,7 @@
     height: 22px;
     appearance: none;
     -webkit-appearance: none;
-    border-radius: 11px;
+    border-radius: var(--radius-md);
     outline: none;
     cursor: pointer;
   }
