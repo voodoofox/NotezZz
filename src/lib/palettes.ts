@@ -16,16 +16,20 @@ export interface Palette {
   dark?: boolean;
 }
 
+// The seven hues are evenly stepped around the color wheel (15° → 330°) with
+// IDENTICAL saturation/lightness (hsl S60 L85 bg, S55 L78 header, S35 L20
+// hue-matched text) — a color-theory-consistent set. Paper and Graphite
+// bookend it as the neutral light/dark options.
 export const PALETTES: Palette[] = [
   { id: 'paper',     name: 'Paper',     bg: '#FBFAF6', header: '#F1EFE8', fg: '#2A2C2E', accent: '#5B7CFA' },
-  { id: 'sunflower', name: 'Sunflower', bg: '#FDF2C0', header: '#F5E7A4', fg: '#46401F', accent: '#B98F0A' },
-  { id: 'coral',     name: 'Coral',     bg: '#FCE4DB', header: '#F8D2C4', fg: '#54301F', accent: '#D96B48' },
-  { id: 'mint',      name: 'Mint',      bg: '#E0F3E9', header: '#CCEADA', fg: '#1F4535', accent: '#2FA579' },
-  { id: 'sky',       name: 'Sky',       bg: '#E1EEFA', header: '#CDE2F5', fg: '#1E3A52', accent: '#3E8FD8' },
-  { id: 'lavender',  name: 'Lavender',  bg: '#EBE6F9', header: '#DDD4F4', fg: '#372C5A', accent: '#7C63E0' },
-  { id: 'rose',      name: 'Rose',      bg: '#FAE4EE', header: '#F6D1E3', fg: '#522A40', accent: '#D8579B' },
+  { id: 'coral',     name: 'Coral',     bg: '#F0CDC2', header: '#E6B7A8', fg: '#452A21', accent: '#A64E30' },
+  { id: 'sunflower', name: 'Sunflower', bg: '#F0E7C2', header: '#E6D9A8', fg: '#453E21', accent: '#A68E30' },
+  { id: 'mint',      name: 'Mint',      bg: '#C2F0CD', header: '#A8E6B7', fg: '#21452A', accent: '#30A64E' },
+  { id: 'teal',      name: 'Teal',      bg: '#C2F0EC', header: '#A8E6E1', fg: '#214542', accent: '#30A69C' },
+  { id: 'sky',       name: 'Sky',       bg: '#C2D9F0', header: '#A8C7E6', fg: '#213345', accent: '#306BA6' },
+  { id: 'lavender',  name: 'Lavender',  bg: '#D3C2F0', header: '#BFA8E6', fg: '#2E2145', accent: '#5B30A6' },
+  { id: 'rose',      name: 'Rose',      bg: '#F0C2D9', header: '#E6A8C7', fg: '#452133', accent: '#A6306B' },
   { id: 'graphite',  name: 'Graphite',  bg: '#292C31', header: '#32363C', fg: '#E6E8EB', accent: '#82A9F2', dark: true },
-  { id: 'ink',       name: 'Ink',       bg: '#202B3A', header: '#28374A', fg: '#DBE5F1', accent: '#63C7F5', dark: true },
 ];
 
 export const PALETTE_MAP = new Map(PALETTES.map((p) => [p.id, p]));

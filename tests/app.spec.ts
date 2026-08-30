@@ -80,10 +80,10 @@ test('changing palette updates the note color live (the frozen-UI bug)', async (
   await page.getByTestId('note-color').click(); // open the color popover
   await page.locator('[data-testid="palette-chip"][data-palette="mint"]').click();
   await expect(pane).toHaveAttribute('data-palette', 'mint');
-  // Mint bg (#E0F3E9) actually paints:
-  await expect(pane).toHaveCSS('background-color', 'rgb(224, 243, 233)');
+  // Mint bg (#C2F0CD) actually paints:
+  await expect(pane).toHaveCSS('background-color', 'rgb(194, 240, 205)');
   // And the sidebar swatch recolors too:
-  await expect(page.getByTestId('note-swatch')).toHaveCSS('background-color', 'rgb(224, 243, 233)');
+  await expect(page.getByTestId('note-swatch')).toHaveCSS('background-color', 'rgb(194, 240, 205)');
 });
 
 test('image import inserts a picture into the note', async ({ page }) => {
@@ -293,6 +293,16 @@ test.describe('mobile layout', () => {
     await expect(page.getByTestId('note-pane')).toBeVisible();
     await page.getByTestId('exit-fullscreen').click();
     await expect(page.getByTestId('new-note')).toBeVisible(); // split back
+  });
+
+  test('selection shows the floating format bubble; bold works from it', async ({ page }) => {
+    await page.getByTestId('new-note').click();
+    await typeInEditor(page, 'bubble me');
+    await expect(page.getByTestId('format-bubble')).toBeHidden();
+    await page.locator('.ProseMirror').press('ControlOrMeta+a');
+    await expect(page.getByTestId('format-bubble')).toBeVisible();
+    await page.getByTestId('format-bubble').getByRole('button', { name: 'Bold' }).click();
+    await expect(page.locator('.ProseMirror strong')).toHaveText('bubble me');
   });
 
   test('deleting in fullscreen returns to the split view', async ({ page }) => {

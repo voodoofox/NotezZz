@@ -101,13 +101,48 @@
 
   const SIZES = [12, 14, 16, 18, 20, 24, 28, 32, 40, 48];
 
+  // Floating format bubble above the selection (phones): Android's selection
+  // sheets/keyboard cover the bottom toolbar, so the essential tools follow
+  // the selection instead.
+  let bubble = $state<{ x: number; y: number } | null>(null);
+
+  function updateBubble() {
+    if (!editor || editor.isDestroyed || window.innerWidth > 700) return void (bubble = null);
+    const { from, to, empty } = editor.state.selection;
+    if (empty) return void (bubble = null);
+    try {
+      const a = editor.view.coordsAtPos(from);
+      const b = editor.view.coordsAtPos(to);
+      const x = Math.min(Math.max((a.left + b.left) / 2, 110), window.innerWidth - 110);
+      bubble = { x, y: Math.max(8, Math.min(a.top, b.top) - 52) };
+    } catch {
+      bubble = null;
+    }
+  }
+
+  const SIZE_STEPS = [12, 14, 16, 18, 20, 24, 28, 32, 40, 48];
+
+  function bumpSize(dir: 1 | -1) {
+    if (!editor) return;
+    const cur = parseInt(editor.getAttributes('textStyle').fontSize ?? '') || baseSize;
+    let i = SIZE_STEPS.reduce(
+      (best, s, idx) => (Math.abs(s - cur) < Math.abs(SIZE_STEPS[best] - cur) ? idx : best),
+      0
+    );
+    i = Math.max(0, Math.min(SIZE_STEPS.length - 1, i + dir));
+    editor.chain().focus().setFontSize(`${SIZE_STEPS[i]}px`).run();
+  }
+
   onMount(() => {
     syncedHtml = html;
     editor = new Editor({
       element,
       extensions: [StarterKit, TextStyle, FontSize, Image.configure({ allowBase64: true })],
       content: html || '<p></p>',
-      onTransaction: () => (tick += 1),
+      onTransaction: () => {
+        tick += 1;
+        updateBubble();
+      },
       onUpdate: ({ editor }) => {
         const out = editor.getHTML();
         syncedHtml = out; // remember our own output so the effect won't push it back
@@ -247,6 +282,24 @@
   <div class="content" style="font-size: {baseSize}px" bind:this={element}></div>
 </div>
 
+{#if bubble && !showDraw}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="bubble"
+    data-testid="format-bubble"
+    style="left: {bubble.x}px; top: {bubble.y}px"
+    onpointerdown={(e) => e.preventDefault()}
+  >
+    <button aria-label="Bold" class:active={isActive('bold')} onclick={() => editor?.chain().focus().toggleBold().run()}><Icon name="bold" size={17} /></button>
+    <button aria-label="Italic" class:active={isActive('italic')} onclick={() => editor?.chain().focus().toggleItalic().run()}><Icon name="italic" size={17} /></button>
+    <button aria-label="Underline" class:active={isActive('underline')} onclick={() => editor?.chain().focus().toggleUnderline().run()}><Icon name="underline" size={17} /></button>
+    <button aria-label="Strikethrough" class:active={isActive('strike')} onclick={() => editor?.chain().focus().toggleStrike().run()}><Icon name="strike" size={17} /></button>
+    <span class="bsep"></span>
+    <button class="atext" aria-label="Smaller text" onclick={() => bumpSize(-1)}>A−</button>
+    <button class="atext" aria-label="Larger text" onclick={() => bumpSize(1)}>A+</button>
+  </div>
+{/if}
+
 {#if showDraw}
   <DrawPad onDone={drawDone} bg={drawBg} ink={drawInk} />
 {/if}
@@ -368,6 +421,50 @@
   .content :global(.ProseMirror img.ProseMirror-selectednode) {
     outline: 2px solid var(--note-accent);
   }
+  /* Selection bubble: monochrome inverted pill floating above the selection. */
+  .bubble {
+    position: fixed;
+    transform: translateX(-50%);
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 6px;
+    border-radius: 22px;
+    background: var(--app-fg);
+    color: var(--app-bg);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
+  }
+  .bubble button {
+    border: none;
+    background: transparent;
+    color: inherit;
+    min-width: 32px;
+    height: 32px;
+    border-radius: 16px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font: inherit;
+    font-size: 14px;
+    padding: 0 6px;
+  }
+  .bubble button.active {
+    background: var(--app-bg);
+    color: var(--app-fg);
+  }
+  .bubble .atext {
+    font-weight: 600;
+  }
+  .bsep {
+    width: 1px;
+    height: 18px;
+    background: currentColor;
+    opacity: 0.3;
+    margin: 0 3px;
+  }
+
   /* Phones: formatting tools live at the BOTTOM (thumb-reach, and Android's
      text-selection bubble — which always appears above the selection — can
      never cover them). Buttons stretch to equal widths filling the full row,
