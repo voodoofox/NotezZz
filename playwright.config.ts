@@ -13,6 +13,11 @@ export default defineConfig({
     channel: 'chrome',
     headless: true,
     trace: 'retain-on-failure',
+    // Fake mic so the voice-memo test can record without hardware/permission.
+    launchOptions: {
+      args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
+    },
+    permissions: ['microphone'],
   },
   projects: [{ name: 'chrome', use: { ...devices['Desktop Chrome'], channel: 'chrome' } }],
   webServer: {

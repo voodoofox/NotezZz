@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { pushState } from '$app/navigation';
+  import { pushState, replaceState } from '$app/navigation';
+  import { page } from '$app/state';
   import { store } from '$lib/store.svelte';
   import { isTauri } from '$lib/storage/backend';
   import { PALETTES, getPalette } from '$lib/palettes';
@@ -55,11 +56,23 @@
     if (note) store.update(note.id, { paletteId: `custom:${hslToHex(custHue, 70, custLight)}` });
   }
 
+  /** Exit fullscreen via history; if the entry got lost (e.g. a reload while
+   *  fullscreen), force the state clear so the button always works. */
+  function exitFullscreen() {
+    history.back();
+    setTimeout(() => {
+      if ((page.state as { fs?: boolean }).fs) {
+        replaceState('', {});
+        store.mobileOpen = false;
+      }
+    }, 250);
+  }
+
   function deleteNote() {
     if (!note || !confirm('Delete this note?')) return;
     const wasFullscreen = store.mobileOpen;
     void store.remove(note.id);
-    if (wasFullscreen) history.back(); // drop the fullscreen history entry
+    if (wasFullscreen) exitFullscreen(); // drop the fullscreen history entry
   }
 </script>
 
@@ -84,7 +97,7 @@
           data-testid="exit-fullscreen"
           title="Back to split view"
           aria-label="Back to split view"
-          onclick={() => history.back()}
+          onclick={exitFullscreen}
         ><Icon name="back" /></button>
       {:else}
         <button
@@ -273,7 +286,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 10px;
+    padding: 8px 14px 8px 10px; /* extra right inset so trash isn't on the edge */
     background: var(--note-header);
   }
   .title {

@@ -5,6 +5,7 @@
   import { TextStyle } from '@tiptap/extension-text-style';
   import { Image } from '@tiptap/extension-image';
   import { FontSize } from '../editor/fontSize';
+  import { AudioNote } from '../editor/audio';
   import DrawPad from './DrawPad.svelte';
   import Icon from './Icon.svelte';
 
@@ -41,6 +42,49 @@
   }
 
   let fileInput = $state<HTMLInputElement | null>(null);
+
+  // ---- Voice memo recording -------------------------------------------------
+  let recording = $state(false);
+  let recSeconds = $state(0);
+  let recorder: MediaRecorder | null = null;
+  let recChunks: Blob[] = [];
+  let recTimer: ReturnType<typeof setInterval> | undefined;
+
+  async function toggleRecord() {
+    if (recording) {
+      recorder?.stop();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : undefined;
+      // 32kbps opus: perfectly fine for voice, tiny files (~4KB/s).
+      recorder = new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: 32000 });
+      recChunks = [];
+      recorder.ondataavailable = (e) => e.data.size && recChunks.push(e.data);
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        clearInterval(recTimer);
+        recording = false;
+        const blob = new Blob(recChunks, { type: recorder?.mimeType || 'audio/webm' });
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === 'string' && recSeconds >= 0 && editor) {
+            editor.chain().focus().insertAudio(reader.result).run();
+          }
+        };
+        reader.readAsDataURL(blob);
+      };
+      recorder.start(1000);
+      recSeconds = 0;
+      recTimer = setInterval(() => (recSeconds += 1), 1000);
+      recording = true;
+    } catch {
+      alert('Microphone unavailable or permission denied.');
+    }
+  }
 
   /** Insert a photo/image, downscaled so notes stay reasonably sized. */
   async function importImage(e: Event) {
@@ -144,7 +188,7 @@
     syncedHtml = html;
     editor = new Editor({
       element,
-      extensions: [StarterKit, TextStyle, FontSize, Image.configure({ allowBase64: true })],
+      extensions: [StarterKit, TextStyle, FontSize, AudioNote, Image.configure({ allowBase64: true })],
       content: html || '<p></p>',
       onTransaction: () => {
         tick += 1;
@@ -276,6 +320,17 @@
       aria-label="Insert image"
       onclick={() => fileInput?.click()}
     ><Icon name="image" /></button>
+    <button
+      data-testid="fmt-record"
+      class="rec"
+      class:recording
+      title={recording ? `Stop recording (${recSeconds}s)` : 'Record voice memo'}
+      aria-label={recording ? 'Stop recording' : 'Record voice memo'}
+      onclick={toggleRecord}
+    >
+      <Icon name={recording ? 'stop' : 'mic'} />
+      {#if recording}<span class="rectime">{recSeconds}s</span>{/if}
+    </button>
     <input
       type="file"
       accept="image/*"
@@ -419,6 +474,33 @@
   }
   .content :global(.ProseMirror:focus) {
     outline: none;
+  }
+  /* Recording state: semantic red dot allowed (functional, not decorative). */
+  .rec.recording {
+    background: var(--app-danger);
+    color: #fff;
+  }
+  .rectime {
+    font-size: 12px;
+    margin-left: 4px;
+  }
+  .content :global(.ProseMirror audio) {
+    width: 100%;
+    max-width: 420px;
+    height: 40px;
+    display: block;
+    margin: 6px 0;
+  }
+  .content :global(.ProseMirror audio.ProseMirror-selectednode) {
+    outline: 2px solid var(--note-fg);
+    border-radius: var(--radius-sm);
+  }
+
+  /* Links stay ink-colored — just underlined, no browser blue. */
+  .content :global(.ProseMirror a) {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
   .content :global(.ProseMirror img) {
     max-width: 100%;

@@ -2,6 +2,7 @@
   import '../app.css';
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
+  import { replaceState } from '$app/navigation';
   import { store } from '$lib/store.svelte';
   import { isTauri } from '$lib/storage/backend';
   import { initDiag } from '$lib/diag';
@@ -36,11 +37,14 @@
     if (isTauri() || import.meta.env.DEV) return;
 
     // Clean the ?v= cache-buster left by a previous self-update reload.
+    // MUST go through SvelteKit's replaceState — raw history.replaceState
+    // wipes the router's internal state and breaks shallow-routing back
+    // navigation (the fullscreen note's back button stopped working).
     const url = new URL(location.href);
     if (url.searchParams.has('v')) {
       url.searchParams.delete('v');
       const qs = url.searchParams.toString();
-      history.replaceState(null, '', url.pathname + (qs ? `?${qs}` : '') + url.hash);
+      replaceState(url.pathname + (qs ? `?${qs}` : '') + url.hash, {});
     }
 
     let busy = false;

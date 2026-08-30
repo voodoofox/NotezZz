@@ -110,6 +110,21 @@ test('custom color sliders recolor the note', async ({ page }) => {
   await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', /custom:#/);
 });
 
+test('voice memo: record inserts a playable audio track', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('fmt-record').click();
+  await expect(page.getByTestId('fmt-record')).toHaveClass(/recording/);
+  await page.waitForTimeout(1500);
+  await page.getByTestId('fmt-record').click();
+  const audio = page.locator('.ProseMirror audio');
+  await expect(audio).toHaveCount(1);
+  expect(await audio.getAttribute('src')).toContain('data:audio/');
+  expect(await audio.getAttribute('controls')).not.toBeNull();
+  // Persists across reload like all note content.
+  await page.goto('/?local');
+  await expect(page.locator('.ProseMirror audio')).toHaveCount(1);
+});
+
 test('share intake: search filters append targets', async ({ page }) => {
   await createNote(page);
   await page.getByTestId('title-input').fill('Groceries');

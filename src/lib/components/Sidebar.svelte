@@ -67,6 +67,11 @@
   {/if}
 
   <div class="list">
+    {#if !store.loaded}
+      <div class="loadrow" data-testid="list-loading">
+        <span class="spin"></span> Loading notes…
+      </div>
+    {/if}
     {#each visibleNotes as note (note.id)}
       {@const pal = getPalette(note.paletteId)}
       <div class="item" data-testid="note-item" class:active={note.id === store.activeId} style="--swatch: {pal.bg}">
@@ -252,6 +257,28 @@
   }
   .pin.on {
     opacity: 1;
+  }
+  .loadrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+    padding: 18px 0;
+    font-size: 14px;
+    color: var(--app-muted);
+  }
+  .spin {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--app-border);
+    border-top-color: var(--app-fg);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   .empty {
     color: var(--app-muted);
