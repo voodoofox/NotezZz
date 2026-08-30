@@ -202,6 +202,21 @@
     });
   });
 
+  // The keyboard opens AFTER a selection is made (focus), resizing the
+  // viewport and invalidating the bubble's position — it then overlapped
+  // Android's own selection menu. Re-anchor on every viewport change.
+  onMount(() => {
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', updateBubble);
+    vv?.addEventListener('scroll', updateBubble);
+    window.addEventListener('resize', updateBubble);
+    return () => {
+      vv?.removeEventListener('resize', updateBubble);
+      vv?.removeEventListener('scroll', updateBubble);
+      window.removeEventListener('resize', updateBubble);
+    };
+  });
+
   onDestroy(() => editor?.destroy());
 
   // Push ONLY external content changes (e.g. switching notes) into the editor.
@@ -490,6 +505,7 @@
     height: 40px;
     display: block;
     margin: 6px 0;
+    border-radius: var(--radius-md);
   }
   .content :global(.ProseMirror audio.ProseMirror-selectednode) {
     outline: 2px solid var(--note-fg);

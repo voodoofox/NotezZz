@@ -39,6 +39,7 @@
   // color-dialog chain.
   let custHue = $state(45);
   let custLight = $state(82);
+  let custSat = $state(70);
 
   function hslToHex(h: number, s: number, l: number): string {
     const a = (s * Math.min(l, 100 - l)) / 100;
@@ -53,7 +54,7 @@
   }
 
   function applyCustom() {
-    if (note) store.update(note.id, { paletteId: `custom:${hslToHex(custHue, 70, custLight)}` });
+    if (note) store.update(note.id, { paletteId: `custom:${hslToHex(custHue, custSat, custLight)}` });
   }
 
   /** Exit fullscreen via history; if the entry got lost (e.g. a reload while
@@ -88,6 +89,7 @@
       --note-header: {pal.header};
       --note-fg: {pal.fg};
       --note-accent: {pal.accent};
+      color-scheme: {pal.dark ? 'dark' : 'light'};
     "
   >
     <div class="topbar">
@@ -166,8 +168,18 @@
                 class="shade"
                 type="range" min="30" max="94" step="1"
                 aria-label="Custom color shade"
-                style="--hue: {custHue}"
+                style="--hue: {custHue}; --sat: {custSat}%"
                 bind:value={custLight}
+                oninput={applyCustom}
+              />
+            </label>
+            <label class="crow">
+              <input
+                class="desat"
+                type="range" min="0" max="90" step="1"
+                aria-label="Custom color saturation"
+                style="--hue: {custHue}"
+                bind:value={custSat}
                 oninput={applyCustom}
               />
             </label>
@@ -286,7 +298,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 14px 8px 10px; /* extra right inset so trash isn't on the edge */
+    padding: 8px 18px 8px 12px; /* insets: left matches list, right keeps trash off the edge */
     background: var(--note-header);
   }
   .title {
@@ -419,8 +431,15 @@
   .shade {
     background: linear-gradient(
       to right,
-      hsl(var(--hue), 70%, 30%),
-      hsl(var(--hue), 70%, 94%)
+      hsl(var(--hue), var(--sat, 70%), 30%),
+      hsl(var(--hue), var(--sat, 70%), 94%)
+    );
+  }
+  .desat {
+    background: linear-gradient(
+      to right,
+      hsl(var(--hue), 0%, 75%),
+      hsl(var(--hue), 90%, 75%)
     );
   }
   .panel {

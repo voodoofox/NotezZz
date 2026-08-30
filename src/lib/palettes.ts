@@ -24,6 +24,7 @@ export const PALETTES: Palette[] = [
   { id: 'paper',     name: 'Paper',     bg: '#FBFAF6', header: '#F1EFE8', fg: '#2A2C2E', accent: '#5B7CFA' },
   { id: 'coral',     name: 'Coral',     bg: '#F0CDC2', header: '#E6B7A8', fg: '#452A21', accent: '#A64E30' },
   { id: 'sunflower', name: 'Sunflower', bg: '#F0E7C2', header: '#E6D9A8', fg: '#453E21', accent: '#A68E30' },
+  { id: 'lime',      name: 'Lime',      bg: '#D9F0C2', header: '#C7E6A8', fg: '#334521', accent: '#6BA630' },
   { id: 'mint',      name: 'Mint',      bg: '#C2F0CD', header: '#A8E6B7', fg: '#21452A', accent: '#30A64E' },
   { id: 'teal',      name: 'Teal',      bg: '#C2F0EC', header: '#A8E6E1', fg: '#214542', accent: '#30A69C' },
   { id: 'sky',       name: 'Sky',       bg: '#C2D9F0', header: '#A8C7E6', fg: '#213345', accent: '#306BA6' },

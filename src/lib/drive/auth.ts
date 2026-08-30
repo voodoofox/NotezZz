@@ -214,6 +214,12 @@ export function isDriveAuthed(): boolean {
   return accessToken !== null;
 }
 
+/** True when the token dies within `ms` — renew proactively at app-open
+ * moments so the silent-refresh popup doesn't blink mid-action. */
+export function tokenExpiringSoon(ms = 5 * 60_000): boolean {
+  return accessToken !== null && Date.now() > expiresAt - ms;
+}
+
 export function signOut(): void {
   accessToken = null;
   expiresAt = 0;

@@ -184,15 +184,13 @@
   .list {
     flex: 1;
     overflow-y: auto;
-    padding: 6px;
+    padding: 4px 0;
   }
+  /* Rows are full-bleed: selection and the color block run edge to edge. */
   .item {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     width: 100%;
-    margin-bottom: 3px;
-    border: 1px solid transparent;
-    border-radius: var(--radius-sm);
     color: var(--app-fg);
   }
   .item:hover {
@@ -202,7 +200,6 @@
      dark theme gets a white card with dark text. */
   .item.active {
     background: var(--app-fg);
-    border-color: var(--app-fg);
     color: var(--app-bg);
   }
   .item.active .pick,
@@ -215,23 +212,23 @@
   .pick {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 11px;
     flex: 1;
     min-width: 0;
     text-align: left;
-    padding: 8px 4px 8px 9px;
+    padding: 0;
     border: none;
     background: transparent;
     color: inherit;
     cursor: pointer;
   }
+  /* The note color is a full-height block flush with the row start. */
   .swatch {
-    width: 14px;
-    height: 14px;
-    border-radius: var(--radius-sm);
+    width: 36px;
+    align-self: stretch;
+    min-height: 38px;
     flex-shrink: 0;
     background: var(--swatch);
-    border: 1px solid rgba(0, 0, 0, 0.15);
   }
   .title {
     flex: 1;
@@ -246,8 +243,7 @@
     background: transparent;
     color: var(--app-fg);
     cursor: pointer;
-    padding: 6px 8px;
-    border-radius: var(--radius-sm);
+    padding: 0 12px 0 8px;
     opacity: 0.3;
     display: inline-flex;
     align-items: center;
