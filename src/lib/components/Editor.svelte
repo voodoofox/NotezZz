@@ -114,7 +114,14 @@
       const a = editor.view.coordsAtPos(from);
       const b = editor.view.coordsAtPos(to);
       const x = Math.min(Math.max((a.left + b.left) / 2, 110), window.innerWidth - 110);
-      bubble = { x, y: Math.max(8, Math.min(a.top, b.top) - 52) };
+      // BELOW the selection: Android's own Translate/Cut/Copy menu owns the
+      // space above it and would cover us. +30 clears the selection handles.
+      const below = Math.max(a.bottom, b.bottom) + 30;
+      const y =
+        below + 44 <= window.innerHeight - 8
+          ? below
+          : Math.max(8, Math.min(a.top, b.top) - 110); // no room: go high above the OS menu
+      bubble = { x, y };
     } catch {
       bubble = null;
     }
