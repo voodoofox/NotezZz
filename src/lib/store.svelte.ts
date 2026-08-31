@@ -20,9 +20,15 @@ function dedupeById(notes: Note[]): Note[] {
 }
 
 async function pickBackend(): Promise<StorageBackend> {
-  // Desktop: local sync-folder files. Web: Google Drive once signed in,
-  // otherwise localStorage (offline/not-yet-authed).
   if (isTauri()) {
+    // Signed in on desktop? Talk to Drive directly, so notes carry the app's
+    // identity and are visible to every other device. Otherwise fall back to
+    // the local sync folder (offline / not signed in).
+    const { desktopAuthConfigured, desktopAccount } = await import('./drive/desktopAuth');
+    if (desktopAuthConfigured() && (await desktopAccount())) {
+      const { DriveBackend } = await import('./drive/driveBackend');
+      return new DriveBackend();
+    }
     const { FsBackend } = await import('./storage/fsBackend');
     return new FsBackend();
   }

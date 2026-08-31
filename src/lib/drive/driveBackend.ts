@@ -7,29 +7,40 @@ import type { Note, Settings } from '../types';
 import type { StorageBackend } from '../storage/backend';
 import { FOLDER_ID_KEY, FOLDER_NAME } from '../googleConfig';
 import { getValidToken, markTokenStale, signIn } from './auth';
+import { isTauri } from '../storage/backend';
+import { desktopToken } from './desktopAuth';
+
+/** Token source: Rust-managed on desktop, GIS in the browser. */
+async function token(): Promise<string> {
+  return isTauri() ? desktopToken() : getValidToken();
+}
 
 const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
 async function authFetch(url: string, opts: RequestInit = {}): Promise<Response> {
-  const token = await getValidToken();
+  const tok = await token();
   const withAuth = (t: string): RequestInit => ({
     ...opts,
     headers: { ...(opts.headers ?? {}), Authorization: `Bearer ${t}` },
     // A wedged mobile connection must become an error, not an eternal hang.
     signal: AbortSignal.timeout(20_000),
   });
-  let res = await fetch(url, withAuth(token));
+  let res = await fetch(url, withAuth(tok));
   if (res.status === 401) {
     // Server says the token is dead (revoked / Testing-mode expiry) even if
     // its local timestamp looked fine. Drop it and retry ONCE silently.
     // Never fall back to an interactive popup here — background code has no
     // user gesture, the browser blocks the popup, and everything hangs.
     // If silent fails we throw; the UI offers a Reconnect button instead.
-    markTokenStale();
-    const t2 = await signIn(false);
-    res = await fetch(url, withAuth(t2));
+    if (isTauri()) {
+      res = await fetch(url, withAuth(await desktopToken()));
+    } else {
+      markTokenStale();
+      const t2 = await signIn(false);
+      res = await fetch(url, withAuth(t2));
+    }
   }
   if (!res.ok) {
     throw new Error(`Drive API ${res.status}: ${await res.text().catch(() => '')}`);

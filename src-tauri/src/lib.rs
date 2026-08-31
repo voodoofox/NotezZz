@@ -5,6 +5,8 @@ use std::fs;
 use std::path::PathBuf;
 
 use serde_json::Value;
+mod gauth;
+
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager};
@@ -143,6 +145,44 @@ fn set_sync_folder(app: tauri::AppHandle, path: String) -> Result<(), String> {
     fs::write(config_file(&app), txt).map_err(|e| e.to_string())
 }
 
+// ----------------------------------------------------------------------------
+// Google sign-in (desktop): the frontend supplies the OAuth client from
+// googleConfig so both apps share one identity, and gets back access tokens.
+// ----------------------------------------------------------------------------
+
+#[tauri::command]
+async fn google_sign_in(
+    app: tauri::AppHandle,
+    client_id: String,
+    client_secret: String,
+) -> Result<String, String> {
+    // Blocking browser round-trip — keep it off the UI thread.
+    tauri::async_runtime::spawn_blocking(move || {
+        gauth::sign_in(&app, &client_id, &client_secret).map(|t| t.email)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn google_token(
+    app: tauri::AppHandle,
+    client_id: String,
+    client_secret: String,
+) -> Result<String, String> {
+    gauth::valid_access_token(&app, &client_id, &client_secret)
+}
+
+#[tauri::command]
+fn google_account(app: tauri::AppHandle) -> Option<String> {
+    gauth::load_tokens(&app).map(|t| t.email).filter(|e| !e.is_empty())
+}
+
+#[tauri::command]
+fn google_sign_out(app: tauri::AppHandle) {
+    gauth::clear_tokens(&app);
+}
+
 // Sticky note windows are created from the frontend via the WebviewWindow JS
 // API (see src/lib/desktop.ts) — window creation from a Rust command deadlocks.
 
@@ -221,6 +261,10 @@ pub fn run() {
             save_settings,
             get_sync_folder,
             set_sync_folder,
+            google_sign_in,
+            google_token,
+            google_account,
+            google_sign_out,
         ])
         .setup(|app| {
             build_tray(app.handle())?;

@@ -28,3 +28,10 @@ export const GOOGLE_API_KEY = 'AIzaSyBrcp849GjZYS0ywXqNhSqEQldTFIc1_8o';
 
 /** localStorage key holding the adopted Drive folder id. */
 export const FOLDER_ID_KEY = 'notezzz:driveFolderId';
+
+/**
+ * Client secret, used ONLY by the desktop build's loopback OAuth flow (Google
+ * requires it for this client type; it ships inside the local binary and is
+ * not a web secret). Empty until configured — desktop sign-in is hidden then.
+ */
+export const GOOGLE_CLIENT_SECRET = '';

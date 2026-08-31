@@ -14,6 +14,34 @@
   let busy = $state(false);
   let picking = $state(false);
   let adoptedName = $state<string | null>(null);
+  let gAuthAvailable = $state(false);
+  let gAccount = $state<string | null>(null);
+  let gBusy = $state(false);
+
+  async function signInDesktop() {
+    gBusy = true;
+    try {
+      const { desktopSignIn } = await import('$lib/drive/desktopAuth');
+      gAccount = await desktopSignIn();
+      await store.reconnect(); // re-init against Drive
+    } catch (e) {
+      alert(`Sign-in failed: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      gBusy = false;
+    }
+  }
+
+  async function signOutDesktop() {
+    gBusy = true;
+    try {
+      const { desktopSignOut } = await import('$lib/drive/desktopAuth');
+      await desktopSignOut();
+      gAccount = null;
+      await store.reconnect(); // back to local files
+    } finally {
+      gBusy = false;
+    }
+  }
 
   /** Adopt an existing Drive folder so desktop-written notes become visible. */
   async function adoptDriveFolder() {
@@ -44,6 +72,9 @@
       /* private mode */
     }
     if (!desktop) return;
+    const { desktopAuthConfigured, desktopAccount } = await import('$lib/drive/desktopAuth');
+    gAuthAvailable = desktopAuthConfigured();
+    if (gAuthAvailable) gAccount = await desktopAccount();
     syncFolder = await getSyncFolder();
     try {
       const { isEnabled } = await import('@tauri-apps/plugin-autostart');
@@ -142,7 +173,24 @@
     {#if desktop}
       <section>
         <h3>Sync</h3>
-        <p class="hint">Notes are stored as files here. Point this at your Google Drive folder to sync across devices.</p>
+        {#if gAuthAvailable}
+          <p class="hint">
+            {gAccount
+              ? `Signed in as ${gAccount} — notes sync straight to Google Drive, visible on every device.`
+              : 'Sign in to sync notes with your phone and the web app directly through Google Drive.'}
+          </p>
+          <div class="folder">
+            <code>{gAccount ?? 'Not signed in'}</code>
+            <button data-testid="desktop-signin" onclick={gAccount ? signOutDesktop : signInDesktop} disabled={gBusy}>
+              {gBusy ? 'Working…' : gAccount ? 'Sign out' : 'Sign in with Google'}
+            </button>
+          </div>
+        {/if}
+        <p class="hint">
+          {gAccount
+            ? 'Local folder (offline copy / used when signed out):'
+            : 'Notes are stored as files here. Point this at your Google Drive folder to sync across devices.'}
+        </p>
         <div class="folder">
           <code>{syncFolder ?? '(app default location)'}</code>
           <button onclick={pickFolder} disabled={busy}>Choose…</button>
