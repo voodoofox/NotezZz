@@ -70,6 +70,18 @@ fn list_notes(app: tauri::AppHandle) -> Result<Vec<Value>, String> {
             if path.extension().and_then(|s| s.to_str()) != Some("json") {
                 continue;
             }
+            // Skip Google Drive conflict copies ("<id> (1).json") when the
+            // canonical file exists — they resurrect stale content and would
+            // collide on note id. Left on disk rather than deleted.
+            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                if let Some(base) = stem.rsplit_once(" (").and_then(|(b, rest)| {
+                    rest.strip_suffix(')').filter(|n| n.chars().all(|c| c.is_ascii_digit())).map(|_| b)
+                }) {
+                    if dir.join(format!("{base}.json")).exists() {
+                        continue;
+                    }
+                }
+            }
             if let Ok(txt) = fs::read_to_string(&path) {
                 if let Ok(v) = serde_json::from_str::<Value>(&txt) {
                     let deleted = v.get("deleted").and_then(Value::as_bool).unwrap_or(false);
