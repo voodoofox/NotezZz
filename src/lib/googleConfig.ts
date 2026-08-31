@@ -30,8 +30,9 @@ export const GOOGLE_API_KEY = 'AIzaSyBrcp849GjZYS0ywXqNhSqEQldTFIc1_8o';
 export const FOLDER_ID_KEY = 'notezzz:driveFolderId';
 
 /**
- * Client secret, used ONLY by the desktop build's loopback OAuth flow (Google
- * requires it for this client type; it ships inside the local binary and is
- * not a web secret). Empty until configured — desktop sign-in is hidden then.
+ * Client secret for the desktop loopback OAuth flow. Injected at build time
+ * from .env.local (git-ignored) and ONLY into desktop/dev builds — the
+ * deployed web bundle always receives an empty string, which also hides the
+ * desktop sign-in UI there. See vite.config.js.
  */
-export const GOOGLE_CLIENT_SECRET = '';
+export const GOOGLE_CLIENT_SECRET = __GOOGLE_CLIENT_SECRET__;

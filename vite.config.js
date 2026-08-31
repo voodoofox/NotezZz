@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
 import { readFileSync, writeFileSync } from "node:fs";
 
@@ -17,11 +17,20 @@ writeFileSync(
 );
 
 // https://vite.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig(async ({ command, mode }) => ({
   plugins: [sveltekit()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __BUILD_TIME__: JSON.stringify(buildStamp),
+    // Desktop-only OAuth secret. Injected for the dev server and the
+    // `desktop` build mode ONLY — the public web bundle (plain `vite build`)
+    // always gets an empty string, so the secret never reaches flatvoxel.com.
+    // Value comes from .env.local (git-ignored), never from source.
+    __GOOGLE_CLIENT_SECRET__: JSON.stringify(
+      command === "serve" || mode === "desktop"
+        ? (loadEnv(mode, process.cwd(), "").GOOGLE_CLIENT_SECRET ?? "")
+        : ""
+    ),
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
