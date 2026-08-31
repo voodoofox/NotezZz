@@ -9,9 +9,15 @@
   let query = $state('');
   let searchInput = $state<HTMLInputElement | null>(null);
 
+  /** List label: real text if present, else describe the media it holds —
+   *  a note containing only a sketch/photo/memo is not an "empty note". */
   function preview(html: string): string {
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    return text || 'Empty note';
+    if (text) return text;
+    if (/<audio/i.test(html)) return 'Voice note';
+    if (/<img[^>]+data:image\/svg/i.test(html)) return 'Drawing';
+    if (/<img/i.test(html)) return 'Image';
+    return 'Empty note';
   }
 
   /** Live-filtered list: title + note text, case-insensitive. */
