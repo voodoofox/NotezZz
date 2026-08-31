@@ -59,6 +59,11 @@
       if (document.visibilityState === 'hidden') flush();
     });
 
+    // Background sync so changes from other devices (pins, new notes) appear
+    // on their own. Desktop reads local files — cheap, so poll often; web
+    // hits the Drive API, so keep it gentle.
+    store.startAutoSync(isTauri() ? 6000 : 45000);
+
     if (isTauri()) {
       const { listen } = await import('@tauri-apps/api/event');
       await listen('tray-new-note', () => store.create());

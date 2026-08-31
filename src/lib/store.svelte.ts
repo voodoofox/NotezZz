@@ -61,6 +61,7 @@ class AppStore {
   #reloading = false;
   #inflight = 0;
   #lastReload = 0;
+  #autoTimer: ReturnType<typeof setInterval> | undefined;
 
   active = $derived(this.notes.find((n) => n.id === this.activeId) ?? null);
 
@@ -177,6 +178,27 @@ class AppStore {
     if ('pinned' in patch) {
       void (patch.pinned ? openSticky(updated) : closeSticky(updated.id));
     }
+  }
+
+  /** Manual "sync now" — bypasses the focus throttle. */
+  async syncNow() {
+    this.#lastReload = 0;
+    await this.reload();
+  }
+
+  /**
+   * Background sync: pick up changes made on other devices (or in sticky
+   * windows) without the user touching anything. Skipped while edits are
+   * pending or the window is hidden, so it never fights the typist.
+   */
+  startAutoSync(intervalMs: number) {
+    if (this.#autoTimer) clearInterval(this.#autoTimer);
+    this.#autoTimer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      if (this.#timers.size) return; // unsaved edits in flight
+      this.#lastReload = 0;
+      void this.reload();
+    }, intervalMs);
   }
 
   /** Re-read notes from the backend (e.g. after a sticky window edited a file). */

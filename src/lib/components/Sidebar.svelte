@@ -28,6 +28,17 @@
     query = '';
   }
 
+  let syncing = $state(false);
+  async function syncNow() {
+    syncing = true;
+    try {
+      await store.syncNow();
+    } finally {
+      // Brief minimum spin so a fast sync still reads as "it did something".
+      setTimeout(() => (syncing = false), 400);
+    }
+  }
+
   $effect(() => {
     if (searching) searchInput?.focus();
   });
@@ -37,6 +48,14 @@
   <div class="head">
     <span class="brand">NotezZz</span>
     <div class="head-actions">
+      <button
+        class="ico"
+        class:busy={syncing}
+        data-testid="sync-now"
+        onclick={syncNow}
+        title="Sync now"
+        aria-label="Sync now"
+      ><Icon name="sync" size={17} /></button>
       <button
         class="ico"
         class:on={searching}
@@ -163,6 +182,9 @@
     background: var(--app-fg);
     color: var(--app-panel);
     border-color: var(--app-fg);
+  }
+  .ico.busy :global(svg) {
+    animation: spin 0.8s linear infinite;
   }
   .searchrow {
     padding: 8px 10px 4px;
