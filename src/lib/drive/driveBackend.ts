@@ -59,11 +59,20 @@ export class DriveBackend implements StorageBackend {
   async #resolveFolder(): Promise<string> {
     // A folder adopted through the Google Picker wins: it grants access to
     // files the app didn't create (i.e. notes written by the desktop app).
+    // If it has since been deleted or unshared, forget it and fall back
+    // rather than failing every sync forever.
     try {
       const adopted = localStorage.getItem(FOLDER_ID_KEY);
-      if (adopted) return adopted;
+      if (adopted) {
+        const check = await fetch(`${API}/files/${adopted}?fields=id,trashed`, {
+          headers: { Authorization: `Bearer ${await getValidToken()}` },
+        });
+        if (check.ok && !(await check.json()).trashed) return adopted;
+        localStorage.removeItem(FOLDER_ID_KEY);
+        localStorage.removeItem(FOLDER_ID_KEY + ':name');
+      }
     } catch {
-      /* private mode */
+      /* private mode or offline — fall through to the name search */
     }
     const q = encodeURIComponent(
       `mimeType='${FOLDER_MIME}' and name='${FOLDER_NAME}' and trashed=false`

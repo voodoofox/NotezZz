@@ -81,17 +81,17 @@ export async function pickDriveFolder(): Promise<{ id: string; name: string } | 
   const picker = pickerNs();
 
   return new Promise((resolve) => {
-    // Files are shown (not just folders) so the user can look inside and
-    // identify the right NotezZz folder — duplicates are easy to create.
-    const view = new picker.DocsView()
+    // Folders only — picking a file is never what's wanted here.
+    const view = new picker.DocsView(picker.ViewId.FOLDERS)
       .setIncludeFolders(true)
-      .setSelectFolderEnabled(true);
+      .setSelectFolderEnabled(true)
+      .setMimeTypes('application/vnd.google-apps.folder');
 
     new picker.PickerBuilder()
       .setDeveloperKey(GOOGLE_API_KEY)
       .setOAuthToken(token)
       .addView(view)
-      .setTitle('Open the NotezZz folder containing PICK-THIS-ONE.txt, then Select')
+      .setTitle('Select your NotezZz folder')
       .setCallback((data: PickerResponse) => {
         if (data.action === picker.Action.PICKED) {
           const doc = data.docs?.[0];
