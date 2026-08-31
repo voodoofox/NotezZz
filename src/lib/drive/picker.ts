@@ -14,6 +14,7 @@ const GAPI_SRC = 'https://apis.google.com/js/api.js';
 interface PickerDoc {
   id: string;
   name?: string;
+  mimeType?: string;
 }
 interface PickerResponse {
   action: string;
@@ -80,19 +81,25 @@ export async function pickDriveFolder(): Promise<{ id: string; name: string } | 
   const picker = pickerNs();
 
   return new Promise((resolve) => {
-    const view = new picker.DocsView(picker.ViewId.FOLDERS)
+    // Files are shown (not just folders) so the user can look inside and
+    // identify the right NotezZz folder — duplicates are easy to create.
+    const view = new picker.DocsView()
       .setIncludeFolders(true)
-      .setSelectFolderEnabled(true)
-      .setMimeTypes('application/vnd.google-apps.folder');
+      .setSelectFolderEnabled(true);
 
     new picker.PickerBuilder()
       .setDeveloperKey(GOOGLE_API_KEY)
       .setOAuthToken(token)
       .addView(view)
-      .setTitle('Select your NotezZz folder')
+      .setTitle('Open the NotezZz folder containing PICK-THIS-ONE.txt, then Select')
       .setCallback((data: PickerResponse) => {
         if (data.action === picker.Action.PICKED) {
           const doc = data.docs?.[0];
+          if (doc && doc.mimeType !== 'application/vnd.google-apps.folder') {
+            alert('Please select the NotezZz folder itself, not a file inside it.');
+            resolve(null);
+            return;
+          }
           resolve(doc ? { id: doc.id, name: doc.name ?? 'NotezZz' } : null);
         } else if (data.action === picker.Action.CANCEL) {
           resolve(null);
