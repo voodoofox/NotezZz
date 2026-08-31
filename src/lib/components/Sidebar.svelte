@@ -222,9 +222,9 @@
     color: inherit;
     cursor: pointer;
   }
-  /* The note color is a full-height block flush with the row start. */
+  /* The note color is a narrow full-height bar flush with the row start. */
   .swatch {
-    width: 36px;
+    width: 10px;
     align-self: stretch;
     min-height: 38px;
     flex-shrink: 0;

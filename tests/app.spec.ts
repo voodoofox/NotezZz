@@ -334,6 +334,15 @@ test.describe('mobile layout', () => {
     await expect(page.locator('.ProseMirror strong')).toHaveText('bubble me');
   });
 
+  test('topbar buttons stay inside the pane (no overflow)', async ({ page }) => {
+    await page.getByTestId('new-note').click();
+    await page.getByTestId('title-input').fill('A very long note title that would push buttons out');
+    const pane = (await page.getByTestId('note-pane').boundingBox())!;
+    const del = (await page.getByTestId('note-delete').boundingBox())!;
+    // Delete must sit inside the pane with breathing room, never clipped.
+    expect(del.x + del.width).toBeLessThanOrEqual(pane.x + pane.width - 8);
+  });
+
   test('deleting in fullscreen returns to the split view', async ({ page }) => {
     await page.getByTestId('new-note').click();
     await page.getByTestId('note-fullscreen').click();

@@ -302,7 +302,11 @@
     background: var(--note-header);
   }
   .title {
-    flex: 1;
+    flex: 1 1 0;
+    /* An <input> has an intrinsic min width; without this the topbar can't
+       shrink and pushes the right-hand buttons off-screen entirely. */
+    min-width: 0;
+    width: 0;
     font-size: 20px;
     font-weight: 700;
     color: var(--note-fg);
