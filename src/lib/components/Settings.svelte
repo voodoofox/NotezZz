@@ -12,10 +12,37 @@
   let syncFolder = $state<string | null>(null);
   let autostartOn = $state(false);
   let busy = $state(false);
+  let picking = $state(false);
+  let adoptedName = $state<string | null>(null);
+
+  /** Adopt an existing Drive folder so desktop-written notes become visible. */
+  async function adoptDriveFolder() {
+    picking = true;
+    try {
+      const { pickDriveFolder } = await import('$lib/drive/picker');
+      const { FOLDER_ID_KEY } = await import('$lib/googleConfig');
+      const folder = await pickDriveFolder();
+      if (folder) {
+        localStorage.setItem(FOLDER_ID_KEY, folder.id);
+        localStorage.setItem(FOLDER_ID_KEY + ':name', folder.name);
+        adoptedName = folder.name;
+        await store.reconnect(); // re-init against the adopted folder
+      }
+    } catch (e) {
+      alert(`Could not open the folder picker: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      picking = false;
+    }
+  }
 
   const desktop = isTauri();
 
   onMount(async () => {
+    try {
+      adoptedName = localStorage.getItem('notezzz:driveFolderId:name');
+    } catch {
+      /* private mode */
+    }
     if (!desktop) return;
     syncFolder = await getSyncFolder();
     try {
@@ -136,6 +163,16 @@
           <p class="hint">
             Signed in with Google — notes sync to a private <b>NotezZz</b> folder in your Drive.
           </p>
+          <p class="hint">
+            Notes created in the <b>desktop app</b> are uploaded by Google Drive itself, so this
+            app can't see them until you point it at the folder once.
+          </p>
+          <div class="folder">
+            <code>{adoptedName ?? 'Using the app-created folder'}</code>
+            <button data-testid="pick-folder" onclick={adoptDriveFolder} disabled={picking}>
+              {picking ? 'Opening…' : 'Connect folder…'}
+            </button>
+          </div>
         {:else}
           <p class="hint">
             Offline mode — notes are stored in this browser only. Reload the page and sign in with

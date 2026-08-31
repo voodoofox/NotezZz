@@ -17,3 +17,14 @@ export const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/drive.file openid e
 
 /** Folder the app creates in the user's Drive to hold all note files. */
 export const FOLDER_NAME = 'NotezZz';
+
+/**
+ * Browser API key for the Google Picker (public by design — restrict it in
+ * Cloud Console to the Picker API + this site). The Picker is how the app
+ * gains `drive.file` access to a folder it did not create itself, which is
+ * what makes desktop-written notes visible to the web app.
+ */
+export const GOOGLE_API_KEY = 'AIzaSyBrcp849GjZYS0ywXqNhSqEQldTFIc1_8o';
+
+/** localStorage key holding the adopted Drive folder id. */
+export const FOLDER_ID_KEY = 'notezzz:driveFolderId';

@@ -5,7 +5,7 @@
 
 import type { Note, Settings } from '../types';
 import type { StorageBackend } from '../storage/backend';
-import { FOLDER_NAME } from '../googleConfig';
+import { FOLDER_ID_KEY, FOLDER_NAME } from '../googleConfig';
 import { getValidToken, markTokenStale, signIn } from './auth';
 
 const API = 'https://www.googleapis.com/drive/v3';
@@ -57,6 +57,14 @@ export class DriveBackend implements StorageBackend {
   }
 
   async #resolveFolder(): Promise<string> {
+    // A folder adopted through the Google Picker wins: it grants access to
+    // files the app didn't create (i.e. notes written by the desktop app).
+    try {
+      const adopted = localStorage.getItem(FOLDER_ID_KEY);
+      if (adopted) return adopted;
+    } catch {
+      /* private mode */
+    }
     const q = encodeURIComponent(
       `mimeType='${FOLDER_MIME}' and name='${FOLDER_NAME}' and trashed=false`
     );
