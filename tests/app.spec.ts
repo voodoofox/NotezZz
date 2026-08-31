@@ -351,6 +351,33 @@ test.describe('mobile layout', () => {
   });
 });
 
+test('a background sync does not drop a just-created note or steal focus', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Fresh note');
+  await page.locator('.ProseMirror').click();
+  await page.locator('.ProseMirror').pressSequentially('typing');
+
+  // Force refreshes like the auto-sync timer does, mid-work.
+  for (let i = 0; i < 3; i++) {
+    await page.getByTestId('sync-now').click();
+    await page.waitForTimeout(150);
+  }
+
+  // The note survives, stays selected, and the text is intact.
+  await expect(page.getByTestId('note-item')).toHaveCount(1);
+  await expect(page.getByTestId('title-input')).toHaveValue('Fresh note');
+  await expect(page.locator('.ProseMirror')).toContainText('typing');
+});
+
+test('a background sync preserves a fresh pin toggle', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('note-pin').click();
+  await expect(page.getByTestId('note-pin')).toHaveClass(/on/);
+  await page.getByTestId('sync-now').click();
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('note-pin')).toHaveClass(/on/);
+});
+
 test('notes persist across a reload', async ({ page }) => {
   await createNote(page);
   await page.getByTestId('title-input').fill('Remember me');

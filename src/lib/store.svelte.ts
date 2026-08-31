@@ -68,6 +68,8 @@ class AppStore {
   #inflight = 0;
   #lastReload = 0;
   #autoTimer: ReturnType<typeof setInterval> | undefined;
+  /** Ids with a save currently in flight — must survive a refresh. */
+  #saving = new Set<string>();
 
   active = $derived(this.notes.find((n) => n.id === this.activeId) ?? null);
 
@@ -182,6 +184,7 @@ class AppStore {
     if (this.#backend.kind !== 'drive') return void this.#backend.saveNote(note);
     this.#cacheNotes(); // instant-start cache stays current even if Drive lags
     this.#inflight += 1;
+    this.#saving.add(note.id);
     this.syncStatus = 'saving';
     try {
       await this.#backend.saveNote(note);
@@ -189,6 +192,8 @@ class AppStore {
     } catch (e) {
       this.#inflight = Math.max(0, this.#inflight - 1);
       this.#fail(e);
+    } finally {
+      this.#saving.delete(note.id);
     }
   }
 
@@ -231,7 +236,10 @@ class AppStore {
     if (this.#autoTimer) clearInterval(this.#autoTimer);
     this.#autoTimer = setInterval(() => {
       if (document.visibilityState !== 'visible') return;
-      if (this.#timers.size) return; // unsaved edits in flight
+      // Never refresh over work that hasn't landed yet: debounced edits or
+      // uploads still in flight (this is what made a fresh note flicker away
+      // and stole editor focus).
+      if (this.#timers.size || this.#saving.size) return;
       this.#lastReload = 0;
       void this.reload();
     }, intervalMs);
@@ -265,8 +273,32 @@ class AppStore {
       if (n) await this.#backend.saveNote($state.snapshot(n));
     }
     const prevPinned = new Set(this.notes.filter((n) => n.pinned).map((n) => n.id));
-    const notes = await this.#backend.listNotes();
-    this.notes = dedupeById(notes);
+    const fetched = await this.#backend.listNotes();
+
+    // Merge rather than replace. A note created/edited moments ago may not be
+    // on the server yet (upload in flight, or another device hasn't seen it):
+    // blindly taking the server list made new notes flicker away and reverted
+    // fresh pin toggles. Local wins while it is newer or still uploading.
+    const merged = new Map(fetched.map((n) => [n.id, n]));
+    const FRESH_MS = 20_000;
+    for (const local of this.notes) {
+      const remote = merged.get(local.id);
+      const stillLanding = this.#saving.has(local.id) || this.#timers.has(local.id);
+      const recent = Date.now() - local.updatedAt < FRESH_MS;
+      if (!remote) {
+        if (stillLanding || recent) merged.set(local.id, $state.snapshot(local));
+      } else if (local.updatedAt > remote.updatedAt) {
+        merged.set(local.id, $state.snapshot(local));
+      }
+    }
+    const notes = dedupeById([...merged.values()]);
+
+    // Skip the update when nothing actually changed — reassigning the array
+    // remounts the editor and steals focus mid-typing.
+    const sig = (list: Note[]) => list.map((n) => `${n.id}:${n.updatedAt}`).join('|');
+    if (sig(notes) === sig(this.notes)) return;
+
+    this.notes = notes;
     if (this.activeId && !this.notes.some((n) => n.id === this.activeId)) {
       this.activeId = this.notes[0]?.id ?? null;
     }
