@@ -23,7 +23,11 @@
     try {
       const { desktopSignIn } = await import('$lib/drive/desktopAuth');
       gAccount = await desktopSignIn();
-      await store.reconnect(); // re-init against Drive
+      // Lift local-only notes into Drive before switching backends, so
+      // nothing drops out of the list and every note becomes app-owned.
+      const moved = await store.migrateLocalToDrive().catch(() => 0);
+      await store.reconnect();
+      if (moved) alert(`Signed in. ${moved} local note(s) uploaded to Google Drive.`);
     } catch (e) {
       alert(`Sign-in failed: ${e instanceof Error ? e.message : e}`);
     } finally {

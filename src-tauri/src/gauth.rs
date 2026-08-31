@@ -107,8 +107,11 @@ pub fn sign_in(app: &tauri::AppHandle, client_id: &str, client_secret: &str) -> 
     let redirect = format!("http://127.0.0.1:{REDIRECT_PORT}/callback");
     let scope = "https://www.googleapis.com/auth/drive.file openid email";
 
-    let server = tiny_http::Server::http(format!("127.0.0.1:{REDIRECT_PORT}"))
-        .map_err(|e| format!("cannot listen on {REDIRECT_PORT}: {e}"))?;
+    let server = std::sync::Arc::new(
+        tiny_http::Server::http(format!("127.0.0.1:{REDIRECT_PORT}"))
+            .map_err(|e| format!("cannot listen on {REDIRECT_PORT}: {e}"))?,
+    );
+    let server_thread = server.clone();
 
     let url = format!(
         "{AUTH_URL}?client_id={}&redirect_uri={}&response_type=code&scope={}&code_challenge={}\
@@ -123,7 +126,7 @@ pub fn sign_in(app: &tauri::AppHandle, client_id: &str, client_secret: &str) -> 
     // Wait for Google to redirect back with ?code=...
     let (tx, rx) = mpsc::channel::<Result<String, String>>();
     std::thread::spawn(move || {
-        for request in server.incoming_requests() {
+        for request in server_thread.incoming_requests() {
             let target = request.url().to_string();
             let code = target
                 .split_once("code=")
@@ -152,9 +155,11 @@ pub fn sign_in(app: &tauri::AppHandle, client_id: &str, client_secret: &str) -> 
         }
     });
 
-    let code = rx
-        .recv_timeout(Duration::from_secs(180))
-        .map_err(|_| "sign-in timed out".to_string())??;
+    let code = rx.recv_timeout(Duration::from_secs(180));
+    // Always release port 8419 — a listener left running from an abandoned
+    // attempt makes every retry fail to bind ("sign-in loop").
+    server.unblock();
+    let code = code.map_err(|_| "sign-in timed out".to_string())??;
 
     let tr = exchange(vec![
         ("code", &code),

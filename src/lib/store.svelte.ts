@@ -138,12 +138,42 @@ class AppStore {
     this.syncStatus = 'loading';
     this.syncError = '';
     try {
-      const { signIn } = await import('./drive/auth');
-      await signIn(true);
+      if (isTauri()) {
+        // Desktop tokens are managed by Rust — never the browser popup flow,
+        // which simply fails inside the app window.
+        const { desktopToken } = await import('./drive/desktopAuth');
+        await desktopToken().catch(() => {}); // signed out -> local files
+      } else {
+        const { signIn } = await import('./drive/auth');
+        await signIn(true);
+      }
       await this.init();
     } catch (e) {
       this.#fail(e);
     }
+  }
+
+  /**
+   * First desktop sign-in: push notes that only exist as local files up to
+   * Drive, so nothing disappears when the app switches backends (and so the
+   * app — not Google Drive for Desktop — becomes their owner, which is what
+   * makes them visible on other devices).
+   */
+  async migrateLocalToDrive(): Promise<number> {
+    if (!isTauri()) return 0;
+    const { FsBackend } = await import('./storage/fsBackend');
+    const { DriveBackend } = await import('./drive/driveBackend');
+    const local = await new FsBackend().listNotes();
+    if (!local.length) return 0;
+    const drive = new DriveBackend();
+    const remote = new Set((await drive.listNotes()).map((n) => n.id));
+    let moved = 0;
+    for (const note of local) {
+      if (remote.has(note.id)) continue;
+      await drive.saveNote(note);
+      moved += 1;
+    }
+    return moved;
   }
 
   /** Save through the backend, tracking cloud sync status. */
