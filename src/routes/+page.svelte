@@ -48,7 +48,9 @@
     if (booted) return; // silent-auth resolution and a gate click can race
     booted = true;
     await store.init();
-    await restoreStickies(store.notes);
+    // Never let one failing step strand the ones below it — those wire up
+    // saving, syncing and the share handoff.
+    await restoreStickies(store.notes).catch((e) => console.error('restoreStickies', e));
 
     // Persist any pending debounced edits before the page/app goes away, so a
     // quick reload or close never loses the last few keystrokes.

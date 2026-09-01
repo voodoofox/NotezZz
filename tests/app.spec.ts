@@ -442,3 +442,20 @@ test('notes persist across a reload', async ({ page }) => {
   await page.goto('/?local'); // full reload
   await expect(page.getByTestId('note-title')).toHaveText('Remember me');
 });
+
+test('a storage layer that fails to load never strands the app on its spinner', async ({
+  page,
+}) => {
+  // A returning Drive user fetches the storage chunk on every launch. When
+  // that fetch dies (radio asleep on wake, or a cached page whose chunks are
+  // gone after a deploy) the app used to sit on "Loading notes…" forever,
+  // with no error and no way out but relaunching by hand.
+  await page.addInitScript(() => localStorage.setItem('notezzz:hasAuthed', '1'));
+  await page.route('**/driveBackend*', (r) => r.abort());
+
+  await page.goto('/');
+
+  await expect(page.getByTestId('list-loading')).toBeHidden({ timeout: 30_000 });
+  await expect(page.getByTestId('sync-error')).toBeVisible();
+  await expect(page.getByTestId('reconnect')).toBeVisible();
+});

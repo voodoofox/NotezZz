@@ -47,6 +47,8 @@ async function pickBackend(): Promise<StorageBackend> {
 const CACHE_KEY = 'notezzz:cache:notes';
 /** Cached settings — theme/palette apply immediately, not after the network. */
 const SETTINGS_CACHE_KEY = 'notezzz:cache:settings';
+/** Marks that this launch already retried itself — never reload twice. */
+const REBOOT_KEY = 'notezzz:reboot';
 
 class AppStore {
   notes = $state<Note[]>([]);
@@ -84,26 +86,34 @@ class AppStore {
   }
 
   async init() {
-    this.#backend = await pickBackend();
+    // Choosing a backend does dynamic imports, which are network fetches: on a
+    // phone waking with the radio asleep — or on a page restored from cache
+    // after a deploy, whose chunks are gone from the server — this rejects or
+    // never settles. It used to sit outside any guard, so the app was left on
+    // its "Loading notes…" spinner with no error and no way out.
+    try {
+      this.#backend = await Promise.race([
+        pickBackend(),
+        new Promise<never>((_, rej) =>
+          setTimeout(() => rej(new Error("Couldn't reach storage — tap Reconnect.")), 20_000)
+        ),
+      ]);
+    } catch (e) {
+      // A reload is what the user would (and did) do by hand, and it fixes
+      // both causes. Do it for them, once, before giving up and showing why.
+      if (this.#rebootOnce()) return;
+      this.#paintCache();
+      this.#fail(e);
+      this.loaded = true;
+      return;
+    }
+    this.#clearReboot();
     const cloud = this.#backend.kind === 'drive';
     this.syncStatus = cloud ? 'loading' : 'local';
     // Cloud mode: paint cached notes + settings instantly; the Drive refresh
     // replaces them when it lands. Kills the startup loading screen and the
     // late theme/palette flip.
-    if (cloud && !this.notes.length) {
-      try {
-        const cached = JSON.parse(localStorage.getItem(CACHE_KEY) ?? '[]') as Note[];
-        if (cached.length) {
-          this.notes = dedupeById(cached);
-          if (!this.activeId) this.activeId = this.notes[0]?.id ?? null;
-          this.loaded = true;
-        }
-        const cachedSettings = localStorage.getItem(SETTINGS_CACHE_KEY);
-        if (cachedSettings) this.settings = { ...this.settings, ...JSON.parse(cachedSettings) };
-      } catch {
-        /* corrupt cache — network load will rebuild it */
-      }
-    }
+    if (cloud) this.#paintCache();
     try {
       // Watchdog: whatever goes wrong below, "Loading…" may never be forever —
       // surface an error (with its Reconnect button) instead.
@@ -121,6 +131,47 @@ class AppStore {
       this.#fail(e);
     }
     this.loaded = true;
+  }
+
+  /** Show the last known notes and settings from this device's cache. */
+  #paintCache() {
+    if (this.notes.length) return;
+    try {
+      const cached = JSON.parse(localStorage.getItem(CACHE_KEY) ?? '[]') as Note[];
+      if (cached.length) {
+        this.notes = dedupeById(cached);
+        if (!this.activeId) this.activeId = this.notes[0]?.id ?? null;
+        this.loaded = true;
+      }
+      const cachedSettings = localStorage.getItem(SETTINGS_CACHE_KEY);
+      if (cachedSettings) this.settings = { ...this.settings, ...JSON.parse(cachedSettings) };
+    } catch {
+      /* corrupt cache — the network load will rebuild it */
+    }
+  }
+
+  /**
+   * Reload the page once per launch to shake off a startup that couldn't get
+   * off the ground. Guarded by sessionStorage so a persistent failure shows
+   * its error instead of reloading forever.
+   */
+  #rebootOnce(): boolean {
+    try {
+      if (sessionStorage.getItem(REBOOT_KEY)) return false;
+      sessionStorage.setItem(REBOOT_KEY, '1');
+      location.reload();
+      return true;
+    } catch {
+      return false; // private mode: fall through to the visible error
+    }
+  }
+
+  #clearReboot() {
+    try {
+      sessionStorage.removeItem(REBOOT_KEY);
+    } catch {
+      /* nothing to clear */
+    }
   }
 
   /** Keep the instant-start cache in step with reality (cloud mode only). */
