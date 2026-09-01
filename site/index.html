@@ -10,13 +10,16 @@
     />
     <meta name="theme-color" content="#16181d" />
     <link rel="icon" href="/NotezZz/icon-192.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Sofia+Sans+Condensed:wght@300;400;700&display=swap"
-      rel="stylesheet"
-    />
     <style>
+      /* Self-hosted so this page makes no third-party requests at all — which
+         is what lets the privacy policy say exactly that. */
+      @font-face {
+        font-family: 'Sofia Sans Condensed';
+        src: url('fonts/SofiaSansCondensed.ttf') format('truetype');
+        font-weight: 1 1000;
+        font-style: normal;
+        font-display: swap;
+      }
       :root {
         --bg: #16181d;
         --panel: #1e2127;
@@ -123,7 +126,7 @@
         <div class="brand"><img src="/NotezZz/icon-192.png" alt="" /> NotezZz</div>
         <nav>
           <a href="#features">Features</a>
-          <a href="#sync">Sync</a>
+          <a href="#privacy">Privacy</a>
           <a href="#download">Download</a>
         </nav>
       </div>
@@ -212,7 +215,7 @@
       </div>
     </section>
 
-    <section id="sync">
+    <section id="privacy">
       <div class="wrap">
         <h2>Your notes, in your Drive</h2>
         <p class="lede">
@@ -224,6 +227,14 @@
           <div class="step"><b>Write anywhere</b><p>Desktop, phone or browser. Changes appear on the other devices within seconds.</p></div>
           <div class="step"><b>Pin what matters</b><p>Pin on your phone and the sticky note appears on your desktop automatically.</p></div>
         </div>
+        <p class="note">
+          <b>NotezZz asks for Google's most restricted Drive permission</b> (<code>drive.file</code>),
+          which grants access only to files the app itself creates. It cannot list or read anything
+          else in your Drive — that limit is enforced by Google, not by our promise. Prefer no cloud
+          at all? Use it without signing in and nothing leaves your device.
+          <br /><br />
+          <a href="privacy.html">Privacy Policy</a> · <a href="terms.html">Terms of Service</a>
+        </p>
       </div>
     </section>
 
@@ -255,7 +266,9 @@
 
     <footer>
       <div class="wrap">
-        NotezZz — built with Tauri and SvelteKit · Notes stored in your own Google Drive
+        NotezZz — built with Tauri and SvelteKit · Notes stored in your own Google Drive<br />
+        <a href="privacy.html">Privacy Policy</a> · <a href="terms.html">Terms of Service</a> ·
+        <a href="mailto:voodoofox@gmail.com">Contact</a>
       </div>
     </footer>
   </body>

@@ -1,0 +1,59 @@
+/* Shared styling for the NotezZz site's text pages (privacy, terms). */
+@font-face {
+  font-family: 'Sofia Sans Condensed';
+  src: url('fonts/SofiaSansCondensed.ttf') format('truetype');
+  font-weight: 1 1000;
+  font-style: normal;
+  font-display: swap;
+}
+:root {
+  --bg: #16181d;
+  --panel: #1e2127;
+  --fg: #e8eaed;
+  --muted: #9aa0a6;
+  --border: #2c2f36;
+  --r-sm: 4px;
+  --r-lg: 6px;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Sofia Sans Condensed', system-ui, sans-serif;
+  font-weight: 324;
+  font-size: 18px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 760px; margin: 0 auto; padding: 0 24px; }
+header { padding: 24px 0; border-bottom: 1px solid var(--border); }
+header .wrap { display: flex; align-items: center; justify-content: space-between; }
+.brand { display: flex; align-items: center; gap: 10px; font-size: 23px; font-weight: 700; text-decoration: none; color: inherit; }
+.brand img { width: 28px; height: 28px; border-radius: var(--r-sm); }
+header nav a { color: var(--muted); text-decoration: none; margin-left: 20px; font-size: 17px; }
+header nav a:hover { color: var(--fg); }
+main { padding: 54px 0 80px; }
+h1 { font-size: clamp(34px, 5vw, 46px); font-weight: 700; margin: 0 0 6px; line-height: 1.1; }
+.date { color: var(--muted); margin: 0 0 34px; font-size: 16px; }
+h2 { font-size: 24px; font-weight: 700; margin: 38px 0 10px; }
+p, li { color: #cfd3d8; }
+ul { padding-left: 22px; }
+li { margin-bottom: 7px; }
+a { color: var(--fg); }
+strong { font-weight: 700; color: var(--fg); }
+.callout {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--fg);
+  border-radius: var(--r-sm);
+  padding: 16px 20px;
+  margin: 26px 0;
+}
+.callout p { margin: 0; }
+table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 17px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--fg); font-weight: 700; }
+td { color: #cfd3d8; }
+footer { border-top: 1px solid var(--border); padding: 28px 0 56px; color: var(--muted); font-size: 15.5px; }
+footer a { color: var(--muted); }
