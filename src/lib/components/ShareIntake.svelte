@@ -27,16 +27,22 @@
       .join('');
   }
 
+  /** Send it straight to the desktop as a sticky note. */
+  let pinIt = $state(false);
+
   function toNew() {
     const note = store.create();
-    store.update(note.id, { contentHtml: asHtml() });
+    store.update(note.id, { contentHtml: asHtml(), pinned: pinIt });
     onDone();
   }
 
   function appendTo(id: string) {
     const note = store.notes.find((n) => n.id === id);
     if (note) {
-      store.update(id, { contentHtml: (note.contentHtml || '') + asHtml() });
+      store.update(id, {
+        contentHtml: (note.contentHtml || '') + asHtml(),
+        ...(pinIt ? { pinned: true } : {}),
+      });
       store.activeId = id;
     }
     onDone();
@@ -57,6 +63,12 @@
       </button>
     </div>
     <blockquote class="preview">{text.length > 220 ? text.slice(0, 220) + '…' : text}</blockquote>
+
+    <label class="pinopt" class:on={pinIt}>
+      <input type="checkbox" data-testid="share-pin" bind:checked={pinIt} />
+      <Icon name="pin" size={17} />
+      <span>Pin it to my desktop</span>
+    </label>
 
     <button class="new" data-testid="share-new" onclick={toNew}>
       <Icon name="add" size={17} /> New note
@@ -131,6 +143,30 @@
     color: var(--app-muted);
     white-space: pre-wrap;
     word-break: break-word;
+  }
+  /* Sending something to the other screen is the point of sharing here, so
+     the option sits above the actions rather than hidden in settings. */
+  .pinopt {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    border: 1px solid var(--app-border);
+    border-radius: var(--radius-sm);
+    background: var(--app-bg);
+    font-size: 16px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .pinopt.on {
+    border-color: var(--app-fg);
+  }
+  .pinopt input {
+    width: 17px;
+    height: 17px;
+    accent-color: var(--app-fg);
+    margin: 0;
   }
   .new {
     width: 100%;

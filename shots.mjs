@@ -153,5 +153,25 @@ const browser = await chromium.launch({ channel: 'chrome' });
   await page.close();
 }
 
+
+// 6 — the Android share sheet landing in the app, with "pin it to my desktop"
+{
+  const page = await browser.newPage({ viewport: { width: 400, height: 800 }, deviceScaleFactor: 3 });
+  await page.goto('http://localhost:1420/?local');
+  await seed(page, 'dark');
+  await page.evaluate(() =>
+    localStorage.setItem(
+      'notezzz:pendingShare',
+      'The Design of Everyday Things — Don Norman\nhttps://example.com/everyday-things'
+    )
+  );
+  await page.reload();
+  await page.waitForTimeout(900);
+  await page.getByTestId('share-pin').check();
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: `${OUT}/app-share.png` });
+  await page.close();
+}
+
 await browser.close();
 console.log('screenshots written to', OUT);

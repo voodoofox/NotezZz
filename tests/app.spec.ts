@@ -125,6 +125,16 @@ test('voice memo: record inserts a playable audio track', async ({ page }) => {
   await expect(page.locator('.ProseMirror audio')).toHaveCount(1);
 });
 
+test('share intake: "pin it to my desktop" creates a pinned note', async ({ page }) => {
+  await page.evaluate(() => localStorage.setItem('notezzz:pendingShare', 'send this to the big screen'));
+  await page.reload();
+  await expect(page.getByTestId('share-overlay')).toBeVisible();
+  await page.getByTestId('share-pin').check();
+  await page.getByTestId('share-new').click();
+  await expect(page.getByTestId('note-pin')).toHaveClass(/on/);
+  await expect(page.locator('.ProseMirror')).toContainText('send this to the big screen');
+});
+
 test('share intake: search filters append targets', async ({ page }) => {
   await createNote(page);
   await page.getByTestId('title-input').fill('Groceries');
