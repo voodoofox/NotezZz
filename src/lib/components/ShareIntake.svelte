@@ -208,15 +208,22 @@
   .list {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    max-height: 40vh;
+    gap: 6px;
+    max-height: 46vh;
+    min-height: 0;
     overflow-y: auto;
+    /* room for the scrollbar so long titles aren't clipped by it */
+    padding-right: 2px;
   }
   .target {
+    /* flex children shrink by default: without this the rows squash into
+       each other as soon as the list overflows. */
+    flex: 0 0 auto;
     text-align: left;
     font: inherit;
-    font-size: 15px;
-    padding: 9px 11px;
+    font-size: 16px;
+    line-height: 1.35;
+    padding: 11px 13px;
     border: 1px solid var(--app-border);
     border-radius: var(--radius-sm);
     background: var(--app-bg);
