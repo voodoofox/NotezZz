@@ -304,7 +304,7 @@
         title="Text size"
         aria-label="Text size"
         onclick={toggleSizes}
-      ><Icon name="textSize" size={22} /></button>
+      ><Icon name="textSize" /></button>
       {#if showSizes}
         <div class="sizemenu" style={sizeMenuStyle} data-testid="size-menu">
           <button
