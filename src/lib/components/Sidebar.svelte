@@ -302,11 +302,12 @@
     display: flex;
     align-items: center;
     gap: 11px;
-    padding-left: 11px;
     flex: 1;
     min-width: 0;
     text-align: left;
-    padding: 0;
+    /* 10px swatch + 10px = text starts at 20px, the same x as the note
+       pane's fullscreen glyph, so the two columns line up on phones. */
+    padding: 0 0 0 10px;
     border: none;
     background: transparent;
     color: inherit;

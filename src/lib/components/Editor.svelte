@@ -152,8 +152,11 @@
 
   function updateBubble() {
     if (!editor || editor.isDestroyed || window.innerWidth > 700) return void (bubble = null);
-    const { from, to, empty } = editor.state.selection;
-    if (empty) return void (bubble = null);
+    const sel = editor.state.selection;
+    const { from, to, empty } = sel;
+    // Only for selected TEXT. Selecting a block — tapping the audio player or
+    // an image — is a node selection, where formatting buttons mean nothing.
+    if (empty || 'node' in sel) return void (bubble = null);
     try {
       const a = editor.view.coordsAtPos(from);
       const b = editor.view.coordsAtPos(to);
@@ -207,11 +210,19 @@
   // Android's own selection menu. Re-anchor on every viewport change.
   onMount(() => {
     const vv = window.visualViewport;
-    vv?.addEventListener('resize', updateBubble);
+    // When the keyboard opens the viewport shrinks under whatever you were
+    // looking at; bring the caret back onto screen.
+    const keepInView = () => {
+      updateBubble();
+      if (editor && !editor.isDestroyed && editor.isFocused) {
+        setTimeout(() => editor?.commands.scrollIntoView(), 60);
+      }
+    };
+    vv?.addEventListener('resize', keepInView);
     vv?.addEventListener('scroll', updateBubble);
     window.addEventListener('resize', updateBubble);
     return () => {
-      vv?.removeEventListener('resize', updateBubble);
+      vv?.removeEventListener('resize', keepInView);
       vv?.removeEventListener('scroll', updateBubble);
       window.removeEventListener('resize', updateBubble);
     };

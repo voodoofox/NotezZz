@@ -112,7 +112,12 @@ export const AudioNote = Node.create({
         time.textContent = fmt(audio.paused || !audio.currentTime ? len : audio.currentTime);
       };
 
-      button.addEventListener('click', () => (audio.paused ? void audio.play() : audio.pause()));
+      button.addEventListener('click', () => {
+        audio.paused ? void audio.play() : audio.pause();
+        // Keep the player in view: on a phone the toolbar and keyboard can
+        // sit exactly where it was a moment ago.
+        dom.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      });
       audio.addEventListener('play', () => setIcon(true));
       audio.addEventListener('pause', () => setIcon(false));
       audio.addEventListener('ended', () => {
