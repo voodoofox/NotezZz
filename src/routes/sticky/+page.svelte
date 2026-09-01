@@ -21,10 +21,18 @@
 
   onMount(() => {
     (async () => {
-      // The id is carried in the window label ("sticky-<id>").
-      const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      const win = getCurrentWindow();
-      const label = win.label;
+      // The id is carried in the window label ("sticky-<id>"). Outside Tauri
+      // (plain browser, e.g. previews and screenshots) that API throws, so
+      // fall back to the query string instead of failing to load at all.
+      let win: import('@tauri-apps/api/window').Window | null = null;
+      let label = '';
+      try {
+        const mod = await import('@tauri-apps/api/window');
+        win = mod.getCurrentWindow();
+        label = win.label;
+      } catch {
+        win = null;
+      }
       noteId = label.startsWith('sticky-')
         ? label.slice('sticky-'.length)
         : new URLSearchParams(window.location.search).get('id');
@@ -40,6 +48,8 @@
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') flush();
       });
+
+      if (!win) return; // plain browser: no window geometry to track
 
       // Persist window geometry (in logical px) as the user moves/resizes.
       const scale = await win.scaleFactor();
