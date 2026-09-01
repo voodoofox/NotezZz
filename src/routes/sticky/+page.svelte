@@ -2,7 +2,6 @@
   import { onMount } from 'svelte';
   import { store } from '$lib/store.svelte';
   import { getPalette } from '$lib/palettes';
-  import { tiltFor } from '$lib/types';
   import Editor from '$lib/components/Editor.svelte';
   import Icon from '$lib/components/Icon.svelte';
 
@@ -11,7 +10,7 @@
   let pal = $derived(note ? getPalette(note.paletteId) : getPalette(''));
   // Optional hand-placed look. The window itself stays rectangular, so the
   // card is inset before rotating — otherwise its corners clip.
-  let tilt = $derived(store.settings.stickyTilt && note ? tiltFor(note.id) : 0);
+  let tilt = $derived(store.settings.stickyTilt ? (note?.tilt ?? 0) : 0);
 
   // Convert a solid hex bg into rgba using the note's opacity so the window
   // (created transparent) shows a translucent sticker while text stays solid.

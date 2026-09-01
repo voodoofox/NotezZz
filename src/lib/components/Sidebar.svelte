@@ -34,6 +34,45 @@
     query = '';
   }
 
+  // ---- drag to rearrange -----------------------------------------------
+  // The colour bar doubles as the grab handle: it is already the note's
+  // identity in the list, and it keeps the whole row tappable for opening.
+  let dragId = $state<string | null>(null);
+  let listEl = $state<HTMLElement | null>(null);
+
+  function startDrag(e: PointerEvent, id: string) {
+    if (searching) return; // order is meaningless while filtered
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    dragId = id;
+  }
+
+  function moveDrag(e: PointerEvent) {
+    if (!dragId || !listEl) return;
+    const rows = [...listEl.querySelectorAll<HTMLElement>('[data-testid="note-item"]')];
+    const from = store.notes.findIndex((n) => n.id === dragId);
+    if (from === -1) return;
+    // Drop where the pointer sits relative to each row's midpoint.
+    let to = rows.findIndex((r) => {
+      const b = r.getBoundingClientRect();
+      return e.clientY < b.top + b.height / 2;
+    });
+    if (to === -1) to = rows.length - 1;
+    else if (to > from) to -= 1;
+    if (to !== from && to >= 0) {
+      const next = [...store.notes];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      store.notes = next; // live feedback; committed on release
+    }
+  }
+
+  function endDrag() {
+    if (!dragId) return;
+    dragId = null;
+    void store.reorder(store.notes.map((n) => n.id));
+  }
+
   let syncing = $state(false);
   async function syncNow() {
     syncing = true;
@@ -91,7 +130,14 @@
     </div>
   {/if}
 
-  <div class="list">
+  <div
+    class="list"
+    role="list"
+    bind:this={listEl}
+    onpointermove={moveDrag}
+    onpointerup={endDrag}
+    onpointercancel={endDrag}
+  >
     {#if !store.loaded}
       <div class="loadrow" data-testid="list-loading">
         <span class="spin"></span> Loading notes…
@@ -99,9 +145,24 @@
     {/if}
     {#each visibleNotes as note (note.id)}
       {@const pal = getPalette(note.paletteId)}
-      <div class="item" data-testid="note-item" class:active={note.id === store.activeId} style="--swatch: {pal.bg}">
+      <div
+        class="item"
+        data-testid="note-item"
+        class:active={note.id === store.activeId}
+        class:dragging={dragId === note.id}
+        style="--swatch: {pal.bg}"
+      >
+        <span
+          class="swatch"
+          data-testid="note-swatch"
+          role="button"
+          tabindex="-1"
+          title="Drag to reorder"
+          aria-label="Drag to reorder"
+          style="background: {pal.bg}"
+          onpointerdown={(e) => startDrag(e, note.id)}
+        ></span>
         <button class="pick" data-testid="note-pick" onclick={() => (store.activeId = note.id)}>
-          <span class="swatch" data-testid="note-swatch" style="background: {pal.bg}"></span>
           <span class="title" data-testid="note-title">{note.title || preview(note.contentHtml)}</span>
         </button>
         <button
@@ -241,6 +302,7 @@
     display: flex;
     align-items: center;
     gap: 11px;
+    padding-left: 11px;
     flex: 1;
     min-width: 0;
     text-align: left;
@@ -251,12 +313,24 @@
     cursor: pointer;
   }
   /* The note color is a narrow full-height bar flush with the row start. */
+  /* The colour bar doubles as the drag handle for rearranging the list. */
   .swatch {
     width: 10px;
     align-self: stretch;
     min-height: 38px;
     flex-shrink: 0;
     background: var(--swatch);
+    cursor: grab;
+    touch-action: none; /* a touch here drags the row instead of scrolling */
+  }
+  .swatch:hover {
+    box-shadow: inset 0 0 0 2px var(--app-fg);
+  }
+  .item.dragging {
+    opacity: 0.65;
+  }
+  .item.dragging .swatch {
+    cursor: grabbing;
   }
   .title {
     flex: 1;

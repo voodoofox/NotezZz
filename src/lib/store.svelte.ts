@@ -2,7 +2,7 @@
 // and persists changes through whichever StorageBackend is active. Saves are
 // debounced per note so fast typing doesn't hammer the disk / Drive.
 
-import { DEFAULT_SETTINGS, newNote, type Note, type Settings } from './types';
+import { DEFAULT_SETTINGS, newNote, rollTilt, type Note, type Settings } from './types';
 import type { StorageBackend } from './storage/backend';
 import { isTauri } from './storage/backend';
 import { LocalBackend } from './storage/localBackend';
@@ -112,8 +112,8 @@ class AppStore {
         setTimeout(() => rej(new Error('Loading timed out — check your connection and retry.')), 45_000)
       );
       const [notes, settings] = await Promise.race([load, watchdog]);
-      this.notes = dedupeById(notes.filter((n) => !this.#deleted.has(n.id)));
-      if (settings) this.settings = settings;
+      if (settings) this.settings = settings; // order lives here, so read it first
+      this.notes = this.#applyOrder(dedupeById(notes.filter((n) => !this.#deleted.has(n.id))));
       if (!this.activeId && this.notes.length) this.activeId = this.notes[0].id;
       this.syncStatus = cloud ? 'synced' : 'local';
       this.#cacheNotes();
@@ -218,6 +218,9 @@ class AppStore {
   update(id: string, patch: Partial<Note>) {
     const idx = this.notes.findIndex((n) => n.id === id);
     if (idx === -1) return;
+    // Each pin gets its own lean, so putting a note back up looks like
+    // putting a note back up.
+    if (patch.pinned && !this.notes[idx].pinned) patch = { ...patch, tilt: rollTilt() };
     const updated = { ...this.notes[idx], ...patch, updatedAt: Date.now() };
     this.notes[idx] = updated;
     this.#persistNote(updated);
@@ -225,6 +228,32 @@ class AppStore {
     if ('pinned' in patch) {
       void (patch.pinned ? openSticky(updated) : closeSticky(updated.id));
     }
+  }
+
+  /**
+   * Apply the user's manual arrangement. Notes they haven't placed (anything
+   * created since) lead the list, newest first, so a new note never hides at
+   * the bottom.
+   */
+  #applyOrder(list: Note[]): Note[] {
+    const order = this.settings.noteOrder;
+    if (!order?.length) return list;
+    const pos = new Map(order.map((id, i) => [id, i]));
+    return [...list].sort((a, b) => {
+      const ai = pos.get(a.id);
+      const bi = pos.get(b.id);
+      if (ai === undefined && bi === undefined) return b.updatedAt - a.updatedAt;
+      if (ai === undefined) return -1;
+      if (bi === undefined) return 1;
+      return ai - bi;
+    });
+  }
+
+  /** Commit a drag-and-drop rearrangement (one settings write, not N). */
+  async reorder(ids: string[]) {
+    const byId = new Map(this.notes.map((n) => [n.id, n]));
+    this.notes = ids.map((id) => byId.get(id)).filter((n): n is Note => !!n);
+    await this.saveSettings({ noteOrder: ids });
   }
 
   /** Manual "sync now" — bypasses the focus throttle. */
@@ -308,11 +337,14 @@ class AppStore {
     // Keep the on-screen order steady. Notes are sorted newest-first, but any
     // edit — including a pin toggle — bumps updatedAt, so a refresh would
     // yank the note you just touched to the top while you're looking at it.
-    // Notes already on screen hold their position; genuinely new ones lead.
-    const prevOrder = new Map(this.notes.map((n, i) => [n.id, i]));
+    // A manual arrangement wins; otherwise notes hold their current position.
+    const anchor = this.settings.noteOrder?.length
+      ? this.settings.noteOrder
+      : this.notes.map((n) => n.id);
+    const pos = new Map(anchor.map((id, i) => [id, i]));
     notes.sort((a, b) => {
-      const ai = prevOrder.get(a.id);
-      const bi = prevOrder.get(b.id);
+      const ai = pos.get(a.id);
+      const bi = pos.get(b.id);
       if (ai === undefined && bi === undefined) return b.updatedAt - a.updatedAt;
       if (ai === undefined) return -1;
       if (bi === undefined) return 1;

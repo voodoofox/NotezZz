@@ -379,6 +379,34 @@ test('a background sync does not drop a just-created note or steal focus', async
   await expect(page.locator('.ProseMirror')).toContainText('typing');
 });
 
+test('notes can be dragged into a new order, and it sticks', async ({ page }) => {
+  for (const title of ['Alpha', 'Beta', 'Gamma']) {
+    await page.getByTestId('new-note').click();
+    await page.getByTestId('title-input').fill(title);
+  }
+  const order = async () => page.getByTestId('note-title').allTextContents();
+  expect(await order()).toEqual(['Gamma', 'Beta', 'Alpha']);
+
+  // Drag the top note's colour bar down past the last row.
+  const handle = page.getByTestId('note-swatch').first();
+  const from = (await handle.boundingBox())!;
+  const last = (await page.getByTestId('note-item').last().boundingBox())!;
+  await page.mouse.move(from.x + 5, from.y + 5);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 5, last.y + last.height, { steps: 12 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  expect(await order()).toEqual(['Beta', 'Alpha', 'Gamma']);
+
+  // A sync must not undo it, and neither must a reload.
+  await page.getByTestId('sync-now').click();
+  await page.waitForTimeout(400);
+  expect(await order()).toEqual(['Beta', 'Alpha', 'Gamma']);
+  await page.goto('/?local');
+  await expect(page.getByTestId('note-item')).toHaveCount(3);
+  expect(await order()).toEqual(['Beta', 'Alpha', 'Gamma']);
+});
+
 test('pinning does not reshuffle the list when a sync lands', async ({ page }) => {
   for (const title of ['First', 'Second', 'Third']) {
     await page.getByTestId('new-note').click();

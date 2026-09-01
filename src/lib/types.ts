@@ -20,6 +20,8 @@ export interface Note {
   updatedAt: number;
   /** Soft-delete flag so sync can propagate deletions safely. */
   deleted?: boolean;
+  /** Sticky tilt in degrees, rolled fresh each time the note is pinned. */
+  tilt?: number;
 }
 
 export interface Settings {
@@ -35,6 +37,8 @@ export interface Settings {
   syncFolder: string | null;
   /** Tilt pinned stickies by a small per-note angle (desktop only). */
   stickyTilt?: boolean;
+  /** Note ids in the order the user arranged them; unlisted notes lead. */
+  noteOrder?: string[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -47,23 +51,12 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 /**
- * A small, stable tilt for a pinned sticky, derived from its id — so a note
- * keeps the same angle forever and across devices without storing anything.
- * Range is -1.8° to +1.8°, and the hash is properly avalanched: a plain
- * multiply-add over similar ids clustered on one side, so every sticky
- * leaned the same way.
+ * A fresh sticky angle, rolled when a note is pinned — so re-pinning gives it
+ * a new lean, the way putting a note back on a wall would. Range -1.8° to
+ * +1.8°: enough to read as hand-placed, little enough to stay legible.
  */
-export function tiltFor(id: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  h ^= h >>> 16;
-  h = Math.imul(h, 0x21f0aaad);
-  h ^= h >>> 15;
-  h >>>= 0;
-  return ((h % 37) - 18) / 10;
+export function rollTilt(): number {
+  return Math.round((Math.random() * 3.6 - 1.8) * 10) / 10;
 }
 
 export function newNote(partial: Partial<Note> = {}): Note {
