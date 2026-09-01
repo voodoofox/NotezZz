@@ -10,7 +10,12 @@
       name="viewport"
       content="width=device-width, initial-scale=1, interactive-widget=resizes-content"
     />
-    <meta name="theme-color" content="#f4f5f7" />
+    <!-- Installed on Android, the status bar colour comes from the manifest,
+         not from this tag — so both are dark, matching the app's own top bar.
+         This tag still drives the browser-tab colour and is kept in step with
+         the chosen theme by the script below. -->
+    <meta name="theme-color" content="#16181d" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="%sveltekit.assets%/icon-192.png" />
     <script>
