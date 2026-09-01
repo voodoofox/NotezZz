@@ -93,7 +93,10 @@
 
       /* ---- hero ---- */
       .hero { padding: clamp(48px, 8vw, 104px) 0 clamp(30px, 5vw, 54px); }
-      .hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) 232px; gap: clamp(24px, 5vw, 64px); align-items: start; }
+      /* No align-items:start — the side column must STRETCH to the row height,
+         otherwise the sticky note has no distance to travel and unsticks
+         immediately. Its run lasts as long as this grid is on screen. */
+      .hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) 232px; gap: clamp(24px, 5vw, 64px); }
       @media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; } }
       h1 { font-size: clamp(56px, 11.5vw, 138px); }
       h1 em { font-style: normal; color: var(--muted); }
@@ -204,23 +207,18 @@
               <a class="act" href="/NotezZz/">Open the web app</a>
             </div>
             <p class="under">Free · no account with us · 3 MB</p>
-          </div>
-          <figure class="pinned" style="margin:0">
-            <img src="shots/sticky.png" alt="A yellow sticky note pinned on the desktop, listing groceries" />
-            <figcaption>↑ a real sticky note<br />it stays while you scroll</figcaption>
-          </figure>
-        </div>
-      </div>
-    </div>
 
-    <div class="sheet band">
-      <div class="ruled">
-        <div class="mark">The app</div>
-        <div class="body">
-          <div class="plate">
-            <img src="shots/app-dark.png" alt="NotezZz on Windows: the note list on the left, a formatted note open on the right" width="2400" height="1360" />
+            <div class="plate" style="margin-top: clamp(40px, 6vw, 76px)">
+              <img src="shots/app-dark.png" alt="NotezZz on Windows: the note list on the left, a formatted note open on the right" width="2400" height="1360" />
+            </div>
+            <p class="cap">Windows · dark theme · the note keeps its own colour</p>
           </div>
-          <p class="cap">Windows · dark theme · the note keeps its own colour</p>
+          <aside>
+            <figure class="pinned" style="margin:0">
+              <img src="shots/sticky.png" alt="A yellow sticky note pinned on the desktop, listing groceries" />
+              <figcaption>↑ a real sticky note<br />it stays while you scroll</figcaption>
+            </figure>
+          </aside>
         </div>
       </div>
     </div>

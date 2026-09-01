@@ -2,12 +2,16 @@
   import { onMount } from 'svelte';
   import { store } from '$lib/store.svelte';
   import { getPalette } from '$lib/palettes';
+  import { tiltFor } from '$lib/types';
   import Editor from '$lib/components/Editor.svelte';
   import Icon from '$lib/components/Icon.svelte';
 
   let noteId = $state<string | null>(null);
   let note = $derived(noteId ? store.notes.find((n) => n.id === noteId) ?? null : null);
   let pal = $derived(note ? getPalette(note.paletteId) : getPalette(''));
+  // Optional hand-placed look. The window itself stays rectangular, so the
+  // card is inset before rotating — otherwise its corners clip.
+  let tilt = $derived(store.settings.stickyTilt && note ? tiltFor(note.id) : 0);
 
   // Convert a solid hex bg into rgba using the note's opacity so the window
   // (created transparent) shows a translucent sticker while text stays solid.
@@ -84,7 +88,9 @@
 {#if note}
   <div
     class="sticky"
+    class:tilted={tilt !== 0}
     style="
+      --tilt: {tilt}deg;
       --note-bg: {bgRgba(pal.bg, note.opacity)};
       --note-header: {bgRgba(pal.header, Math.min(1, note.opacity + 0.08))};
       --note-fg: {pal.fg};
@@ -116,6 +122,12 @@
   :global(html),
   :global(body) {
     background: transparent !important;
+  }
+  /* Tilted stickies inset themselves so the rotated corners stay inside the
+     (rectangular) window instead of being clipped. */
+  .sticky.tilted {
+    inset: 14px;
+    transform: rotate(var(--tilt));
   }
   .sticky {
     position: fixed;

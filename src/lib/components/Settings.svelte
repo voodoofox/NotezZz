@@ -202,6 +202,21 @@
       </section>
 
       <section>
+        <h3>Sticky notes</h3>
+        <label class="row">
+          <span>Tilt pinned notes</span>
+          <input
+            type="checkbox"
+            data-testid="sticky-tilt"
+            checked={store.settings.stickyTilt ?? false}
+            onchange={(e) =>
+              store.saveSettings({ stickyTilt: (e.currentTarget as HTMLInputElement).checked })}
+          />
+        </label>
+        <p class="hint">Each sticky gets a small angle of its own, as if placed by hand.</p>
+      </section>
+
+      <section>
         <h3>Startup</h3>
         <label class="row">
           <span>Launch on system startup</span>

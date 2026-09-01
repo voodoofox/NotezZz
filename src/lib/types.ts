@@ -33,6 +33,8 @@ export interface Settings {
   autostart: boolean;
   /** Absolute path to the Drive sync folder (desktop). */
   syncFolder: string | null;
+  /** Tilt pinned stickies by a small per-note angle (desktop only). */
+  stickyTilt?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -41,7 +43,20 @@ export const DEFAULT_SETTINGS: Settings = {
   appTheme: 'light',
   autostart: false,
   syncFolder: null,
+  stickyTilt: false,
 };
+
+/**
+ * A small, stable tilt for a pinned sticky, derived from its id — so a note
+ * keeps the same angle forever and across devices without storing anything.
+ * Range is roughly -3.2° to +3.2°: enough to read as "placed by hand",
+ * little enough to stay legible.
+ */
+export function tiltFor(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return ((h % 65) - 32) / 10;
+}
 
 export function newNote(partial: Partial<Note> = {}): Note {
   const now = Date.now();
