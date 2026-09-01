@@ -51,7 +51,9 @@
         font-family: 'Reader', Georgia, serif; font-size: 19px; line-height: 1.62;
         -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
       }
-      img { display: block; max-width: 100%; }
+      /* height:auto matters: the plates carry width/height attributes (good for
+         layout stability) and without it they render at full intrinsic height. */
+      img { display: block; max-width: 100%; height: auto; }
       a { color: inherit; }
       :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 
@@ -60,7 +62,7 @@
       .ruled { display: grid; grid-template-columns: 132px minmax(0, 1fr); }
       .ruled > .mark {
         border-right: 1px solid var(--rule); padding: 6px 20px 0 0; text-align: right;
-        font-family: 'Plex', monospace; font-size: 11.5px; letter-spacing: .13em;
+        font-family: 'Plex', monospace; font-size: 12px; letter-spacing: .13em;
         text-transform: uppercase; color: var(--muted);
       }
       .ruled > .body { padding: 0 0 0 clamp(20px, 4vw, 54px); }
@@ -109,7 +111,7 @@
       /* The one flourish: the sticky note actually sticks while you scroll. */
       .pinned { position: sticky; top: 96px; }
       .pinned img { filter: drop-shadow(10px 16px 26px rgba(35,38,42,.22)); transform: rotate(-2.2deg); }
-      .pinned figcaption { font-family: 'Plex', monospace; font-size: 11.5px; letter-spacing: .08em;
+      .pinned figcaption { font-family: 'Plex', monospace; font-size: 12px; letter-spacing: .08em;
                            text-transform: uppercase; color: var(--muted); margin-top: 14px; line-height: 1.5; }
       @media (max-width: 900px) { .pinned { position: static; max-width: 200px; } }
       @media (prefers-reduced-motion: reduce) { .pinned { position: static; } .act:hover { transform: none; } }
@@ -118,7 +120,7 @@
       .band { padding: clamp(26px, 4vw, 44px) 0; }
       .plate { border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; background: var(--raise);
                box-shadow: var(--shadow); }
-      .cap { font-family: 'Plex', monospace; font-size: 11.5px; letter-spacing: .08em; color: var(--muted);
+      .cap { font-family: 'Plex', monospace; font-size: 12px; letter-spacing: .08em; color: var(--muted);
              margin-top: 14px; text-transform: uppercase; }
 
       /* ---- sections ---- */
