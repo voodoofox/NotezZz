@@ -9,10 +9,23 @@ function stickyLabel(id: string): string {
   return `sticky-${id.replace(/[^a-zA-Z0-9_-]/g, '')}`;
 }
 
+/** Where this machine last put the sticky (device-local, never synced). */
+function savedGeometry(id: string): { x: number; y: number; w: number; h: number } | null {
+  try {
+    const raw = localStorage.getItem(`notezzz:win:${id}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function openSticky(note: Note): Promise<void> {
   if (!isTauri()) return;
   const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
   const label = stickyLabel(note.id);
+  // Fall back to the note's legacy `win` field for stickies placed before
+  // geometry moved out of the note.
+  const geom = savedGeometry(note.id) ?? note.win;
 
   const existing = await WebviewWindow.getByLabel(label);
   if (existing) {
@@ -31,10 +44,10 @@ export async function openSticky(note: Note): Promise<void> {
     alwaysOnTop: true,
     skipTaskbar: true,
     shadow: false,
-    width: note.win?.w ?? 260,
-    height: note.win?.h ?? 260,
-    x: note.win?.x,
-    y: note.win?.y,
+    width: geom?.w ?? 260,
+    height: geom?.h ?? 260,
+    x: geom?.x,
+    y: geom?.y,
     minWidth: 170,
     minHeight: 130,
   });

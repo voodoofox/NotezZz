@@ -41,6 +41,10 @@
         : new URLSearchParams(window.location.search).get('id');
 
       await store.init();
+      // A sticky can sit open for hours. Without this it keeps whatever it
+      // loaded at open time, and any write from it republishes that stale
+      // copy over newer edits made elsewhere.
+      store.startAutoSync(6000);
 
       // This window has its own store instance, so flush its own debounced
       // edits when it closes/hides — otherwise unpinning right after typing
@@ -54,21 +58,29 @@
 
       if (!win) return; // plain browser: no window geometry to track
 
-      // Persist window geometry (in logical px) as the user moves/resizes.
+      // Window geometry is device-local: where a sticky sits on THIS screen
+      // means nothing on a phone or another PC. It used to be saved onto the
+      // note, which meant a nudge of the window republished the sticky's
+      // whole (possibly stale) copy over newer edits from another device.
       const scale = await win.scaleFactor();
       let timer: ReturnType<typeof setTimeout> | undefined;
       const saveGeom = async () => {
         if (!noteId) return;
         const pos = await win.outerPosition();
         const size = await win.innerSize();
-        store.update(noteId, {
-          win: {
-            x: Math.round(pos.x / scale),
-            y: Math.round(pos.y / scale),
-            w: Math.round(size.width / scale),
-            h: Math.round(size.height / scale),
-          },
-        });
+        try {
+          localStorage.setItem(
+            `notezzz:win:${noteId}`,
+            JSON.stringify({
+              x: Math.round(pos.x / scale),
+              y: Math.round(pos.y / scale),
+              w: Math.round(size.width / scale),
+              h: Math.round(size.height / scale),
+            })
+          );
+        } catch {
+          /* private mode — the sticky just opens at the default spot */
+        }
       };
       const debounced = () => {
         clearTimeout(timer);
