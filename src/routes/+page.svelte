@@ -63,6 +63,8 @@
     // on their own. Desktop reads local files — cheap, so poll often; web
     // hits the Drive API, so keep it gentle.
     store.startAutoSync(isTauri() ? 6000 : 45000);
+    // Edits made in a sticky window land here immediately, not on the poll.
+    store.listenForChanges();
 
     if (isTauri()) {
       const { listen } = await import('@tauri-apps/api/event');

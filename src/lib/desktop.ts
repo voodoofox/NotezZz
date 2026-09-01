@@ -3,10 +3,35 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { isTauri } from './storage/backend';
-import type { Note } from './types';
+import type { Note, Settings } from './types';
 
 function stickyLabel(id: string): string {
   return `sticky-${id.replace(/[^a-zA-Z0-9_-]/g, '')}`;
+}
+
+// ---- cross-window bus --------------------------------------------------
+// Every window runs its own store and would otherwise only learn about an
+// edit on its next poll — up to six seconds of a sticky showing the wrong
+// colour, title or lean. These push it across immediately.
+
+const BUS = 'notezzz:changed';
+/** Identifies this window, so it can ignore the echo of its own broadcast. */
+const senderId = Math.random().toString(36).slice(2);
+
+export type Change = { from?: string; note?: Note; settings?: Settings };
+
+export async function broadcastChange(change: Change): Promise<void> {
+  if (!isTauri()) return;
+  const { emit } = await import('@tauri-apps/api/event');
+  await emit(BUS, { ...change, from: senderId });
+}
+
+export async function onRemoteChange(cb: (c: Change) => void): Promise<void> {
+  if (!isTauri()) return;
+  const { listen } = await import('@tauri-apps/api/event');
+  await listen<Change>(BUS, (e) => {
+    if (e.payload && e.payload.from !== senderId) cb(e.payload);
+  });
 }
 
 /** Where this machine last put the sticky (device-local, never synced). */

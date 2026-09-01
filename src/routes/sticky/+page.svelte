@@ -45,6 +45,9 @@
       // loaded at open time, and any write from it republishes that stale
       // copy over newer edits made elsewhere.
       store.startAutoSync(6000);
+      // ...and pick up edits from the main window the moment they're saved,
+      // rather than on the next poll.
+      store.listenForChanges();
 
       // This window has its own store instance, so flush its own debounced
       // edits when it closes/hides — otherwise unpinning right after typing

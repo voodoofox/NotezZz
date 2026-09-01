@@ -6,7 +6,7 @@ import { DEFAULT_SETTINGS, newNote, rollTilt, type Note, type Settings } from '.
 import type { StorageBackend } from './storage/backend';
 import { isTauri } from './storage/backend';
 import { LocalBackend } from './storage/localBackend';
-import { openSticky, closeSticky } from './desktop';
+import { openSticky, closeSticky, broadcastChange, onRemoteChange } from './desktop';
 
 /**
  * Newest-first, one note per id. Duplicate ids (Drive "(1)" copies, file-sync
@@ -187,7 +187,10 @@ class AppStore {
   /** Save through the backend, tracking cloud sync status. */
   async #save(note: Note) {
     if (!this.#backend) return;
-    if (this.#backend.kind !== 'drive') return void this.#backend.saveNote(note);
+    // Mirror into this app's other windows straight away — they must not wait
+    // on the cloud round-trip, or on their own poll, to show current state.
+    void broadcastChange({ note });
+    if (this.#backend.kind !== 'drive') return this.#backend.saveNote(note);
     this.#cacheNotes(); // instant-start cache stays current even if Drive lags
     this.#inflight += 1;
     this.#saving.add(note.id);
@@ -223,11 +226,43 @@ class AppStore {
     if (patch.pinned && !this.notes[idx].pinned) patch = { ...patch, tilt: rollTilt() };
     const updated = { ...this.notes[idx], ...patch, updatedAt: Date.now() };
     this.notes[idx] = updated;
-    this.#persistNote(updated);
     // Pin/unpin spawns or closes the desktop sticky window (no-op on web).
-    if ('pinned' in patch) {
-      void (patch.pinned ? openSticky(updated) : closeSticky(updated.id));
+    if (!('pinned' in patch)) return this.#persistNote(updated);
+    if (patch.pinned) return void this.#pin(updated);
+    this.#persistNote(updated, /* immediate */ true);
+    void closeSticky(updated.id);
+  }
+
+  /**
+   * A sticky window loads its own copy of the note from storage as it boots,
+   * so the note has to be written BEFORE the window is created. Under the
+   * usual debounced save the write is still pending when the sticky reads,
+   * and it opens showing the previous state — most visibly the old lean,
+   * which then snaps to the new one whenever its first sync lands.
+   */
+  async #pin(note: Note) {
+    const pending = this.#timers.get(note.id);
+    if (pending) {
+      clearTimeout(pending);
+      this.#timers.delete(note.id);
     }
+    await this.#save($state.snapshot(note));
+    await openSticky(note);
+  }
+
+  /** Mirror an edit made in another window of this app (desktop only). */
+  listenForChanges() {
+    void onRemoteChange((change) => {
+      if (change.settings) this.settings = { ...this.settings, ...change.settings };
+      const n = change.note;
+      if (!n) return;
+      // Same rule as the sync merge: never let an incoming copy clobber edits
+      // this window hasn't written yet.
+      if (this.#saving.has(n.id) || this.#timers.has(n.id)) return;
+      const idx = this.notes.findIndex((x) => x.id === n.id);
+      if (idx === -1 || n.updatedAt < this.notes[idx].updatedAt) return;
+      this.notes[idx] = n;
+    });
   }
 
   /**
@@ -395,6 +430,7 @@ class AppStore {
   async saveSettings(patch: Partial<Settings>) {
     this.settings = { ...this.settings, ...patch };
     this.#cacheNotes();
+    void broadcastChange({ settings: $state.snapshot(this.settings) });
     try {
       await this.#backend?.saveSettings(this.settings);
     } catch (e) {
