@@ -32,7 +32,7 @@
   let sizeMenuStyle = $state('');
 
   function toggleSizes() {
-    if (!showSizes && sizeWrap) sizeMenuStyle = popoverStyle(sizeWrap, 124);
+    if (!showSizes && sizeWrap) sizeMenuStyle = popoverStyle(sizeWrap, 168);
     showSizes = !showSizes;
   }
 
@@ -433,10 +433,11 @@
   }
   .sizemenu {
     /* position:fixed via inline popoverStyle — the toolbar's overflow
-       clipping made absolutely-positioned menus invisible. */
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
+       clipping made absolutely-positioned menus invisible. Two columns keep
+       it short enough to fit in small windows. */
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
     padding: 10px;
     background: var(--app-panel);
     border: 1px solid var(--app-border);
@@ -446,8 +447,8 @@
   .sopt {
     font: inherit;
     font-size: 17px;
-    min-width: 88px;
-    padding: 10px 16px;
+    min-width: 0;
+    padding: 10px 6px;
     border: none;
     border-radius: var(--radius-sm);
     background: transparent;
