@@ -305,9 +305,23 @@ class AppStore {
     }
     const notes = dedupeById([...merged.values()]);
 
+    // Keep the on-screen order steady. Notes are sorted newest-first, but any
+    // edit — including a pin toggle — bumps updatedAt, so a refresh would
+    // yank the note you just touched to the top while you're looking at it.
+    // Notes already on screen hold their position; genuinely new ones lead.
+    const prevOrder = new Map(this.notes.map((n, i) => [n.id, i]));
+    notes.sort((a, b) => {
+      const ai = prevOrder.get(a.id);
+      const bi = prevOrder.get(b.id);
+      if (ai === undefined && bi === undefined) return b.updatedAt - a.updatedAt;
+      if (ai === undefined) return -1;
+      if (bi === undefined) return 1;
+      return ai - bi;
+    });
+
     // Skip the update when nothing actually changed — reassigning the array
     // remounts the editor and steals focus mid-typing.
-    const sig = (list: Note[]) => list.map((n) => `${n.id}:${n.updatedAt}`).join('|');
+    const sig = (list: Note[]) => list.map((n) => `${n.id}:${n.updatedAt}:${n.pinned}`).join('|');
     if (sig(notes) === sig(this.notes)) return;
 
     this.notes = notes;

@@ -379,6 +379,23 @@ test('a background sync does not drop a just-created note or steal focus', async
   await expect(page.locator('.ProseMirror')).toContainText('typing');
 });
 
+test('pinning does not reshuffle the list when a sync lands', async ({ page }) => {
+  for (const title of ['First', 'Second', 'Third']) {
+    await page.getByTestId('new-note').click();
+    await page.getByTestId('title-input').fill(title);
+  }
+  const order = async () => page.getByTestId('note-title').allTextContents();
+  const before = await order();
+
+  // Pin the middle note, then force the refresh that used to reorder things.
+  await page.getByTestId('note-pin').nth(1).click();
+  await page.getByTestId('sync-now').click();
+  await page.waitForTimeout(400);
+
+  expect(await order()).toEqual(before);
+  await expect(page.getByTestId('note-pin').nth(1)).toHaveClass(/on/);
+});
+
 test('a background sync preserves a fresh pin toggle', async ({ page }) => {
   await createNote(page);
   await page.getByTestId('note-pin').click();
