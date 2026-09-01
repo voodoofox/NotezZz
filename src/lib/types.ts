@@ -49,13 +49,21 @@ export const DEFAULT_SETTINGS: Settings = {
 /**
  * A small, stable tilt for a pinned sticky, derived from its id — so a note
  * keeps the same angle forever and across devices without storing anything.
- * Range is roughly -3.2° to +3.2°: enough to read as "placed by hand",
- * little enough to stay legible.
+ * Range is -1.8° to +1.8°, and the hash is properly avalanched: a plain
+ * multiply-add over similar ids clustered on one side, so every sticky
+ * leaned the same way.
  */
 export function tiltFor(id: string): number {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return ((h % 65) - 32) / 10;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x21f0aaad);
+  h ^= h >>> 15;
+  h >>>= 0;
+  return ((h % 37) - 18) / 10;
 }
 
 export function newNote(partial: Partial<Note> = {}): Note {

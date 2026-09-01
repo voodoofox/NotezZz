@@ -70,6 +70,12 @@ class AppStore {
   #autoTimer: ReturnType<typeof setInterval> | undefined;
   /** Ids with a save currently in flight — must survive a refresh. */
   #saving = new Set<string>();
+  /**
+   * Tombstones: ids deleted here recently. A refresh that lands before the
+   * backend delete has propagated would otherwise resurrect them.
+   */
+  #deleted = new Map<string, number>();
+  static #TOMBSTONE_MS = 120_000;
 
   active = $derived(this.notes.find((n) => n.id === this.activeId) ?? null);
 
@@ -106,7 +112,7 @@ class AppStore {
         setTimeout(() => rej(new Error('Loading timed out — check your connection and retry.')), 45_000)
       );
       const [notes, settings] = await Promise.race([load, watchdog]);
-      this.notes = dedupeById(notes);
+      this.notes = dedupeById(notes.filter((n) => !this.#deleted.has(n.id)));
       if (settings) this.settings = settings;
       if (!this.activeId && this.notes.length) this.activeId = this.notes[0].id;
       this.syncStatus = cloud ? 'synced' : 'local';
@@ -273,7 +279,13 @@ class AppStore {
       if (n) await this.#backend.saveNote($state.snapshot(n));
     }
     const prevPinned = new Set(this.notes.filter((n) => n.pinned).map((n) => n.id));
-    const fetched = await this.#backend.listNotes();
+    const prevIds = new Set(this.notes.map((n) => n.id));
+    // Forget stale tombstones, then drop anything we deleted recently — the
+    // backend may not have caught up yet.
+    for (const [id, at] of this.#deleted) {
+      if (Date.now() - at > AppStore.#TOMBSTONE_MS) this.#deleted.delete(id);
+    }
+    const fetched = (await this.#backend.listNotes()).filter((n) => !this.#deleted.has(n.id));
 
     // Merge rather than replace. A note created/edited moments ago may not be
     // on the server yet (upload in flight, or another device hasn't seen it):
@@ -306,10 +318,14 @@ class AppStore {
     // Desktop: honor pin changes that arrived from other devices — a note
     // pinned on the phone becomes a sticky here on the next refresh.
     if (isTauri()) {
+      const liveIds = new Set(this.notes.map((n) => n.id));
       for (const n of this.notes) {
         if (n.pinned && !prevPinned.has(n.id)) void openSticky(n);
         if (!n.pinned && prevPinned.has(n.id)) void closeSticky(n.id);
       }
+      // A note deleted elsewhere disappears from the list entirely, so its
+      // sticky window has to be closed here too — it isn't in the loop above.
+      for (const id of prevIds) if (!liveIds.has(id)) void closeSticky(id);
     }
   }
 
@@ -320,6 +336,8 @@ class AppStore {
       this.mobileOpen = false; // drop out of fullscreen after deleting on phones
     }
     this.#timers.delete(id);
+    this.#deleted.set(id, Date.now());
+    void closeSticky(id); // a deleted note must not leave a sticky behind
     this.#cacheNotes();
     try {
       await this.#backend?.deleteNote(id);

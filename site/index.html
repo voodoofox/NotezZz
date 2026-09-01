@@ -111,13 +111,28 @@
       .act svg { width: 17px; height: 17px; fill: currentColor; }
       .under { font-family: 'Plex', monospace; font-size: 12px; letter-spacing: .07em; color: var(--muted); margin-top: 18px; }
 
-      /* The one flourish: the sticky note actually sticks while you scroll. */
-      .pinned { position: sticky; top: 96px; }
+      /* The one flourish: the sticky note stays put while the page scrolls,
+         then steps aside once you reach the writing section. It lives in a
+         fixed rail aligned to the sheet, in space the hero grid reserves for
+         it, so it never overlaps the text. */
+      .rail {
+        position: fixed; top: 96px; left: 50%; transform: translateX(-50%);
+        width: min(1180px, 100% - 40px); display: flex; justify-content: flex-end;
+        pointer-events: none; z-index: 5; transition: opacity .35s ease, translate .35s ease;
+      }
+      .rail .pinned { width: 232px; margin: 0; pointer-events: auto; }
+      .rail[data-off='1'] { opacity: 0; translate: 0 -14px; }
       .pinned img { filter: drop-shadow(10px 16px 26px rgba(35,38,42,.22)); transform: rotate(-2.2deg); }
       .pinned figcaption { font-family: 'Plex', monospace; font-size: 12px; letter-spacing: .08em;
                            text-transform: uppercase; color: var(--muted); margin-top: 14px; line-height: 1.5; }
-      @media (max-width: 900px) { .pinned { position: static; max-width: 200px; } }
-      @media (prefers-reduced-motion: reduce) { .pinned { position: static; } .act:hover { transform: none; } }
+      .hero-inline { display: none; }
+      /* Too narrow to keep a rail beside the text — show it inline instead. */
+      @media (max-width: 1000px) {
+        .rail { display: none; }
+        .hero-inline { display: block; max-width: 210px; margin: 34px 0 0; }
+        .hero-grid { grid-template-columns: 1fr; }
+      }
+      @media (prefers-reduced-motion: reduce) { .rail { transition: none; } .act:hover { transform: none; } }
 
       /* ---- screenshot bands ---- */
       .band { padding: clamp(26px, 4vw, 44px) 0; }
@@ -177,6 +192,13 @@
     </style>
   </head>
   <body>
+    <div class="rail" id="rail" aria-hidden="true">
+      <figure class="pinned">
+        <img src="shots/sticky.png" alt="" />
+        <figcaption>↑ a real sticky note<br />it stays while you scroll</figcaption>
+      </figure>
+    </div>
+
     <div class="top">
       <div class="sheet">
         <a class="wordmark" href="#top"><img src="icon.png" alt="" />NotezZz</a>
@@ -213,10 +235,12 @@
             </div>
             <p class="cap">Windows · dark theme · the note keeps its own colour</p>
           </div>
+          <!-- Reserved space for the fixed rail (see .rail); on narrow screens
+               the note appears inline here instead. -->
           <aside>
-            <figure class="pinned" style="margin:0">
+            <figure class="pinned hero-inline">
               <img src="shots/sticky.png" alt="A yellow sticky note pinned on the desktop, listing groceries" />
-              <figcaption>↑ a real sticky note<br />it stays while you scroll</figcaption>
+              <figcaption>↑ a real sticky note</figcaption>
             </figure>
           </aside>
         </div>
@@ -387,5 +411,21 @@
         </span>
       </div>
     </footer>
+
+    <script>
+      // The sticky note holds its place until the writing section arrives,
+      // then bows out rather than following you down the whole page.
+      (() => {
+        const rail = document.getElementById('rail');
+        const stop = document.getElementById('writing');
+        if (!rail || !stop) return;
+        const update = () => {
+          rail.dataset.off = stop.getBoundingClientRect().top < 260 ? '1' : '0';
+        };
+        update();
+        addEventListener('scroll', update, { passive: true });
+        addEventListener('resize', update);
+      })();
+    </script>
   </body>
 </html>
