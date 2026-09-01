@@ -15,9 +15,18 @@
     <link rel="apple-touch-icon" href="%sveltekit.assets%/icon-192.png" />
     <script>
       // Apply the cached theme before first paint — no light flash, no delay.
+      // The theme-color is set here too: on an installed PWA it colours the
+      // Android status bar, which otherwise stays at the manifest's light
+      // value while the app itself is dark.
       try {
         var s = JSON.parse(localStorage.getItem('notezzz:cache:settings') || 'null');
-        if (s && s.appTheme) document.documentElement.dataset.theme = s.appTheme;
+        var t = (s && s.appTheme) || (localStorage.getItem('notezzz:settings')
+          ? (JSON.parse(localStorage.getItem('notezzz:settings')).appTheme) : null);
+        if (t) {
+          document.documentElement.dataset.theme = t;
+          var m = document.querySelector('meta[name="theme-color"]');
+          if (m) m.setAttribute('content', t === 'dark' ? '#16181d' : '#f4f5f7');
+        }
       } catch (e) {}
     </script>
     <title>NotezZz</title>

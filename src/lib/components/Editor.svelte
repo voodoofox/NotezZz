@@ -500,16 +500,57 @@
     font-size: 12px;
     margin-left: 4px;
   }
-  .content :global(.ProseMirror audio) {
-    width: 100%;
+  /* Voice memo player — no panel, no chrome: a line of controls in the
+     note's own ink, so it reads as part of the note rather than a widget
+     dropped into it. */
+  .content :global(.nz-audio) {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     max-width: 420px;
-    height: 40px;
-    display: block;
-    margin: 6px 0;
-    border-radius: var(--radius-md);
+    margin: 10px 0;
+    color: var(--note-fg);
   }
-  .content :global(.ProseMirror audio.ProseMirror-selectednode) {
+  .content :global(.nz-audio-play) {
+    flex: none;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1.5px solid currentColor;
+    border-radius: 50%;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .content :global(.nz-audio-play:hover) {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+  }
+  .content :global(.nz-audio-track) {
+    flex: 1;
+    height: 3px;
+    border-radius: 2px;
+    background: color-mix(in srgb, currentColor 22%, transparent);
+    cursor: pointer;
+    position: relative;
+  }
+  .content :global(.nz-audio-fill) {
+    height: 100%;
+    width: 0;
+    border-radius: 2px;
+    background: currentColor;
+  }
+  .content :global(.nz-audio-time) {
+    flex: none;
+    font-size: 13px;
+    opacity: 0.7;
+    font-variant-numeric: tabular-nums;
+  }
+  .content :global(.nz-audio.ProseMirror-selectednode) {
     outline: 2px solid var(--note-fg);
+    outline-offset: 4px;
     border-radius: var(--radius-sm);
   }
 

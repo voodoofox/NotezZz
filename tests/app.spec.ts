@@ -116,13 +116,15 @@ test('voice memo: record inserts a playable audio track', async ({ page }) => {
   await expect(page.getByTestId('fmt-record')).toHaveClass(/recording/);
   await page.waitForTimeout(1500);
   await page.getByTestId('fmt-record').click();
-  const audio = page.locator('.ProseMirror audio');
-  await expect(audio).toHaveCount(1);
-  expect(await audio.getAttribute('src')).toContain('data:audio/');
-  expect(await audio.getAttribute('controls')).not.toBeNull();
+  // The custom player replaces the browser widget; the <audio> lives in the
+  // saved HTML rather than the DOM.
+  const player = page.locator('.ProseMirror .nz-audio');
+  await expect(player).toHaveCount(1);
+  await expect(player.locator('.nz-audio-play')).toBeVisible();
+  await expect(player.locator('.nz-audio-track')).toBeVisible();
   // Persists across reload like all note content.
   await page.goto('/?local');
-  await expect(page.locator('.ProseMirror audio')).toHaveCount(1);
+  await expect(page.locator('.ProseMirror .nz-audio')).toHaveCount(1);
 });
 
 test('share intake: "pin it to my desktop" creates a pinned note', async ({ page }) => {
