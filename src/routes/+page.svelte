@@ -48,6 +48,9 @@
     if (booted) return; // silent-auth resolution and a gate click can race
     booted = true;
     await store.init();
+    // A brand-new account gets a few notes explaining the app. Skipped under
+    // ?local, which is the E2E suite's bypass and expects a clean slate.
+    if (!localMode) await store.seedWelcome().catch((e) => console.error('seedWelcome', e));
     // Never let one failing step strand the ones below it — those wire up
     // saving, syncing and the share handoff.
     await restoreStickies(store.notes).catch((e) => console.error('restoreStickies', e));
@@ -120,7 +123,9 @@
     <ShareIntake text={sharedText} onDone={shareDone} />
   {/if}
 {:else}
-  <SignIn {onSignedIn} onLocal={() => (authed = true)} />
+  <!-- Both ways past the gate must start the app: opening the pane without
+       booting the store leaves it on its loading spinner forever. -->
+  <SignIn {onSignedIn} onLocal={onSignedIn} />
 {/if}
 
 <style>

@@ -28,7 +28,7 @@
       {busy ? 'Connecting…' : 'Sign in with Google'}
     </button>
     {#if error}<p class="err">{error}</p>{/if}
-    <button class="local" onclick={onLocal}>Open without signing in</button>
+    <button class="local" data-testid="open-local" onclick={onLocal}>Open without signing in</button>
     <p class="fine">
       Sign-in syncs to a private <b>NotezZz</b> folder in your Drive — nothing else is accessed.
       Offline mode keeps notes in this browser only.

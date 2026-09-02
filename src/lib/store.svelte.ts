@@ -3,6 +3,7 @@
 // debounced per note so fast typing doesn't hammer the disk / Drive.
 
 import { DEFAULT_SETTINGS, newNote, rollTilt, type Note, type Settings } from './types';
+import { welcomeNotes } from './welcome';
 import type { StorageBackend } from './storage/backend';
 import { isTauri } from './storage/backend';
 import { LocalBackend } from './storage/localBackend';
@@ -131,6 +132,26 @@ class AppStore {
       this.#fail(e);
     }
     this.loaded = true;
+  }
+
+  /**
+   * First run only: leave a few notes that explain the app. Call after init.
+   *
+   * The guards matter more than the notes do — seeding into an account that
+   * already has notes would scatter three files across the user's Drive for
+   * them to clean up, so anything short of "we definitely saw an empty
+   * account" declines and tries again next launch.
+   */
+  async seedWelcome() {
+    if (this.settings.seeded || !this.loaded) return;
+    if (this.syncStatus === 'error') return; // empty because the load FAILED
+    if (this.notes.length) return void this.saveSettings({ seeded: true });
+
+    const notes = welcomeNotes(this.settings.defaultFontSize, this.isCloud);
+    this.notes = notes;
+    this.activeId ??= notes[0].id;
+    for (const note of notes) await this.#save(note);
+    await this.saveSettings({ seeded: true });
   }
 
   /** Show the last known notes and settings from this device's cache. */

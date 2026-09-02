@@ -459,3 +459,33 @@ test('a storage layer that fails to load never strands the app on its spinner', 
   await expect(page.getByTestId('sync-error')).toBeVisible();
   await expect(page.getByTestId('reconnect')).toBeVisible();
 });
+
+test('a first run leaves welcome notes, and only once', async ({ page }) => {
+  // No ?local here: that is the suite's blank-slate bypass. This is the real
+  // first-run path a person takes.
+  await page.goto('/');
+  await page.getByTestId('open-local').click();
+
+  await expect(page.getByTestId('note-item')).toHaveCount(3);
+  await expect(page.getByTestId('note-title').first()).toHaveText('Start here');
+
+  // Seeding again on every launch would be the app nagging. (Local mode is
+  // not remembered on web, so the gate is part of the relaunch.)
+  await page.reload();
+  await page.getByTestId('open-local').click();
+  await expect(page.getByTestId('note-item')).toHaveCount(3);
+});
+
+test('welcome notes are never written over notes that already exist', async ({ page }) => {
+  // The dangerous case: an account WITH notes whose first launch on this
+  // device is a fresh one. Seeding there would litter the user's Drive.
+  await page.goto('/?local');
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Mine');
+
+  await page.goto('/'); // same storage, but the first-run path
+  await page.getByTestId('open-local').click();
+
+  await expect(page.getByTestId('note-item')).toHaveCount(1);
+  await expect(page.getByTestId('note-title')).toHaveText('Mine');
+});

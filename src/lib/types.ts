@@ -39,6 +39,8 @@ export interface Settings {
   stickyTilt?: boolean;
   /** Note ids in the order the user arranged them; unlisted notes lead. */
   noteOrder?: string[];
+  /** First-run welcome notes have been written; never write them again. */
+  seeded?: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
