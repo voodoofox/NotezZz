@@ -17,7 +17,6 @@
   --app-fg: #1f2328;
   --app-muted: #6b7280;
   --app-border: #e2e4e8;
-  --app-accent: #2f8fe0; /* legacy: palette accents only — never UI chrome */
   --app-danger: #e0245e; /* semantic error color (text only) */
   --radius-sm: 4px; /* buttons, inputs, chips */
   --radius-md: 5px; /* larger buttons, pills, sliders */
@@ -30,7 +29,6 @@
   --app-fg: #e8eaed;
   --app-muted: #9aa0a6;
   --app-border: #2c2f36;
-  --app-accent: #7fb2ff;
 }
 
 * {

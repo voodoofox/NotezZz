@@ -3,7 +3,9 @@
   // ink-like outlines, rendered live as SVG. "Done" hands back a cropped,
   // transparent-background SVG data URL that gets embedded in the note.
   import { getStroke } from 'perfect-freehand';
+  import { downscaleImage } from '$lib/image';
   import Icon from './Icon.svelte';
+  import Modal from './Modal.svelte';
 
   interface Props {
     onDone: (svgDataUrl: string | null) => void;
@@ -35,6 +37,17 @@
     '#f2b705',
   ].filter((c, i, a) => a.indexOf(c) === i);
   const SIZES = [4, 8, 14];
+  // Swatches need distinct names: six buttons all called "Ink color" are
+  // indistinguishable to a screen reader.
+  const COLOR_NAMES: Record<string, string> = {
+    '#1f2328': 'Black',
+    '#ffffff': 'White',
+    '#e0245e': 'Red',
+    '#2f8fe0': 'Blue',
+    '#2fa579': 'Green',
+    '#f2b705': 'Yellow',
+  };
+  const colorName = (c: string) => COLOR_NAMES[c] ?? (c === inkAtOpen ? 'Note ink' : c);
 
   interface PadImage {
     href: string;
@@ -112,29 +125,18 @@
   let fileInput = $state<HTMLInputElement | null>(null);
 
   /** Drop a photo onto the pad (centered, fit to ~70%) to draw over it. */
-  function importImage(e: Event) {
+  async function importImage(e: Event) {
     const input = e.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    const img = new window.Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const canvas = document.createElement('canvas');
-      const k = Math.min(1, 1280 / Math.max(img.width, img.height));
-      canvas.width = Math.round(img.width * k);
-      canvas.height = Math.round(img.height * k);
-      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
-      const href =
-        file.type === 'image/png' ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.85);
-      const r = surface.getBoundingClientRect();
-      const fit = Math.min((r.width * 0.7) / canvas.width, (r.height * 0.7) / canvas.height, 1);
-      const w = canvas.width * fit;
-      const h = canvas.height * fit;
-      images.push({ href, x: (r.width - w) / 2, y: (r.height - h) / 2, w, h });
-    };
-    img.src = url;
+    const scaled = await downscaleImage(file, 1280);
+    if (!scaled || !surface) return;
+    const r = surface.getBoundingClientRect();
+    const fit = Math.min((r.width * 0.7) / scaled.width, (r.height * 0.7) / scaled.height, 1);
+    const w = scaled.width * fit;
+    const h = scaled.height * fit;
+    images.push({ href: scaled.src, x: (r.width - w) / 2, y: (r.height - h) / 2, w, h });
   }
 
   function finish() {
@@ -181,15 +183,19 @@
   }
 </script>
 
+<Modal labelledby="drawpad-title" onClose={() => onDone(null)} fill zIndex={80}>
 <div class="pad">
+  <h2 id="drawpad-title" class="sr-only">Draw a sketch</h2>
   <div class="bar">
     <div class="swatches">
       {#each COLORS as c}
         <button
           class="dot"
           class:sel={c === color}
+          aria-pressed={c === color}
           style="background: {c}"
-          aria-label="Ink color"
+          aria-label="Ink color: {colorName(c)}"
+          title={colorName(c)}
           onclick={() => (color = c)}
         ></button>
       {/each}
@@ -199,6 +205,7 @@
         <button
           class="sz"
           class:sel={s === penSize}
+          aria-pressed={s === penSize}
           aria-label="Pen size {s}"
           title="Pen size"
           onclick={() => (penSize = s)}
@@ -211,6 +218,7 @@
       <button
         class="op"
         class:sel={tool === 'pen'}
+        aria-pressed={tool === 'pen'}
         data-testid="tool-pen"
         title="Pen"
         aria-label="Pen"
@@ -219,6 +227,7 @@
       <button
         class="op"
         class:sel={tool === 'erase'}
+        aria-pressed={tool === 'erase'}
         data-testid="tool-erase"
         title="Eraser (removes whole strokes)"
         aria-label="Eraser"
@@ -229,7 +238,7 @@
       <button class="op" onclick={() => fileInput?.click()} title="Insert image" aria-label="Insert image">
         <Icon name="image" />
       </button>
-      <input type="file" accept="image/*" hidden bind:this={fileInput} onchange={importImage} />
+      <input type="file" accept="image/*" hidden bind:this={fileInput} onchange={importImage} aria-label="Image file" />
       <button class="op" onclick={undo} disabled={!strokes.length} title="Undo" aria-label="Undo">
         <Icon name="undo" />
       </button>
@@ -281,15 +290,25 @@
     ><Icon name="check" size={17} /> Done</button>
   </div>
 </div>
+</Modal>
 
 <style>
+  /* Fills the Modal's edge-to-edge dialog; the shell owns the backdrop. */
   .pad {
-    position: fixed;
-    inset: 0;
-    z-index: 80;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     background: var(--app-panel);
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
   .bar {
     display: flex;

@@ -1,6 +1,10 @@
 // Core data model. These shapes are what get persisted (as one JSON file per
 // note on desktop, or one Drive file per note on web). Keep them serializable.
 
+/** Default body font size (px). The FontSize extension renders sizes as em
+ *  relative to this, so the base-size slider is a true text zoom. */
+export const BASE_FONT_PX = 18;
+
 export interface Note {
   id: string;
   title: string;
@@ -45,7 +49,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   defaultPaletteId: 'paper',
-  defaultFontSize: 18,
+  defaultFontSize: BASE_FONT_PX,
   appTheme: 'light',
   autostart: false,
   syncFolder: null,
@@ -68,7 +72,7 @@ export function newNote(partial: Partial<Note> = {}): Note {
     title: '',
     contentHtml: '',
     paletteId: 'paper',
-    fontSize: 18,
+    fontSize: BASE_FONT_PX,
     pinned: false,
     opacity: 1,
     win: null,

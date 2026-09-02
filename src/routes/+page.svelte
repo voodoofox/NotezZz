@@ -13,8 +13,21 @@
   /** Text arriving via the Android share sheet (see routes/share). */
   let sharedText = $state<string | null>(null);
 
+  // Desktop never gates. Web waits for Google sign-in, unless "local mode" is
+  // chosen (offline, localStorage) — also used by the E2E test suite via ?local.
+  // Returning Drive users boot straight into the app (cached notes paint
+  // instantly, token renews in the background) — no "Connecting…" screen.
+  const localMode =
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('local');
+  let authed = $state(isTauri() || localMode || hasPriorAuth());
+
+  let booted = false;
+  let listenersWired = false;
+
   // Fullscreen note view is history-backed shallow state, so the system back
-  // button/gesture exits fullscreen instead of leaving the app.
+  // button/gesture exits fullscreen instead of leaving the app. This effect
+  // is the ONLY writer of store.mobileOpen on the page side; everything that
+  // wants to leave fullscreen goes through history (see NotePane).
   $effect(() => {
     store.mobileOpen = (page.state as { fs?: boolean }).fs === true;
   });
@@ -41,15 +54,44 @@
     }
   });
 
-  // Desktop never gates. Web waits for Google sign-in, unless "local mode" is
-  // chosen (offline, localStorage) — also used by the E2E test suite via ?local.
-  // Returning Drive users boot straight into the app (cached notes paint
-  // instantly, token renews in the background) — no "Connecting…" screen.
-  const localMode =
-    typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('local');
-  let authed = $state(isTauri() || localMode || hasPriorAuth());
+  /**
+   * Window/document listeners that must exist exactly once. boot() can run
+   * again (the effect above drops to the gate and the gate re-boots), and
+   * registering these inside it doubled them — two token renewals raced on
+   * the next foreground, and every flush ran twice.
+   */
+  async function wireListeners() {
+    if (listenersWired) return;
+    listenersWired = true;
 
-  let booted = false;
+    // Persist any pending debounced edits before the page/app goes away, so a
+    // quick reload or close never loses the last few keystrokes.
+    const flush = () => store.flush();
+    window.addEventListener('beforeunload', flush);
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flush();
+    });
+
+    // Edits made in a sticky window land here immediately, not on the poll.
+    store.listenForChanges();
+
+    if (isTauri()) {
+      const { listen } = await import('@tauri-apps/api/event');
+      await listen('tray-new-note', () => store.create());
+      window.addEventListener('focus', () => void store.reload());
+    } else if (!localMode) {
+      // Renew the Google token when the user RETURNS to the app if it's close
+      // to expiry — the silent-refresh popup blink happens at open, not while
+      // they're mid-edit ("screen blinked like it was logging in").
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && isDriveAuthed() && tokenExpiringSoon()) {
+          void signIn(false).catch(() => {});
+        }
+      });
+    }
+  }
+
   async function boot() {
     if (booted) return; // silent-auth resolution and a gate click can race
     booted = true;
@@ -79,36 +121,12 @@
     // saving, syncing and the share handoff.
     await restoreStickies(store.notes).catch((e) => console.error('restoreStickies', e));
 
-    // Persist any pending debounced edits before the page/app goes away, so a
-    // quick reload or close never loses the last few keystrokes.
-    const flush = () => store.flush();
-    window.addEventListener('beforeunload', flush);
-    window.addEventListener('pagehide', flush);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') flush();
-    });
-
     // Background sync so changes from other devices (pins, new notes) appear
     // on their own. Desktop reads local files — cheap, so poll often; web
-    // hits the Drive API, so keep it gentle.
+    // hits the Drive API, so keep it gentle. (Self-resetting: safe to re-run.)
     store.startAutoSync(isTauri() ? 6000 : 45000);
-    // Edits made in a sticky window land here immediately, not on the poll.
-    store.listenForChanges();
 
-    if (isTauri()) {
-      const { listen } = await import('@tauri-apps/api/event');
-      await listen('tray-new-note', () => store.create());
-      window.addEventListener('focus', () => void store.reload());
-    } else if (!localMode) {
-      // Renew the Google token when the user RETURNS to the app if it's close
-      // to expiry — the silent-refresh popup blink happens at open, not while
-      // they're mid-edit ("screen blinked like it was logging in").
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible' && isDriveAuthed() && tokenExpiringSoon()) {
-          void signIn(false).catch(() => {});
-        }
-      });
-    }
+    await wireListeners();
   }
 
   function shareDone() {
@@ -152,28 +170,11 @@
     width: 100vw;
     overflow: hidden;
   }
-  /* Phone: stacked split — list on top (30%), note below (70%).
-     .note-open expands the note fullscreen. */
+  /* Phone: stacked split — list on top, note below; .note-open expands the
+     note fullscreen. The panels size themselves (Sidebar/NotePane @media). */
   @media (max-width: 700px) {
     .app {
       flex-direction: column;
-    }
-    .app :global(.sidebar) {
-      width: 100%;
-      height: 30%;
-      border-right: none;
-      border-bottom: 2px solid var(--app-border);
-    }
-    .app :global(.pane) {
-      height: 70%;
-      flex: none;
-      width: 100%;
-    }
-    .app.note-open :global(.sidebar) {
-      display: none;
-    }
-    .app.note-open :global(.pane) {
-      height: 100%;
     }
   }
 </style>

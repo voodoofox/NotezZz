@@ -3,7 +3,7 @@
   import { page } from '$app/state';
   import { store } from '$lib/store.svelte';
   import { isTauri } from '$lib/storage/backend';
-  import { PALETTES, getPalette } from '$lib/palettes';
+  import { PALETTES, getPalette, hslToHex, hexToHsl } from '$lib/palettes';
   import Editor from './Editor.svelte';
   import Icon from './Icon.svelte';
 
@@ -12,6 +12,9 @@
   let note = $derived(store.active);
   let pal = $derived(note ? getPalette(note.paletteId) : PALETTES[0]);
   const desktop = isTauri();
+  // Fullscreen is history state (see +page.svelte); read it from there rather
+  // than store.mobileOpen so this pane never disagrees with the page.
+  let fullscreen = $derived((page.state as { fs?: boolean }).fs === true);
 
   // Toolbar popovers (note color / base text size), fixed-positioned so the
   // toolbar's overflow can't clip them; any outside tap closes them.
@@ -24,6 +27,16 @@
     if (openPop === which) return void (openPop = null);
     const anchor = which === 'pal' ? palWrap : sizeWrapEl;
     if (anchor) popStyle = popoverStyle(anchor, which === 'pal' ? 226 : 270);
+    // Open ON the note's current custom colour: with the sliders at their
+    // defaults, the first nudge used to snap the note to a different colour.
+    if (which === 'pal' && note?.paletteId.startsWith('custom:')) {
+      const hsl = hexToHsl(note.paletteId.slice(7));
+      if (hsl) {
+        custHue = hsl.h;
+        custSat = Math.min(90, hsl.s);
+        custLight = Math.max(30, Math.min(94, hsl.l));
+      }
+    }
     openPop = which;
   }
 
@@ -41,37 +54,23 @@
   let custLight = $state(82);
   let custSat = $state(70);
 
-  function hslToHex(h: number, s: number, l: number): string {
-    const a = (s * Math.min(l, 100 - l)) / 100;
-    const f = (n: number) => {
-      const k = (n + h / 30) % 12;
-      const c = (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))) / 100;
-      return Math.round(255 * c)
-        .toString(16)
-        .padStart(2, '0');
-    };
-    return `#${f(0)}${f(8)}${f(4)}`;
-  }
-
   function applyCustom() {
     if (note) store.update(note.id, { paletteId: `custom:${hslToHex(custHue, custSat, custLight)}` });
   }
 
   /** Exit fullscreen via history; if the entry got lost (e.g. a reload while
-   *  fullscreen), force the state clear so the button always works. */
+   *  fullscreen), force the state clear so the button always works. Both
+   *  paths change page.state — the page effect turns that into mobileOpen. */
   function exitFullscreen() {
     history.back();
     setTimeout(() => {
-      if ((page.state as { fs?: boolean }).fs) {
-        replaceState('', {});
-        store.mobileOpen = false;
-      }
+      if ((page.state as { fs?: boolean }).fs) replaceState('', {});
     }, 250);
   }
 
   function deleteNote() {
     if (!note || !confirm('Delete this note?')) return;
-    const wasFullscreen = store.mobileOpen;
+    const wasFullscreen = fullscreen;
     void store.remove(note.id);
     if (wasFullscreen) exitFullscreen(); // drop the fullscreen history entry
   }
@@ -88,12 +87,11 @@
       --note-bg: {pal.bg};
       --note-header: {pal.header};
       --note-fg: {pal.fg};
-      --note-accent: {pal.accent};
       color-scheme: {pal.dark ? 'dark' : 'light'};
     "
   >
     <div class="topbar">
-      {#if store.mobileOpen}
+      {#if fullscreen}
         <button
           class="icon mob"
           data-testid="exit-fullscreen"
@@ -114,6 +112,7 @@
         class="title"
         data-testid="title-input"
         placeholder="Title…"
+        aria-label="Note title"
         value={note.title}
         oninput={(e) => store.update(note!.id, { title: (e.currentTarget as HTMLInputElement).value })}
       />
@@ -231,6 +230,7 @@
         class="icon"
         data-testid="pane-pin"
         class:on={note.pinned}
+        aria-pressed={note.pinned}
         title={note.pinned ? 'Unpin from desktop' : 'Pin as desktop sticky'}
         aria-label="Pin note"
         onclick={() => store.update(note!.id, { pinned: !note!.pinned })}
@@ -274,7 +274,6 @@
     height: 100%;
   }
   .pane.empty {
-    flex-direction: column;
     gap: 14px;
     align-items: center;
     justify-content: center;
@@ -335,7 +334,8 @@
     flex-shrink: 0;
   }
   .icon:hover {
-    background: rgba(0, 0, 0, 0.08);
+    /* Mixed from the note's ink so dark palettes get a visible hover. */
+    background: color-mix(in srgb, var(--note-fg) 9%, transparent);
     opacity: 1;
   }
   /* Monochrome active state: invert the note's colors. */
@@ -349,9 +349,19 @@
     display: none;
     opacity: 0.8;
   }
+  /* Phone: the pane is the lower 70% of the stacked split, or all of it in
+     fullscreen (.note-open on the page's <main>). */
   @media (max-width: 700px) {
     .mob {
       display: inline-flex;
+    }
+    .pane {
+      height: 70%;
+      flex: none;
+      width: 100%;
+    }
+    :global(.note-open) > .pane {
+      height: 100%;
     }
   }
   .twrap {

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { store } from '$lib/store.svelte';
   import { getPalette } from '$lib/palettes';
+  import { filterNotes, noteLabel } from '$lib/text';
+  import type { Note } from '$lib/types';
   import Settings from './Settings.svelte';
   import Icon from './Icon.svelte';
 
@@ -9,24 +11,12 @@
   let query = $state('');
   let searchInput = $state<HTMLInputElement | null>(null);
 
-  /** List label: real text if present, else describe the media it holds —
-   *  a note containing only a sketch/photo/memo is not an "empty note". */
-  function preview(html: string): string {
-    const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    if (text) return text;
-    if (/<audio/i.test(html)) return 'Voice note';
-    if (/<img[^>]+data:image\/svg/i.test(html)) return 'Drawing';
-    if (/<img/i.test(html)) return 'Image';
-    return 'Empty note';
-  }
-
-  /** Live-filtered list: title + note text, case-insensitive. */
+  /** Live-filtered list: title + note text, case-insensitive. While a drag
+   *  is in progress the local snapshot is shown instead (see startDrag). */
   let visibleNotes = $derived.by(() => {
-    const q = query.trim().toLowerCase();
-    if (!searching || !q) return store.notes;
-    return store.notes.filter((n) =>
-      `${n.title} ${n.contentHtml.replace(/<[^>]+>/g, ' ')}`.toLowerCase().includes(q)
-    );
+    if (dragOrder) return dragOrder;
+    if (!searching) return store.notes;
+    return filterNotes(store.notes, query);
   });
 
   function toggleSearch() {
@@ -39,18 +29,23 @@
   // identity in the list, and it keeps the whole row tappable for opening.
   let dragId = $state<string | null>(null);
   let listEl = $state<HTMLElement | null>(null);
+  // The order being dragged, held locally until release. Writing store.notes
+  // live let a background poll (which replaces the list) reorder the rows
+  // under the pointer mid-drag.
+  let dragOrder = $state<Note[] | null>(null);
 
   function startDrag(e: PointerEvent, id: string) {
     if (searching) return; // order is meaningless while filtered
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     dragId = id;
+    dragOrder = [...store.notes];
   }
 
   function moveDrag(e: PointerEvent) {
-    if (!dragId || !listEl) return;
+    if (!dragId || !listEl || !dragOrder) return;
     const rows = [...listEl.querySelectorAll<HTMLElement>('[data-testid="note-item"]')];
-    const from = store.notes.findIndex((n) => n.id === dragId);
+    const from = dragOrder.findIndex((n) => n.id === dragId);
     if (from === -1) return;
     // Drop where the pointer sits relative to each row's midpoint.
     let to = rows.findIndex((r) => {
@@ -60,17 +55,36 @@
     if (to === -1) to = rows.length - 1;
     else if (to > from) to -= 1;
     if (to !== from && to >= 0) {
-      const next = [...store.notes];
+      const next = [...dragOrder];
       const [moved] = next.splice(from, 1);
       next.splice(to, 0, moved);
-      store.notes = next; // live feedback; committed on release
+      dragOrder = next; // live feedback; committed on release
     }
   }
 
   function endDrag() {
     if (!dragId) return;
     dragId = null;
-    void store.reorder(store.notes.map((n) => n.id));
+    const order = dragOrder;
+    dragOrder = null;
+    if (!order) return;
+    // Notes that arrived during the drag are not in the snapshot; they lead,
+    // the same way #applyOrder treats unlisted notes.
+    const seen = new Set(order.map((n) => n.id));
+    const ids = [...store.notes.filter((n) => !seen.has(n.id)), ...order].map((n) => n.id);
+    void store.reorder(ids);
+  }
+
+  /** Keyboard counterpart of the drag: Alt+ArrowUp/Down moves the note. */
+  function keyMove(e: KeyboardEvent, id: string) {
+    if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || searching) return;
+    e.preventDefault();
+    const ids = store.notes.map((n) => n.id);
+    const i = ids.indexOf(id);
+    const j = i + (e.key === 'ArrowDown' ? 1 : -1);
+    if (i === -1 || j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    void store.reorder(ids);
   }
 
   let syncing = $state(false);
@@ -124,6 +138,7 @@
         class="search"
         data-testid="search-input"
         placeholder="Search notes…"
+        aria-label="Search notes"
         bind:this={searchInput}
         bind:value={query}
       />
@@ -148,6 +163,7 @@
       <div
         class="item"
         data-testid="note-item"
+        role="listitem"
         class:active={note.id === store.activeId}
         class:dragging={dragId === note.id}
         style="--swatch: {pal.bg}"
@@ -156,19 +172,21 @@
           class="swatch"
           data-testid="note-swatch"
           role="button"
-          tabindex="-1"
-          title="Drag to reorder"
-          aria-label="Drag to reorder"
+          tabindex="0"
+          title="Drag to reorder (keyboard: Alt+Arrow Up/Down)"
+          aria-label="Reorder {noteLabel(note)}: drag, or Alt+Arrow Up/Down"
           style="background: {pal.bg}"
           onpointerdown={(e) => startDrag(e, note.id)}
+          onkeydown={(e) => keyMove(e, note.id)}
         ></span>
         <button class="pick" data-testid="note-pick" onclick={() => (store.activeId = note.id)}>
-          <span class="title" data-testid="note-title">{note.title || preview(note.contentHtml)}</span>
+          <span class="title" data-testid="note-title">{noteLabel(note)}</span>
         </button>
         <button
           class="pin"
           data-testid="note-pin"
           class:on={note.pinned}
+          aria-pressed={note.pinned}
           title={note.pinned ? 'Pinned to desktop (click to unpin)' : 'Pin to desktop as always-on-top sticker'}
           aria-label="Pin note"
           onclick={() => store.update(note.id, { pinned: !note.pinned })}
@@ -324,8 +342,10 @@
     cursor: grab;
     touch-action: none; /* a touch here drags the row instead of scrolling */
   }
-  .swatch:hover {
+  .swatch:hover,
+  .swatch:focus-visible {
     box-shadow: inset 0 0 0 2px var(--app-fg);
+    outline: none;
   }
   .item.dragging {
     opacity: 0.65;
@@ -407,5 +427,18 @@
     background: var(--app-fg);
     color: var(--app-panel);
     cursor: pointer;
+  }
+  /* Phone: the list is the upper 30% of the stacked split and disappears in
+     fullscreen (.note-open on the page's <main>). */
+  @media (max-width: 700px) {
+    .sidebar {
+      width: 100%;
+      height: 30%;
+      border-right: none;
+      border-bottom: 2px solid var(--app-border);
+    }
+    :global(.note-open) > .sidebar {
+      display: none;
+    }
   }
 </style>

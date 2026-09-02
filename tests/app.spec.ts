@@ -662,3 +662,80 @@ test('a write that never landed survives closing the page', async ({ page }) => 
   await page.goto('/?local'); // and it actually reached storage
   await expect(page.getByTestId('note-title')).toHaveText('written after restart');
 });
+
+test('Escape closes the share chooser and focus is not left on a removed node', async ({
+  page,
+}) => {
+  await page.evaluate(() => localStorage.setItem('notezzz:pendingShare', 'escape me'));
+  await page.reload();
+  const overlay = page.getByTestId('share-overlay');
+  await expect(overlay).toBeVisible();
+  // The dialog takes focus on open, so Escape reaches it without a click.
+  // (document.activeElement rather than toBeFocused: a freshly reloaded
+  // headless page has no window focus yet, which toBeFocused reports as
+  // "inactive" even though the element IS the active one.)
+  await expect
+    .poll(() => page.evaluate(() => document.activeElement?.getAttribute('role')))
+    .toBe('dialog');
+  await page.keyboard.press('Escape');
+  await expect(overlay).toBeHidden();
+  // Focus went back to what had it before (the page itself) — never left on
+  // an element that no longer exists.
+  expect(await page.evaluate(() => document.activeElement?.isConnected)).toBe(true);
+  // The share was discarded, not silently applied.
+  await expect(page.getByTestId('note-item')).toHaveCount(0);
+});
+
+test('Escape closes the draw pad and returns focus to the button that opened it', async ({
+  page,
+}) => {
+  await createNote(page);
+  await page.getByTestId('fmt-draw').click();
+  await expect(page.getByTestId('draw-surface')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('draw-surface')).toBeHidden();
+  await expect(page.getByTestId('fmt-draw')).toBeFocused();
+  await expect(page.locator('.ProseMirror img')).toHaveCount(0);
+});
+
+test('sidebar preview decodes HTML entities, and search matches the decoded text', async ({
+  page,
+}) => {
+  await createNote(page);
+  await typeInEditor(page, 'Tom & Jerry <3');
+  // TipTap stores "&amp;" / "&lt;"; the list must show the real characters,
+  // not the escaped source ("Tom &amp; Jerry" was the old preview).
+  await expect(page.getByTestId('note-title')).toHaveText('Tom & Jerry <3');
+  await page.getByTestId('search-toggle').click();
+  await page.getByTestId('search-input').fill('&');
+  await expect(page.getByTestId('note-item')).toHaveCount(1);
+  await page.getByTestId('search-input').fill('<3');
+  await expect(page.getByTestId('note-item')).toHaveCount(1);
+  await page.getByTestId('search-input').fill('&amp;');
+  await expect(page.getByTestId('note-item')).toHaveCount(0);
+});
+
+test('switching notes mid-recording stops the recording cleanly', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+
+  await createNote(page);
+  await page.getByTestId('title-input').fill('First');
+  await page.getByTestId('fmt-record').click();
+  await expect(page.getByTestId('fmt-record')).toHaveClass(/recording/);
+  await page.waitForTimeout(1200); // let the recorder actually run a tick
+
+  // A new note remounts the editor; the old recorder must go with it.
+  await page.getByTestId('new-note').click();
+  await expect(page.getByTestId('fmt-record')).not.toHaveClass(/recording/);
+  await expect(page.getByTestId('fmt-record')).toHaveAttribute('aria-pressed', 'false');
+  // Give the orphaned onstop/interval (if any survived) time to misbehave.
+  await page.waitForTimeout(1500);
+  await expect(page.getByTestId('fmt-record')).not.toHaveClass(/recording/);
+  // Nothing was inserted into either note by a stray onstop.
+  await expect(page.locator('.ProseMirror .nz-audio')).toHaveCount(0);
+  await page.getByTestId('note-pick').filter({ hasText: 'First' }).click();
+  await expect(page.locator('.ProseMirror .nz-audio')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

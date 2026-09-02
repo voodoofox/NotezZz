@@ -10,7 +10,7 @@ export interface Palette {
   header: string;
   /** Text color. */
   fg: string;
-  /** Accent for links / active toolbar buttons. */
+  /** Palette data only — UI chrome never uses it (active states invert fg/bg). */
   accent: string;
   /** True for dark-on-light inversion. */
   dark?: boolean;
@@ -56,4 +56,43 @@ function customPalette(hex: string): Palette {
     .join('')}`;
   const fg = dark ? '#ECEDEF' : '#26282B';
   return { id: `custom:${hex}`, name: 'Custom', bg: hex, header, fg, accent: fg, dark };
+}
+
+/** HSL (0-360, 0-100, 0-100) → "#rrggbb". Drives the custom colour sliders. */
+export function hslToHex(h: number, s: number, l: number): string {
+  const a = (s * Math.min(l, 100 - l)) / 100;
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const c = (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))) / 100;
+    return Math.round(255 * c)
+      .toString(16)
+      .padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+/**
+ * Inverse of hslToHex, so the sliders can open ON the note's current custom
+ * colour instead of their defaults (which used to snap the note to a
+ * different colour on the first nudge). Null for anything that isn't #rrggbb.
+ */
+export function hexToHsl(hex: string): { h: number; s: number; l: number } | null {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return null;
+  const n = parseInt(hex.slice(1), 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return { h: 0, s: 0, l: Math.round(l * 100) };
+  const s = d / (1 - Math.abs(2 * l - 1));
+  let h: number;
+  if (max === r) h = ((g - b) / d) % 6;
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  h = Math.round(h * 60);
+  if (h < 0) h += 360;
+  return { h, s: Math.round(s * 100), l: Math.round(l * 100) };
 }

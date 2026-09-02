@@ -71,6 +71,13 @@ export const AudioNote = Node.create({
 
       const track = document.createElement('div');
       track.className = 'nz-audio-track';
+      // A keyboard-reachable slider: the hairline is otherwise pointer-only.
+      track.setAttribute('role', 'slider');
+      track.setAttribute('tabindex', '0');
+      track.setAttribute('aria-label', 'Seek');
+      track.setAttribute('aria-valuemin', '0');
+      track.setAttribute('aria-valuemax', '0');
+      track.setAttribute('aria-valuenow', '0');
       const fill = document.createElement('div');
       fill.className = 'nz-audio-fill';
       track.appendChild(fill);
@@ -110,6 +117,9 @@ export const AudioNote = Node.create({
         const len = total();
         fill.style.width = `${len ? (audio.currentTime / len) * 100 : 0}%`;
         time.textContent = fmt(audio.paused || !audio.currentTime ? len : audio.currentTime);
+        track.setAttribute('aria-valuemax', String(Math.round(len)));
+        track.setAttribute('aria-valuenow', String(Math.round(audio.currentTime)));
+        track.setAttribute('aria-valuetext', `${fmt(audio.currentTime)} of ${fmt(len)}`);
       };
 
       button.addEventListener('click', () => {
@@ -134,6 +144,18 @@ export const AudioNote = Node.create({
         const r = track.getBoundingClientRect();
         const len = total();
         if (len) audio.currentTime = ((e.clientX - r.left) / r.width) * len;
+      });
+      track.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        // Ours, not ProseMirror's: left unhandled the arrow would also move
+        // the document selection off the player.
+        e.preventDefault();
+        e.stopPropagation();
+        const len = total();
+        if (!len) return;
+        const step = e.key === 'ArrowRight' ? 5 : -5;
+        audio.currentTime = Math.max(0, Math.min(len, audio.currentTime + step));
+        paint();
       });
 
       return {

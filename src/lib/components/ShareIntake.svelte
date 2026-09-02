@@ -2,18 +2,14 @@
   // Chooser shown after an Android "share to NotezZz": put the shared text in
   // a brand-new note, or append it to the end of an existing one.
   import { store } from '$lib/store.svelte';
+  import { filterNotes, noteLabel } from '$lib/text';
   import Icon from './Icon.svelte';
+  import Modal from './Modal.svelte';
 
   let { text, onDone }: { text: string; onDone: () => void } = $props();
 
   let query = $state('');
-  let targets = $derived.by(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return store.notes;
-    return store.notes.filter((n) =>
-      `${n.title} ${n.contentHtml.replace(/<[^>]+>/g, ' ')}`.toLowerCase().includes(q)
-    );
-  });
+  let targets = $derived(filterNotes(store.notes, query));
 
   function esc(s: string): string {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -58,17 +54,12 @@
     appending = null;
     onDone();
   }
-
-  function label(n: { title: string; contentHtml: string }): string {
-    const t = n.title || n.contentHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    return t || 'Empty note';
-  }
 </script>
 
-<div class="overlay" data-testid="share-overlay">
+<Modal labelledby="share-title" onClose={onDone} testid="share-overlay">
   <div class="card">
     <div class="head">
-      <h2>Add shared text</h2>
+      <h2 id="share-title">Add shared text</h2>
       <button class="x" data-testid="share-cancel" title="Discard" aria-label="Discard" onclick={onDone}>
         <Icon name="close" size={18} />
       </button>
@@ -91,6 +82,7 @@
         class="ssearch"
         data-testid="share-search"
         placeholder="Search notes…"
+        aria-label="Search notes to append to"
         bind:value={query}
       />
       <div class="list">
@@ -101,26 +93,16 @@
             disabled={appending !== null}
             onclick={() => appendTo(n.id)}
           >
-            {label(n)}
+            {noteLabel(n)}
             {#if appending === n.id}<span class="wait">adding…</span>{/if}
           </button>
         {/each}
       </div>
     {/if}
   </div>
-</div>
+</Modal>
 
 <style>
-  .overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.45);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 60;
-    padding: 16px;
-  }
   .card {
     width: 400px;
     max-width: 100%;
