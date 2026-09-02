@@ -11,13 +11,16 @@ RewriteRule . /NotezZz/index.html [L]
 # PWAs keep running stale builds for hours after a deploy), while hashed
 # bundle assets are immutable and can cache forever.
 <IfModule mod_headers.c>
-  <FilesMatch "^(index\.html|manifest\.webmanifest|version\.json)$">
-    Header set Cache-Control "no-cache, must-revalidate"
-  </FilesMatch>
   <FilesMatch "\.(js|css|ttf)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
   <FilesMatch "\.png$">
     Header set Cache-Control "public, max-age=86400"
+  </FilesMatch>
+  # Apache applies matching blocks in order, later ones overriding: the
+  # always-revalidate set MUST come after the immutable .js rule, or the
+  # service worker ships as immutable and a new one never reaches anyone.
+  <FilesMatch "^(index\.html|manifest\.webmanifest|version\.json|service-worker\.js)$">
+    Header set Cache-Control "no-cache, must-revalidate"
   </FilesMatch>
 </IfModule>

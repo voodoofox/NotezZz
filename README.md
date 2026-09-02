@@ -87,6 +87,16 @@ temporary netrc file (deleted afterwards), never on the command line.
 Both are gitignored. Nothing else in the repo is secret (the OAuth client ID
 is public by design).
 
+- `updater.env` (gitignored) — `NOTEZZZ_UPDATER_KEY_FILE` (path to `~/.tauri/notezzz-updater.key`) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` for the self-updater. The key's public half is in `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`). Tauri wants the key's CONTENTS, not its path, so a signed build is:
+
+  ```sh
+  set -a; . ./updater.env; set +a
+  export TAURI_SIGNING_PRIVATE_KEY="$(cat "$NOTEZZZ_UPDATER_KEY_FILE")"
+  npm run tauri build
+  ```
+
+  An unsigned build can be signed afterwards with `npx tauri signer sign -f <key> -p <password> <installer.exe>`; either way `deploy-site.ps1` refuses to publish without the `.sig`. Lose the key and shipped apps can never self-update again: back it up.
+
 ## Hard-won gotchas (do not relearn these)
 
 1. **Never sync TipTap ↔ state in a naive `$effect`** — ProseMirror's serialized

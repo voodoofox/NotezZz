@@ -1,6 +1,6 @@
 # Always revalidate the site pages so updates land immediately.
 <IfModule mod_headers.c>
-  <FilesMatch "\.(html|css)$">
+  <FilesMatch "\.(html|css|json)$">
     Header set Cache-Control "no-cache, must-revalidate"
   </FilesMatch>
   <FilesMatch "\.(png|ttf|exe)$">

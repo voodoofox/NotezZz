@@ -1,4 +1,5 @@
 <script lang="ts">
+  import UpdateCheck from './UpdateCheck.svelte';
   import { onMount } from 'svelte';
   import { store } from '$lib/store.svelte';
   import { isTauri } from '$lib/storage/backend';
@@ -187,6 +188,7 @@
     </section>
 
     {#if desktop}
+      <UpdateCheck />
       <section>
         <h3>Sync</h3>
         {#if gAuthAvailable}

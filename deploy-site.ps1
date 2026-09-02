@@ -35,6 +35,26 @@ $html = [regex]::Replace($html, '(<span data-version>)[^<]*(</span>)', "`${1}$st
 [System.IO.File]::WriteAllText($path, $html, $utf8)
 
 Copy-Item $exe site\NotezZz-Setup.exe -Force
+
+# Updater manifest. The desktop app polls latest.json (tauri-plugin-updater),
+# checks the version, downloads the installer and verifies its minisign
+# signature against the public key in tauri.conf.json. The .sig is produced
+# at build time only when updater.env is loaded into the environment.
+$sig = "$exe.sig"
+if (-not (Test-Path $sig)) { throw "No signature next to $exe - build with updater.env loaded (see README, 'Deploy')" }
+Copy-Item $sig site\NotezZz-Setup.exe.sig -Force
+$manifest = [ordered]@{
+  version  = $version
+  pub_date = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+  notes    = "NotezZz $version"
+  platforms = @{
+    'windows-x86_64' = [ordered]@{
+      signature = [System.IO.File]::ReadAllText($sig, $utf8).Trim()
+      url       = 'https://flatvoxel.com/notezzz/NotezZz-Setup.exe'
+    }
+  }
+}
+[System.IO.File]::WriteAllText((Join-Path $PSScriptRoot 'site\latest.json'), ($manifest | ConvertTo-Json -Depth 5), $utf8)
 Write-Host "Publishing $stamp" -ForegroundColor Cyan
 
 $FtpHost = $cfg.FTP_HOST

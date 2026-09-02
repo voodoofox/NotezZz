@@ -382,6 +382,10 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // Self-update: the app checks latest.json on the site (signed with the
+        // key in updater.env) so users stop re-downloading installers.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
