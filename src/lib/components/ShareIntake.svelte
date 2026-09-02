@@ -30,13 +30,23 @@
   /** Send it straight to the desktop as a sticky note. */
   let pinIt = $state(false);
 
+  /** A brand-new note can't conflict with anything, so it needs no waiting. */
   function toNew() {
     const note = store.create();
     store.update(note.id, { contentHtml: asHtml(), pinned: pinIt });
     onDone();
   }
 
-  function appendTo(id: string) {
+  /**
+   * Appending is the one action that can't run on cached content: the copy
+   * shown in this list may predate an edit made on another device, and
+   * writing old text back with new text on the end would erase it. So wait
+   * for the real note to land — the user has already chosen by then.
+   */
+  let appending = $state<string | null>(null);
+  async function appendTo(id: string) {
+    appending = id;
+    await store.whenReady();
     const note = store.notes.find((n) => n.id === id);
     if (note) {
       store.update(id, {
@@ -45,6 +55,7 @@
       });
       store.activeId = id;
     }
+    appending = null;
     onDone();
   }
 
@@ -84,8 +95,14 @@
       />
       <div class="list">
         {#each targets as n (n.id)}
-          <button class="target" data-testid="share-append-item" onclick={() => appendTo(n.id)}>
+          <button
+            class="target"
+            data-testid="share-append-item"
+            disabled={appending !== null}
+            onclick={() => appendTo(n.id)}
+          >
             {label(n)}
+            {#if appending === n.id}<span class="wait">adding…</span>{/if}
           </button>
         {/each}
       </div>
@@ -235,5 +252,19 @@
   }
   .target:hover {
     border-color: var(--app-fg);
+  }
+  /* The tapped row keeps full contrast; the rest recede while it works. */
+  .target:disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+  .target:disabled:has(.wait) {
+    opacity: 1;
+    border-color: var(--app-fg);
+  }
+  .wait {
+    color: var(--app-muted);
+    font-size: 14px;
+    margin-left: 8px;
   }
 </style>

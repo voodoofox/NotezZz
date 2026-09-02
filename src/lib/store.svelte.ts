@@ -79,6 +79,9 @@ class AppStore {
    */
   #deleted = new Map<string, number>();
   static #TOMBSTONE_MS = 120_000;
+  /** Resolves once init has settled, so writes can queue behind it. */
+  #markReady!: () => void;
+  #ready = new Promise<void>((resolve) => (this.#markReady = resolve));
 
   active = $derived(this.notes.find((n) => n.id === this.activeId) ?? null);
 
@@ -106,6 +109,7 @@ class AppStore {
       this.#paintCache();
       this.#fail(e);
       this.loaded = true;
+      this.#markReady();
       return;
     }
     this.#clearReboot();
@@ -124,7 +128,15 @@ class AppStore {
       );
       const [notes, settings] = await Promise.race([load, watchdog]);
       if (settings) this.settings = settings; // order lives here, so read it first
-      this.notes = this.#applyOrder(dedupeById(notes.filter((n) => !this.#deleted.has(n.id))));
+      const fetched = dedupeById(notes.filter((n) => !this.#deleted.has(n.id)));
+      // A note written while this load was in flight (the share sheet lets the
+      // user act immediately) is not in the server's answer yet — keep it, or
+      // the shared text disappears the moment the load lands.
+      const unsent = this.notes.filter(
+        (n) =>
+          (this.#saving.has(n.id) || this.#timers.has(n.id)) && !fetched.some((f) => f.id === n.id)
+      );
+      this.notes = this.#applyOrder([...unsent, ...fetched]);
       if (!this.activeId && this.notes.length) this.activeId = this.notes[0].id;
       this.syncStatus = cloud ? 'synced' : 'local';
       this.#cacheNotes();
@@ -132,6 +144,7 @@ class AppStore {
       this.#fail(e);
     }
     this.loaded = true;
+    this.#markReady();
   }
 
   /**
@@ -152,6 +165,21 @@ class AppStore {
     this.activeId ??= notes[0].id;
     for (const note of notes) await this.#save(note);
     await this.saveSettings({ seeded: true });
+  }
+
+  /**
+   * Paint this device's cached notes without touching the network. The share
+   * sheet uses it so its "append to..." list is there on the first frame,
+   * before any sign-in or Drive fetch. Cloud users only — a local-mode user
+   * must never be shown notes from an account they didn't open.
+   */
+  showCachedNotes() {
+    this.#paintCache();
+  }
+
+  /** Resolves when init has settled (either way). */
+  whenReady(): Promise<void> {
+    return this.#ready;
   }
 
   /** Show the last known notes and settings from this device's cache. */
@@ -258,16 +286,22 @@ class AppStore {
 
   /** Save through the backend, tracking cloud sync status. */
   async #save(note: Note) {
-    if (!this.#backend) return;
     // Mirror into this app's other windows straight away — they must not wait
     // on the cloud round-trip, or on their own poll, to show current state.
     void broadcastChange({ note });
-    if (this.#backend.kind !== 'drive') return this.#backend.saveNote(note);
-    this.#cacheNotes(); // instant-start cache stays current even if Drive lags
-    this.#inflight += 1;
+    // Claim the id before any await: the load in flight must know this note
+    // is being written, or it would replace it with the server's older list.
     this.#saving.add(note.id);
-    this.syncStatus = 'saving';
     try {
+      // A write can be scheduled before init has picked a backend — the share
+      // sheet lets the user act on the first paint. Wait for it rather than
+      // dropping their note on the floor.
+      if (!this.#backend) await this.#ready;
+      if (!this.#backend) return;
+      if (this.#backend.kind !== 'drive') return await this.#backend.saveNote(note);
+      this.#cacheNotes(); // instant-start cache stays current even if Drive lags
+      this.#inflight += 1;
+      this.syncStatus = 'saving';
       await this.#backend.saveNote(note);
       if (--this.#inflight === 0) this.syncStatus = 'synced';
     } catch (e) {

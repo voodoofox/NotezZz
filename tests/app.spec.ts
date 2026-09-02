@@ -489,3 +489,35 @@ test('welcome notes are never written over notes that already exist', async ({ p
   await expect(page.getByTestId('note-item')).toHaveCount(1);
   await expect(page.getByTestId('note-title')).toHaveText('Mine');
 });
+
+test('the share chooser appears without waiting for storage', async ({ page }) => {
+  // Someone sharing from Android wants one question answered. It used to be
+  // asked only after sign-in and a full Drive fetch had finished; the chooser
+  // needs neither, so a storage layer that never loads must not delay it.
+  await page.addInitScript(() => localStorage.setItem('notezzz:hasAuthed', '1'));
+  let release: (() => void) | undefined;
+  await page.route('**/driveBackend*', async (r) => {
+    await new Promise<void>((resolve) => (release = resolve));
+    await r.abort();
+  });
+  await page.evaluate(() => localStorage.setItem('notezzz:pendingShare', 'shared while offline'));
+
+  await page.goto('/');
+  await expect(page.getByTestId('share-overlay')).toBeVisible({ timeout: 5000 });
+  await expect(page.getByTestId('share-overlay')).toContainText('shared while offline');
+
+  release?.();
+});
+
+test('a note created from a share survives the load that lands after it', async ({ page }) => {
+  // The write is scheduled before init has a backend. Both the queued save and
+  // the list the load returns must leave the shared text intact.
+  await page.goto('/?local');
+  await page.evaluate(() => localStorage.setItem('notezzz:pendingShare', 'do not lose me'));
+  await page.reload();
+  await page.getByTestId('share-new').click();
+
+  await expect(page.locator('.ProseMirror')).toContainText('do not lose me');
+  await page.goto('/?local'); // reload: it must have actually persisted
+  await expect(page.getByTestId('note-title')).toHaveText('do not lose me');
+});

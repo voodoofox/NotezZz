@@ -47,6 +47,24 @@
   async function boot() {
     if (booted) return; // silent-auth resolution and a gate click can race
     booted = true;
+
+    // Text shared in from Android. Read it FIRST: the chooser is the only
+    // thing that person came here for, and it needs neither the notes nor a
+    // Google token to appear. Waiting for the load put a sign-in and a full
+    // Drive fetch between the share sheet and the question. Writes made
+    // before the store is ready queue behind init rather than being dropped.
+    try {
+      const pending = localStorage.getItem('notezzz:pendingShare');
+      if (pending) {
+        sharedText = pending;
+        // Fills the "append to…" list from cache on the first frame. Drive
+        // users only: local mode must never be shown another account's notes.
+        if (hasPriorAuth()) store.showCachedNotes();
+      }
+    } catch {
+      /* private mode */
+    }
+
     await store.init();
     // A brand-new account gets a few notes explaining the app. Skipped under
     // ?local, which is the E2E suite's bypass and expects a clean slate.
@@ -84,14 +102,6 @@
           void signIn(false).catch(() => {});
         }
       });
-    }
-
-    // Text shared in from Android lands here after the /share redirect.
-    try {
-      const pending = localStorage.getItem('notezzz:pendingShare');
-      if (pending) sharedText = pending;
-    } catch {
-      /* private mode */
     }
   }
 

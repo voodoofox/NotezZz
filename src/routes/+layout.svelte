@@ -50,6 +50,15 @@
     let busy = false;
     const check = async () => {
       if (busy || document.visibilityState !== 'visible') return;
+      // Never reload out from under a share in progress. It lands ~2.5s in —
+      // exactly when the chooser is on screen — and restarts the whole boot,
+      // sign-in included, turning a share into a long wait through two of
+      // them. The update can wait for a launch that isn't mid-task.
+      try {
+        if (localStorage.getItem('notezzz:pendingShare')) return;
+      } catch {
+        /* private mode: nothing pending to protect */
+      }
       busy = true;
       try {
         const res = await fetch(`${base}/version.json?ts=${Date.now()}`, { cache: 'no-store' });
