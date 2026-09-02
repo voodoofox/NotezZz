@@ -411,7 +411,11 @@ class AppStore {
   startAutoSync(intervalMs: number) {
     if (this.#autoTimer) clearInterval(this.#autoTimer);
     this.#autoTimer = setInterval(() => {
-      if (document.visibilityState !== 'visible') return;
+      // A background browser tab has no business polling Drive. A desktop
+      // sticky is the opposite case: it sits on the user's screen showing a
+      // note, and it is never the focused window, so gating it on visibility
+      // is how it ends up displaying stale content indefinitely.
+      if (!isTauri() && document.visibilityState !== 'visible') return;
       // Never refresh over work that hasn't landed yet: debounced edits or
       // uploads still in flight (this is what made a fresh note flicker away
       // and stole editor focus).
@@ -449,6 +453,7 @@ class AppStore {
       if (n) await this.#backend.saveNote($state.snapshot(n));
     }
     const prevPinned = new Set(this.notes.filter((n) => n.pinned).map((n) => n.id));
+    const prevStamp = new Map(this.notes.map((n) => [n.id, n.updatedAt]));
     const prevIds = new Set(this.notes.map((n) => n.id));
     // Forget stale tombstones, then drop anything we deleted recently — the
     // backend may not have caught up yet.
@@ -502,6 +507,13 @@ class AppStore {
       this.activeId = this.notes[0]?.id ?? null;
     }
     this.#cacheNotes();
+    // Hand what we just learned to this app's other windows. Whichever window
+    // notices a remote edit first updates the rest, so an open sticky no
+    // longer depends on its own poll coming round to see an edit the main
+    // window already has on screen.
+    for (const n of this.notes) {
+      if (prevStamp.get(n.id) !== n.updatedAt) void broadcastChange({ note: $state.snapshot(n) });
+    }
     // Desktop: honor pin changes that arrived from other devices — a note
     // pinned on the phone becomes a sticky here on the next refresh.
     if (isTauri()) {

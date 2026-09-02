@@ -521,3 +521,25 @@ test('a note created from a share survives the load that lands after it', async 
   await page.goto('/?local'); // reload: it must have actually persisted
   await expect(page.getByTestId('note-title')).toHaveText('do not lose me');
 });
+
+test('an edit made elsewhere lands in an editor that is already open', async ({ page }) => {
+  // The symptom behind the stale sticky: a window holding a note open must
+  // show content that arrived from another device, not just the copy it read
+  // when it opened.
+  await createNote(page);
+  await typeInEditor(page, 'original');
+  await expect(page.getByTestId('note-title')).toHaveText('original');
+  await page.waitForTimeout(500); // let the debounced write land
+
+  // Rewrite the note in storage the way a sync from another device would.
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!;
+    const note = JSON.parse(localStorage.getItem(key)!);
+    note.contentHtml = '<p>original</p><p>added from my phone</p>';
+    note.updatedAt = Date.now() + 60_000;
+    localStorage.setItem(key, JSON.stringify(note));
+  });
+
+  await page.getByTestId('sync-now').click();
+  await expect(page.locator('.ProseMirror')).toContainText('added from my phone');
+});

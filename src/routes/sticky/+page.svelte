@@ -48,6 +48,9 @@
       // ...and pick up edits from the main window the moment they're saved,
       // rather than on the next poll.
       store.listenForChanges();
+      // Clicking a sticky should show current content, the same way clicking
+      // the main window does.
+      window.addEventListener('focus', () => void store.reload());
 
       // This window has its own store instance, so flush its own debounced
       // edits when it closes/hides — otherwise unpinning right after typing
