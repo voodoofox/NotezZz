@@ -44,7 +44,10 @@
       // A sticky can sit open for hours. Without this it keeps whatever it
       // loaded at open time, and any write from it republishes that stale
       // copy over newer edits made elsewhere.
-      store.startAutoSync(6000);
+      // Edits reach a sticky over the cross-window bus the moment the main
+      // window learns of them; this poll is only a fallback for when the main
+      // window isn't running. At 6s it was a full Drive fetch per sticky.
+      store.startAutoSync(60_000);
       // ...and pick up edits from the main window the moment they're saved,
       // rather than on the next poll.
       store.listenForChanges();

@@ -43,7 +43,14 @@ async function authFetch(url: string, opts: RequestInit = {}): Promise<Response>
     }
   }
   if (!res.ok) {
-    throw new Error(`Drive API ${res.status}: ${await res.text().catch(() => '')}`);
+    const body = await res.text().catch(() => '');
+    // Quota errors get a plain label: the store backs its polling off on any
+    // failure, but a human reading the banner should see "rate limited", not
+    // a JSON blob.
+    if (res.status === 429 || (res.status === 403 && /rate|quota/i.test(body))) {
+      throw new Error(`Drive rate limit (${res.status}) — syncing will slow down and retry`);
+    }
+    throw new Error(`Drive API ${res.status}: ${body}`);
   }
   return res;
 }
@@ -72,18 +79,25 @@ export class DriveBackend implements StorageBackend {
     // files the app didn't create (i.e. notes written by the desktop app).
     // If it has since been deleted or unshared, forget it and fall back
     // rather than failing every sync forever.
+    // Forget the adoption ONLY when Drive says the folder is gone (404 or
+    // trashed). It used to be dropped on any non-OK response — an expired
+    // token, a 500, a rate limit — after which the name search picked a
+    // different folder and every note appeared to vanish until re-adopted.
+    let adopted: string | null = null;
     try {
-      const adopted = localStorage.getItem(FOLDER_ID_KEY);
-      if (adopted) {
-        const check = await fetch(`${API}/files/${adopted}?fields=id,trashed`, {
-          headers: { Authorization: `Bearer ${await getValidToken()}` },
-        });
-        if (check.ok && !(await check.json()).trashed) return adopted;
-        localStorage.removeItem(FOLDER_ID_KEY);
-        localStorage.removeItem(FOLDER_ID_KEY + ':name');
-      }
+      adopted = localStorage.getItem(FOLDER_ID_KEY);
     } catch {
-      /* private mode or offline — fall through to the name search */
+      /* private mode */
+    }
+    if (adopted) {
+      try {
+        const check = await authFetch(`${API}/files/${adopted}?fields=id,trashed`);
+        if (!(await check.json()).trashed) return adopted;
+        this.#forgetAdopted();
+      } catch (e) {
+        if (/Drive API 404/.test(String(e))) this.#forgetAdopted();
+        else throw e; // transient: keep the adoption, let the caller retry
+      }
     }
     const q = encodeURIComponent(
       `mimeType='${FOLDER_MIME}' and name='${FOLDER_NAME}' and trashed=false`
@@ -97,6 +111,15 @@ export class DriveBackend implements StorageBackend {
       body: JSON.stringify({ name: FOLDER_NAME, mimeType: FOLDER_MIME }),
     });
     return (await cres.json()).id;
+  }
+
+  #forgetAdopted() {
+    try {
+      localStorage.removeItem(FOLDER_ID_KEY);
+      localStorage.removeItem(FOLDER_ID_KEY + ':name');
+    } catch {
+      /* private mode */
+    }
   }
 
   /**
@@ -161,7 +184,11 @@ export class DriveBackend implements StorageBackend {
     return files?.[0]?.id ?? null;
   }
 
-  async #create(name: string, folderId: string, content: unknown): Promise<string> {
+  async #create(
+    name: string,
+    folderId: string,
+    content: unknown
+  ): Promise<{ id: string; modifiedTime: string }> {
     const metadata = { name, parents: [folderId], mimeType: 'application/json' };
     const boundary = 'notezzzBoundary1337';
     const body =
@@ -170,70 +197,80 @@ export class DriveBackend implements StorageBackend {
       `\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n` +
       JSON.stringify(content) +
       `\r\n--${boundary}--`;
-    const res = await authFetch(`${UPLOAD}/files?uploadType=multipart&fields=id`, {
+    const res = await authFetch(`${UPLOAD}/files?uploadType=multipart&fields=id,modifiedTime`, {
       method: 'POST',
       headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
       body,
     });
-    return (await res.json()).id;
+    return (await res.json()) as { id: string; modifiedTime: string };
   }
 
-  async #update(fileId: string, content: unknown): Promise<void> {
-    await authFetch(`${UPLOAD}/files/${fileId}?uploadType=media`, {
+  async #update(fileId: string, content: unknown): Promise<string> {
+    const res = await authFetch(`${UPLOAD}/files/${fileId}?uploadType=media&fields=modifiedTime`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(content),
     });
+    return ((await res.json()) as { modifiedTime: string }).modifiedTime;
   }
+
+  /**
+   * Per-file cache keyed by Drive fileId. A poll lists the folder (one call)
+   * and downloads only files whose modifiedTime changed. Before this, every
+   * poll — every 6s, from every window — re-downloaded every note in full,
+   * base64 images and voice memos included: about a megabyte per poll per
+   * window on a sixteen-note account.
+   */
+  #files = new Map<string, { modifiedTime: string; note: Note }>();
 
   async listNotes(): Promise<Note[]> {
     const folderId = await this.#notesFolder();
     const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
-    const res = await authFetch(`${API}/files?q=${q}&fields=files(id,name)&pageSize=1000`);
-    const { files } = await res.json();
-    this.#ids.clear();
-    const noteFiles = (files ?? []).filter((f: { id: string; name: string }) =>
-      String(f.name).endsWith('.json')
-    );
-    // Download all note files concurrently — sequential fetches make startup
-    // painfully slow once there are more than a handful of notes.
-    const fetched = (
-      await Promise.all(
-        noteFiles.map(async (f: { id: string; name: string }) => {
-          try {
-            const c = await authFetch(`${API}/files/${f.id}?alt=media`);
-            const note = (await c.json()) as Note;
-            return note ? { note, fileId: f.id } : null;
-          } catch {
-            return null; // one corrupt/unreadable file must not sink the list
-          }
-        })
-      )
-    ).filter((x): x is { note: Note; fileId: string } => x !== null);
+    type Meta = { id: string; name: string; modifiedTime: string };
+    const listed: Meta[] = [];
+    let pageToken: string | undefined;
+    do {
+      const page = pageToken ? `&pageToken=${pageToken}` : '';
+      const res = await authFetch(
+        `${API}/files?q=${q}&fields=nextPageToken,files(id,name,modifiedTime)&pageSize=1000${page}`
+      );
+      const body = (await res.json()) as { files?: Meta[]; nextPageToken?: string };
+      listed.push(...(body.files ?? []).filter((f) => String(f.name).endsWith('.json')));
+      pageToken = body.nextPageToken;
+    } while (pageToken);
+
+    // Forget files that are no longer there, then fetch what changed.
+    const liveIds = new Set(listed.map((f) => f.id));
+    for (const id of this.#files.keys()) if (!liveIds.has(id)) this.#files.delete(id);
+
+    const changed = listed.filter((f) => this.#files.get(f.id)?.modifiedTime !== f.modifiedTime);
+    const results = await Promise.all(changed.map((f) => this.#download(f)));
+    const failed = results.filter((r) => r === 'failed').length;
+    // A file that couldn't be downloaded is NOT a file that was deleted. If we
+    // returned the partial list, the store would drop the note, close its
+    // sticky, and wipe it from the cache until the next successful poll.
+    if (failed) throw new Error(`Couldn't download ${failed} note(s) — will retry`);
 
     // Dedupe by note id — a save racing the folder migration can leave
     // "name.json" + "name (1).json" both holding the same note. Duplicate ids
     // crash Svelte's keyed list, so keep the newest and delete the strays.
     const byId = new Map<string, { note: Note; fileId: string }>();
     const stale: string[] = [];
-    for (const item of fetched) {
-      const prev = byId.get(item.note.id);
-      if (!prev) {
-        byId.set(item.note.id, item);
-      } else if (item.note.updatedAt > prev.note.updatedAt) {
+    for (const [fileId, { note }] of this.#files) {
+      const prev = byId.get(note.id);
+      if (!prev) byId.set(note.id, { note, fileId });
+      else if (note.updatedAt > prev.note.updatedAt) {
         stale.push(prev.fileId);
-        byId.set(item.note.id, item);
-      } else {
-        stale.push(item.fileId);
-      }
+        byId.set(note.id, { note, fileId });
+      } else stale.push(fileId);
     }
     if (stale.length) {
+      for (const id of stale) this.#files.delete(id);
       void Promise.allSettled(
         stale.map((id) => authFetch(`${API}/files/${id}`, { method: 'DELETE' }))
       );
     }
 
-    this.#ids.clear();
     const notes: Note[] = [];
     for (const { note, fileId } of byId.values()) {
       this.#ids.set(note.id, fileId);
@@ -242,18 +279,48 @@ export class DriveBackend implements StorageBackend {
     return notes.sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
+  /** Fetch one file into the cache. Retries once; a corrupt file is skipped. */
+  async #download(f: { id: string; modifiedTime: string }): Promise<'ok' | 'failed' | 'corrupt'> {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await authFetch(`${API}/files/${f.id}?alt=media`);
+        const text = await res.text();
+        let note: Note | null = null;
+        try {
+          note = JSON.parse(text) as Note;
+        } catch {
+          console.warn('[NotezZz] skipping unreadable note file', f.id);
+          this.#files.delete(f.id);
+          return 'corrupt';
+        }
+        if (!note?.id) return 'corrupt';
+        this.#files.set(f.id, { modifiedTime: f.modifiedTime, note });
+        return 'ok';
+      } catch {
+        /* try once more */
+      }
+    }
+    return 'failed';
+  }
+
   async saveNote(note: Note): Promise<void> {
     const folderId = await this.#notesFolder();
     let fileId = this.#ids.get(note.id) ?? (await this.#findByName(`${note.id}.json`, folderId));
-    if (fileId) await this.#update(fileId, note);
-    else fileId = await this.#create(`${note.id}.json`, folderId, note);
+    let modifiedTime: string;
+    if (fileId) modifiedTime = await this.#update(fileId, note);
+    else ({ id: fileId, modifiedTime } = await this.#create(`${note.id}.json`, folderId, note));
     this.#ids.set(note.id, fileId);
+    // Our own write must not look like a remote change on the next poll.
+    this.#files.set(fileId, { modifiedTime, note });
   }
 
   async deleteNote(id: string): Promise<void> {
     const folderId = await this.#notesFolder();
     const fileId = this.#ids.get(id) ?? (await this.#findByName(`${id}.json`, folderId));
-    if (fileId) await authFetch(`${API}/files/${fileId}`, { method: 'DELETE' });
+    if (fileId) {
+      await authFetch(`${API}/files/${fileId}`, { method: 'DELETE' });
+      this.#files.delete(fileId);
+    }
     this.#ids.delete(id);
   }
 
@@ -269,6 +336,6 @@ export class DriveBackend implements StorageBackend {
   async saveSettings(settings: Settings): Promise<void> {
     const folderId = await this.#folder();
     if (this.#settingsId) await this.#update(this.#settingsId, settings);
-    else this.#settingsId = await this.#create('settings.json', folderId, settings);
+    else this.#settingsId = (await this.#create('settings.json', folderId, settings)).id;
   }
 }

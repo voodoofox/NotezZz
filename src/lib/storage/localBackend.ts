@@ -27,6 +27,9 @@ export class LocalBackend implements StorageBackend {
   }
 
   async saveNote(note: Note): Promise<void> {
+    // Test hook: the E2E suite flips this to prove a failed write is retried
+    // rather than discarded. Nothing in the app sets it.
+    if (localStorage.getItem('notezzz:test:failSaves')) throw new Error('Storage rejected the write');
     localStorage.setItem(NOTE_PREFIX + note.id, JSON.stringify(note));
   }
 

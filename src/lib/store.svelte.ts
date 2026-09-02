@@ -1,9 +1,16 @@
 // Central app store (Svelte 5 runes). Holds notes + settings in reactive state
-// and persists changes through whichever StorageBackend is active. Saves are
-// debounced per note so fast typing doesn't hammer the disk / Drive.
+// and persists changes through whichever StorageBackend is active.
+//
+// Writes go through the Outbox (./outbox.ts): one in flight per note, retried
+// on failure, mirrored to localStorage. Every merge in this file asks the
+// outbox whether a note's latest local change has landed, and keeps the local
+// copy while it hasn't. Typing is debounced 400ms BEFORE it reaches the
+// outbox — that debounce is a keystroke coalescer, not part of durability,
+// which is why flush() exists for page-hide.
 
 import { DEFAULT_SETTINGS, newNote, rollTilt, type Note, type Settings } from './types';
 import { welcomeNotes } from './welcome';
+import { Outbox, type OutboxOp } from './outbox';
 import type { StorageBackend } from './storage/backend';
 import { isTauri } from './storage/backend';
 import { LocalBackend } from './storage/localBackend';
@@ -18,6 +25,25 @@ function dedupeById(notes: Note[]): Note[] {
   const sorted = [...notes].sort((a, b) => b.updatedAt - a.updatedAt);
   const seen = new Set<string>();
   return sorted.filter((n) => !seen.has(n.id) && (seen.add(n.id), true));
+}
+
+/**
+ * Sort by a remembered arrangement. Notes not in it lead, newest first, so a
+ * new note never hides at the bottom. Used both for the user's manual order
+ * and for holding the on-screen order steady across a refresh (any edit bumps
+ * updatedAt, and a pure newest-first sort would yank the note you just
+ * touched to the top while you're looking at it).
+ */
+function orderedBy(anchor: string[]): (a: Note, b: Note) => number {
+  const pos = new Map(anchor.map((id, i) => [id, i]));
+  return (a, b) => {
+    const ai = pos.get(a.id);
+    const bi = pos.get(b.id);
+    if (ai === undefined && bi === undefined) return b.updatedAt - a.updatedAt;
+    if (ai === undefined) return -1;
+    if (bi === undefined) return 1;
+    return ai - bi;
+  };
 }
 
 async function pickBackend(): Promise<StorageBackend> {
@@ -66,16 +92,23 @@ class AppStore {
   mobileOpen = $state(false);
 
   #backend: StorageBackend | null = null;
+  /** Keystroke debounce per note — edits waiting to enter the outbox. */
   #timers = new Map<string, ReturnType<typeof setTimeout>>();
+  #outbox = new Outbox(
+    (op) => this.#perform(op),
+    (ok, e) => this.#settled(ok, e)
+  );
   #reloading = false;
-  #inflight = 0;
   #lastReload = 0;
   #autoTimer: ReturnType<typeof setInterval> | undefined;
-  /** Ids with a save currently in flight — must survive a refresh. */
-  #saving = new Set<string>();
+  /** Refresh backoff after failed polls, so a rate limit isn't hammered. */
+  #pollFailures = 0;
+  #pollBackoffUntil = 0;
   /**
-   * Tombstones: ids deleted here recently. A refresh that lands before the
-   * backend delete has propagated would otherwise resurrect them.
+   * Tombstones for deletes that have LANDED: the backend may take a moment to
+   * stop listing the file, and a refresh in that window would resurrect it.
+   * A delete that hasn't landed is still in the outbox, which is the durable
+   * tombstone.
    */
   #deleted = new Map<string, number>();
   static #TOMBSTONE_MS = 120_000;
@@ -87,6 +120,15 @@ class AppStore {
 
   get isCloud(): boolean {
     return this.#backend?.kind === 'drive';
+  }
+
+  /** True while this note has a local change that hasn't landed in storage. */
+  #pending(id: string): boolean {
+    return this.#timers.has(id) || this.#outbox.has(id);
+  }
+
+  #isDeleted(id: string): boolean {
+    return this.#deleted.has(id) || this.#outbox.isDeleting(id);
   }
 
   async init() {
@@ -119,6 +161,9 @@ class AppStore {
     // replaces them when it lands. Kills the startup loading screen and the
     // late theme/palette flip.
     if (cloud) this.#paintCache();
+    // Writes a previous page load never finished (closed mid-upload, offline)
+    // go first, so the list we fetch below already reflects them where it can.
+    this.#outbox.restore();
     try {
       // Watchdog: whatever goes wrong below, "Loading…" may never be forever —
       // surface an error (with its Reconnect button) instead.
@@ -128,17 +173,9 @@ class AppStore {
       );
       const [notes, settings] = await Promise.race([load, watchdog]);
       if (settings) this.settings = settings; // order lives here, so read it first
-      const fetched = dedupeById(notes.filter((n) => !this.#deleted.has(n.id)));
-      // A note written while this load was in flight (the share sheet lets the
-      // user act immediately) is not in the server's answer yet — keep it, or
-      // the shared text disappears the moment the load lands.
-      const unsent = this.notes.filter(
-        (n) =>
-          (this.#saving.has(n.id) || this.#timers.has(n.id)) && !fetched.some((f) => f.id === n.id)
-      );
-      this.notes = this.#applyOrder([...unsent, ...fetched]);
+      this.notes = this.#merge(notes);
       if (!this.activeId && this.notes.length) this.activeId = this.notes[0].id;
-      this.syncStatus = cloud ? 'synced' : 'local';
+      if (!this.#outbox.busy) this.syncStatus = cloud ? 'synced' : 'local';
       this.#cacheNotes();
     } catch (e) {
       this.#fail(e);
@@ -163,7 +200,7 @@ class AppStore {
     const notes = welcomeNotes(this.settings.defaultFontSize, this.isCloud);
     this.notes = notes;
     this.activeId ??= notes[0].id;
-    for (const note of notes) await this.#save(note);
+    await Promise.all(notes.map((note) => this.#save(note)));
     await this.saveSettings({ seeded: true });
   }
 
@@ -251,11 +288,18 @@ class AppStore {
         // which simply fails inside the app window.
         const { desktopToken } = await import('./drive/desktopAuth');
         await desktopToken().catch(() => {}); // signed out -> local files
-      } else {
+      } else if (this.#backend?.kind !== 'local') {
+        // Local mode has no account to reconnect; re-init and retry is all
+        // "Reconnect" can mean there.
         const { signIn } = await import('./drive/auth');
         await signIn(true);
       }
+      this.#pollFailures = 0;
+      this.#pollBackoffUntil = 0;
       await this.init();
+      // The user asked, so retry everything that failed without waiting out
+      // its backoff.
+      this.#outbox.retryAll();
     } catch (e) {
       this.#fail(e);
     }
@@ -284,31 +328,37 @@ class AppStore {
     return moved;
   }
 
-  /** Save through the backend, tracking cloud sync status. */
-  async #save(note: Note) {
+  // ---- writes ---------------------------------------------------------------
+
+  /** Queue a note write. Resolves when the outbox has drained past it. */
+  #save(note: Note): Promise<void> {
     // Mirror into this app's other windows straight away — they must not wait
     // on the cloud round-trip, or on their own poll, to show current state.
     void broadcastChange({ note });
-    // Claim the id before any await: the load in flight must know this note
-    // is being written, or it would replace it with the server's older list.
-    this.#saving.add(note.id);
-    try {
-      // A write can be scheduled before init has picked a backend — the share
-      // sheet lets the user act on the first paint. Wait for it rather than
-      // dropping their note on the floor.
-      if (!this.#backend) await this.#ready;
-      if (!this.#backend) return;
-      if (this.#backend.kind !== 'drive') return await this.#backend.saveNote(note);
-      this.#cacheNotes(); // instant-start cache stays current even if Drive lags
-      this.#inflight += 1;
-      this.syncStatus = 'saving';
-      await this.#backend.saveNote(note);
-      if (--this.#inflight === 0) this.syncStatus = 'synced';
-    } catch (e) {
-      this.#inflight = Math.max(0, this.#inflight - 1);
-      this.#fail(e);
-    } finally {
-      this.#saving.delete(note.id);
+    if (this.isCloud) this.syncStatus = 'saving';
+    return this.#outbox.push({ kind: 'save', note });
+  }
+
+  /** The outbox's executor: the only place that calls the backend to write. */
+  async #perform(op: OutboxOp) {
+    // A write can be queued before init has picked a backend — the share
+    // sheet lets the user act on the first paint. Wait rather than drop.
+    if (!this.#backend) await this.#ready;
+    if (!this.#backend) throw new Error('No storage available');
+    if (op.kind === 'delete') return this.#backend.deleteNote(op.id);
+    // A save that was queued before the note was deleted must not resurrect
+    // it: this was the "deleted notes come back" bug in its original form.
+    if (this.#isDeleted(op.note.id)) return;
+    this.#cacheNotes(); // instant-start cache stays current even if Drive lags
+    await this.#backend.saveNote(op.note);
+  }
+
+  #settled(ok: boolean, e?: unknown) {
+    if (!ok) return this.#fail(e);
+    // One success doesn't clear the error while other writes are still failed;
+    // a fully drained queue does.
+    if (!this.#outbox.busy && this.#outbox.failedCount === 0 && this.isCloud) {
+      this.syncStatus = 'synced';
     }
   }
 
@@ -334,9 +384,7 @@ class AppStore {
     this.notes[idx] = updated;
     // Pin/unpin spawns or closes the desktop sticky window (no-op on web).
     if (!('pinned' in patch)) return this.#persistNote(updated);
-    if (patch.pinned) return void this.#pin(updated);
-    this.#persistNote(updated, /* immediate */ true);
-    void closeSticky(updated.id);
+    void (patch.pinned ? this.#pin(updated) : this.#unpin(updated));
   }
 
   /**
@@ -347,13 +395,29 @@ class AppStore {
    * which then snaps to the new one whenever its first sync lands.
    */
   async #pin(note: Note) {
-    const pending = this.#timers.get(note.id);
-    if (pending) {
-      clearTimeout(pending);
-      this.#timers.delete(note.id);
-    }
+    this.#cancelDebounce(note.id);
     await this.#save($state.snapshot(note));
     await openSticky(note);
+  }
+
+  /**
+   * The mirror image: the sticky calls this from inside the window being
+   * closed, and closing it destroys the webview mid-request. Write first, so
+   * the server doesn't keep `pinned: true` and bring the sticky back on the
+   * next launch.
+   */
+  async #unpin(note: Note) {
+    this.#cancelDebounce(note.id);
+    await this.#save($state.snapshot(note));
+    await closeSticky(note.id);
+  }
+
+  #cancelDebounce(id: string) {
+    const t = this.#timers.get(id);
+    if (t !== undefined) {
+      clearTimeout(t);
+      this.#timers.delete(id);
+    }
   }
 
   /** Mirror an edit made in another window of this app (desktop only). */
@@ -364,29 +428,10 @@ class AppStore {
       if (!n) return;
       // Same rule as the sync merge: never let an incoming copy clobber edits
       // this window hasn't written yet.
-      if (this.#saving.has(n.id) || this.#timers.has(n.id)) return;
+      if (this.#pending(n.id)) return;
       const idx = this.notes.findIndex((x) => x.id === n.id);
       if (idx === -1 || n.updatedAt < this.notes[idx].updatedAt) return;
       this.notes[idx] = n;
-    });
-  }
-
-  /**
-   * Apply the user's manual arrangement. Notes they haven't placed (anything
-   * created since) lead the list, newest first, so a new note never hides at
-   * the bottom.
-   */
-  #applyOrder(list: Note[]): Note[] {
-    const order = this.settings.noteOrder;
-    if (!order?.length) return list;
-    const pos = new Map(order.map((id, i) => [id, i]));
-    return [...list].sort((a, b) => {
-      const ai = pos.get(a.id);
-      const bi = pos.get(b.id);
-      if (ai === undefined && bi === undefined) return b.updatedAt - a.updatedAt;
-      if (ai === undefined) return -1;
-      if (bi === undefined) return 1;
-      return ai - bi;
     });
   }
 
@@ -397,16 +442,72 @@ class AppStore {
     await this.saveSettings({ noteOrder: ids });
   }
 
-  /** Manual "sync now" — bypasses the focus throttle. */
+  async remove(id: string) {
+    this.notes = this.notes.filter((n) => n.id !== id);
+    if (this.activeId === id) {
+      this.activeId = this.notes[0]?.id ?? null;
+      this.mobileOpen = false; // drop out of fullscreen after deleting on phones
+    }
+    // The debounce timer MUST die here. Left alive, it fired 400ms later,
+    // found the note gone from the list, and wrote its captured copy back.
+    this.#cancelDebounce(id);
+    void closeSticky(id); // a deleted note must not leave a sticky behind
+    this.#cacheNotes();
+    // The queued delete is the tombstone until it lands; the in-memory one
+    // covers the backend's propagation lag afterwards.
+    await this.#outbox.push({ kind: 'delete', id });
+    this.#deleted.set(id, Date.now());
+  }
+
+  async saveSettings(patch: Partial<Settings>) {
+    this.settings = { ...this.settings, ...patch };
+    this.#cacheNotes();
+    void broadcastChange({ settings: $state.snapshot(this.settings) });
+    try {
+      await this.#backend?.saveSettings(this.settings);
+    } catch (e) {
+      this.#fail(e);
+    }
+  }
+
+  /**
+   * Move every debounced edit into the outbox right now (page hide, window
+   * close). The outbox mirrors itself to localStorage synchronously on push,
+   * so even if the page dies before the request completes, the write runs on
+   * the next launch.
+   */
+  flush() {
+    for (const id of [...this.#timers.keys()]) this.#flushOne(id);
+  }
+
+  #flushOne(id: string) {
+    this.#cancelDebounce(id);
+    const n = this.notes.find((x) => x.id === id);
+    if (n) void this.#save($state.snapshot(n));
+  }
+
+  #persistNote(note: Note, immediate = false) {
+    this.#cancelDebounce(note.id);
+    if (immediate) return this.#flushOne(note.id);
+    this.#timers.set(
+      note.id,
+      setTimeout(() => this.#flushOne(note.id), 400)
+    );
+  }
+
+  // ---- reads ----------------------------------------------------------------
+
+  /** Manual "sync now" — bypasses the focus throttle and any backoff. */
   async syncNow() {
     this.#lastReload = 0;
+    this.#pollBackoffUntil = 0;
     await this.reload();
   }
 
   /**
    * Background sync: pick up changes made on other devices (or in sticky
    * windows) without the user touching anything. Skipped while edits are
-   * pending or the window is hidden, so it never fights the typist.
+   * pending, so it never fights the typist.
    */
   startAutoSync(intervalMs: number) {
     if (this.#autoTimer) clearInterval(this.#autoTimer);
@@ -416,10 +517,14 @@ class AppStore {
       // note, and it is never the focused window, so gating it on visibility
       // is how it ends up displaying stale content indefinitely.
       if (!isTauri() && document.visibilityState !== 'visible') return;
+      // Failed writes get their retry here, on the app's heartbeat.
+      this.#outbox.retryDue();
       // Never refresh over work that hasn't landed yet: debounced edits or
       // uploads still in flight (this is what made a fresh note flicker away
-      // and stole editor focus).
-      if (this.#timers.size || this.#saving.size) return;
+      // and stole editor focus). Failed-and-waiting writes don't block a
+      // refresh — offline for an hour must not also mean blind for an hour.
+      if (this.#timers.size || this.#outbox.busy) return;
+      if (Date.now() < this.#pollBackoffUntil) return;
       this.#lastReload = 0;
       void this.reload();
     }, intervalMs);
@@ -435,146 +540,101 @@ class AppStore {
     this.#reloading = true;
     try {
       await this.#doReload();
+      this.#pollFailures = 0;
     } catch (e) {
+      // Back off doubling from 30s to 5min: a rate limit that is polled
+      // through every 6s never clears.
+      this.#pollFailures += 1;
+      const wait = Math.min(30_000 * 2 ** (this.#pollFailures - 1), 300_000);
+      this.#pollBackoffUntil = Date.now() + wait;
       this.#fail(e);
     } finally {
       this.#reloading = false;
     }
   }
 
-  async #doReload() {
-    if (!this.#backend) return;
-    // Flush pending debounced writes to disk first so we don't lose fresh edits.
-    const pendingIds = [...this.#timers.keys()];
-    for (const [, t] of this.#timers) clearTimeout(t);
-    this.#timers.clear();
-    for (const id of pendingIds) {
-      const n = this.notes.find((x) => x.id === id);
-      if (n) await this.#backend.saveNote($state.snapshot(n));
-    }
-    const prevPinned = new Set(this.notes.filter((n) => n.pinned).map((n) => n.id));
-    const prevStamp = new Map(this.notes.map((n) => [n.id, n.updatedAt]));
-    const prevIds = new Set(this.notes.map((n) => n.id));
-    // Forget stale tombstones, then drop anything we deleted recently — the
-    // backend may not have caught up yet.
-    for (const [id, at] of this.#deleted) {
-      if (Date.now() - at > AppStore.#TOMBSTONE_MS) this.#deleted.delete(id);
-    }
-    const fetched = (await this.#backend.listNotes()).filter((n) => !this.#deleted.has(n.id));
-
-    // Merge rather than replace. A note created/edited moments ago may not be
-    // on the server yet (upload in flight, or another device hasn't seen it):
-    // blindly taking the server list made new notes flicker away and reverted
-    // fresh pin toggles. Local wins while it is newer or still uploading.
-    const merged = new Map(fetched.map((n) => [n.id, n]));
+  /**
+   * Merge a fetched list into what's on screen rather than replacing it. A
+   * note created/edited moments ago may not be on the server yet (upload in
+   * flight, or another device hasn't seen it): blindly taking the server list
+   * made new notes flicker away and reverted fresh pin toggles. Local wins
+   * while it is newer or still unlanded; deleted ids never come back.
+   */
+  #merge(fetched: Note[]): Note[] {
+    const merged = new Map(
+      dedupeById(fetched.filter((n) => !this.#isDeleted(n.id))).map((n) => [n.id, n])
+    );
     const FRESH_MS = 20_000;
-    for (const local of this.notes) {
+    // Writes the outbox still owes count as local copies too — otherwise a
+    // save restored from a previous page load stays invisible until it lands
+    // AND the next poll comes round.
+    const owed = this.#outbox.pendingNotes().filter((n) => !this.notes.some((l) => l.id === n.id));
+    for (const local of [...this.notes, ...owed]) {
       const remote = merged.get(local.id);
-      const stillLanding = this.#saving.has(local.id) || this.#timers.has(local.id);
+      const unlanded = this.#pending(local.id);
       const recent = Date.now() - local.updatedAt < FRESH_MS;
       if (!remote) {
-        if (stillLanding || recent) merged.set(local.id, $state.snapshot(local));
-      } else if (local.updatedAt > remote.updatedAt) {
+        if (unlanded || recent) merged.set(local.id, $state.snapshot(local));
+      } else if (unlanded || local.updatedAt > remote.updatedAt) {
         merged.set(local.id, $state.snapshot(local));
       }
     }
-    const notes = dedupeById([...merged.values()]);
-
-    // Keep the on-screen order steady. Notes are sorted newest-first, but any
-    // edit — including a pin toggle — bumps updatedAt, so a refresh would
-    // yank the note you just touched to the top while you're looking at it.
     // A manual arrangement wins; otherwise notes hold their current position.
     const anchor = this.settings.noteOrder?.length
       ? this.settings.noteOrder
       : this.notes.map((n) => n.id);
-    const pos = new Map(anchor.map((id, i) => [id, i]));
-    notes.sort((a, b) => {
-      const ai = pos.get(a.id);
-      const bi = pos.get(b.id);
-      if (ai === undefined && bi === undefined) return b.updatedAt - a.updatedAt;
-      if (ai === undefined) return -1;
-      if (bi === undefined) return 1;
-      return ai - bi;
-    });
+    return [...merged.values()].sort(orderedBy(anchor));
+  }
+
+  async #doReload() {
+    if (!this.#backend) return;
+    // Debounced edits enter the outbox before we fetch, so the merge sees them
+    // as unlanded and keeps them. (They used to be written straight to the
+    // backend here, outside the queue: no retry, and the first failure
+    // abandoned every edit after it.)
+    this.flush();
+    const prevPinned = new Set(this.notes.filter((n) => n.pinned).map((n) => n.id));
+    const prevStamp = new Map(this.notes.map((n) => [n.id, n.updatedAt]));
+    const prevIds = new Set(this.notes.map((n) => n.id));
+    for (const [id, at] of this.#deleted) {
+      if (Date.now() - at > AppStore.#TOMBSTONE_MS) this.#deleted.delete(id);
+    }
+    const notes = this.#merge(await this.#backend.listNotes());
 
     // Skip the update when nothing actually changed — reassigning the array
     // remounts the editor and steals focus mid-typing.
     const sig = (list: Note[]) => list.map((n) => `${n.id}:${n.updatedAt}:${n.pinned}`).join('|');
-    if (sig(notes) === sig(this.notes)) return;
-
-    this.notes = notes;
-    if (this.activeId && !this.notes.some((n) => n.id === this.activeId)) {
-      this.activeId = this.notes[0]?.id ?? null;
-    }
-    this.#cacheNotes();
-    // Hand what we just learned to this app's other windows. Whichever window
-    // notices a remote edit first updates the rest, so an open sticky no
-    // longer depends on its own poll coming round to see an edit the main
-    // window already has on screen.
-    for (const n of this.notes) {
-      if (prevStamp.get(n.id) !== n.updatedAt) void broadcastChange({ note: $state.snapshot(n) });
-    }
-    // Desktop: honor pin changes that arrived from other devices — a note
-    // pinned on the phone becomes a sticky here on the next refresh.
-    if (isTauri()) {
-      const liveIds = new Set(this.notes.map((n) => n.id));
-      for (const n of this.notes) {
-        if (n.pinned && !prevPinned.has(n.id)) void openSticky(n);
-        if (!n.pinned && prevPinned.has(n.id)) void closeSticky(n.id);
+    if (sig(notes) !== sig(this.notes)) {
+      this.notes = notes;
+      if (this.activeId && !this.notes.some((n) => n.id === this.activeId)) {
+        this.activeId = this.notes[0]?.id ?? null;
       }
-      // A note deleted elsewhere disappears from the list entirely, so its
-      // sticky window has to be closed here too — it isn't in the loop above.
-      for (const id of prevIds) if (!liveIds.has(id)) void closeSticky(id);
+      this.#cacheNotes();
+      // Hand what we just learned to this app's other windows. Whichever
+      // window notices a remote edit first updates the rest, so an open
+      // sticky no longer depends on its own poll coming round.
+      for (const n of this.notes) {
+        if (prevStamp.get(n.id) !== n.updatedAt) void broadcastChange({ note: $state.snapshot(n) });
+      }
+      // Desktop: honor pin changes that arrived from other devices — a note
+      // pinned on the phone becomes a sticky here on the next refresh.
+      if (isTauri()) {
+        const liveIds = new Set(this.notes.map((n) => n.id));
+        for (const n of this.notes) {
+          if (n.pinned && !prevPinned.has(n.id)) void openSticky(n);
+          if (!n.pinned && prevPinned.has(n.id)) void closeSticky(n.id);
+        }
+        // A note deleted elsewhere disappears from the list entirely, so its
+        // sticky window has to be closed here too.
+        for (const id of prevIds) if (!liveIds.has(id)) void closeSticky(id);
+      }
     }
-  }
-
-  async remove(id: string) {
-    this.notes = this.notes.filter((n) => n.id !== id);
-    if (this.activeId === id) {
-      this.activeId = this.notes[0]?.id ?? null;
-      this.mobileOpen = false; // drop out of fullscreen after deleting on phones
+    // A successful poll with nothing unlanded means we're in sync — the error
+    // badge used to stick until the next successful WRITE, however many polls
+    // succeeded in between.
+    if (this.isCloud && !this.#outbox.busy && this.#outbox.failedCount === 0) {
+      this.syncStatus = 'synced';
     }
-    this.#timers.delete(id);
-    this.#deleted.set(id, Date.now());
-    void closeSticky(id); // a deleted note must not leave a sticky behind
-    this.#cacheNotes();
-    try {
-      await this.#backend?.deleteNote(id);
-    } catch (e) {
-      this.#fail(e);
-    }
-  }
-
-  async saveSettings(patch: Partial<Settings>) {
-    this.settings = { ...this.settings, ...patch };
-    this.#cacheNotes();
-    void broadcastChange({ settings: $state.snapshot(this.settings) });
-    try {
-      await this.#backend?.saveSettings(this.settings);
-    } catch (e) {
-      this.#fail(e);
-    }
-  }
-
-  /** Immediately write all pending debounced edits (call before page unload). */
-  flush() {
-    for (const [id, t] of this.#timers) {
-      clearTimeout(t);
-      const n = this.notes.find((x) => x.id === id);
-      if (n) void this.#save($state.snapshot(n));
-    }
-    this.#timers.clear();
-  }
-
-  #persistNote(note: Note, immediate = false) {
-    const flush = () => {
-      this.#timers.delete(note.id);
-      void this.#save($state.snapshot(this.notes.find((n) => n.id === note.id) ?? note));
-    };
-    const existing = this.#timers.get(note.id);
-    if (existing) clearTimeout(existing);
-    if (immediate) return flush();
-    this.#timers.set(note.id, setTimeout(flush, 400));
   }
 }
 

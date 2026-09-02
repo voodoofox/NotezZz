@@ -3,6 +3,11 @@ import { test, expect, type Page } from '@playwright/test';
 // Start each test on a clean slate: local mode + empty storage.
 test.beforeEach(async ({ page }) => {
   page.on('dialog', (d) => d.accept()); // auto-accept the delete confirm()
+  // Keep the suite offline: tests that hit '/' (no ?local) would otherwise
+  // pull the real Google Identity Services script. Nothing here needs it --
+  // ?local never signs in, and the one test that exercises GIS stubs
+  // window.google itself, which makes the loader skip the script tag.
+  await page.route('**://accounts.google.com/**', (r) => r.abort());
   await page.goto('/?local');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
@@ -20,6 +25,18 @@ async function typeInEditor(page: Page, text: string) {
   const pm = page.locator('.ProseMirror');
   await pm.click();
   await pm.pressSequentially(text);
+}
+
+/**
+ * Click "Sync now" and wait for the sync to finish. The button carries .busy
+ * from the click until the store's sync resolves (plus a short minimum spin),
+ * so busy-then-not-busy is a deterministic "the refresh has landed" signal.
+ */
+async function syncAndSettle(page: Page) {
+  const btn = page.getByTestId('sync-now');
+  await btn.click();
+  await expect(btn).toHaveClass(/busy/);
+  await expect(btn).not.toHaveClass(/busy/);
 }
 
 test('starts with an empty state', async ({ page }) => {
@@ -114,7 +131,7 @@ test('voice memo: record inserts a playable audio track', async ({ page }) => {
   await createNote(page);
   await page.getByTestId('fmt-record').click();
   await expect(page.getByTestId('fmt-record')).toHaveClass(/recording/);
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(1500); // not a UI wait: actually records 1.5s of (fake) audio
   await page.getByTestId('fmt-record').click();
   // The custom player replaces the browser widget; the <audio> lives in the
   // saved HTML rather than the DOM.
@@ -370,10 +387,7 @@ test('a background sync does not drop a just-created note or steal focus', async
   await page.locator('.ProseMirror').pressSequentially('typing');
 
   // Force refreshes like the auto-sync timer does, mid-work.
-  for (let i = 0; i < 3; i++) {
-    await page.getByTestId('sync-now').click();
-    await page.waitForTimeout(150);
-  }
+  for (let i = 0; i < 3; i++) await syncAndSettle(page);
 
   // The note survives, stays selected, and the text is intact.
   await expect(page.getByTestId('note-item')).toHaveCount(1);
@@ -397,12 +411,10 @@ test('notes can be dragged into a new order, and it sticks', async ({ page }) =>
   await page.mouse.down();
   await page.mouse.move(from.x + 5, last.y + last.height, { steps: 12 });
   await page.mouse.up();
-  await page.waitForTimeout(300);
-  expect(await order()).toEqual(['Beta', 'Alpha', 'Gamma']);
+  await expect(page.getByTestId('note-title')).toHaveText(['Beta', 'Alpha', 'Gamma']);
 
   // A sync must not undo it, and neither must a reload.
-  await page.getByTestId('sync-now').click();
-  await page.waitForTimeout(400);
+  await syncAndSettle(page);
   expect(await order()).toEqual(['Beta', 'Alpha', 'Gamma']);
   await page.goto('/?local');
   await expect(page.getByTestId('note-item')).toHaveCount(3);
@@ -419,8 +431,7 @@ test('pinning does not reshuffle the list when a sync lands', async ({ page }) =
 
   // Pin the middle note, then force the refresh that used to reorder things.
   await page.getByTestId('note-pin').nth(1).click();
-  await page.getByTestId('sync-now').click();
-  await page.waitForTimeout(400);
+  await syncAndSettle(page);
 
   expect(await order()).toEqual(before);
   await expect(page.getByTestId('note-pin').nth(1)).toHaveClass(/on/);
@@ -430,8 +441,7 @@ test('a background sync preserves a fresh pin toggle', async ({ page }) => {
   await createNote(page);
   await page.getByTestId('note-pin').click();
   await expect(page.getByTestId('note-pin')).toHaveClass(/on/);
-  await page.getByTestId('sync-now').click();
-  await page.waitForTimeout(300);
+  await syncAndSettle(page);
   await expect(page.getByTestId('note-pin')).toHaveClass(/on/);
 });
 
@@ -450,6 +460,9 @@ test('a storage layer that fails to load never strands the app on its spinner', 
   // that fetch dies (radio asleep on wake, or a cached page whose chunks are
   // gone after a deploy) the app used to sit on "Loading notes…" forever,
   // with no error and no way out but relaunching by hand.
+  // The store gives storage 20s before it gives up, so this test must outlive
+  // the suite's default 20s budget.
+  test.setTimeout(45_000);
   await page.addInitScript(() => localStorage.setItem('notezzz:hasAuthed', '1'));
   await page.route('**/driveBackend*', (r) => r.abort());
 
@@ -529,7 +542,10 @@ test('an edit made elsewhere lands in an editor that is already open', async ({ 
   await createNote(page);
   await typeInEditor(page, 'original');
   await expect(page.getByTestId('note-title')).toHaveText('original');
-  await page.waitForTimeout(500); // let the debounced write land
+  // Genuine debounce wait with no observable hook: the store's per-note save
+  // timer (store.svelte.ts, setTimeout(flush, 400)) must fire so the edit
+  // below rewrites the stored note rather than being overwritten by it.
+  await page.waitForTimeout(500);
 
   // Rewrite the note in storage the way a sync from another device would.
   await page.evaluate(() => {
@@ -597,4 +613,52 @@ test('a dead Google session does not flash the sign-in screen over cached notes'
   await expect(page.getByTestId('open-local')).toBeHidden();
   // The way back is a real tap on Reconnect, which is allowed to be interactive.
   await expect(page.getByTestId('reconnect')).toBeVisible();
+});
+
+test('deleting a note right after typing in it does not bring it back', async ({ page }) => {
+  // The debounce timer used to outlive the delete: it fired 400ms later,
+  // found the note gone, and wrote its captured copy straight back.
+  await createNote(page);
+  await typeInEditor(page, 'gone');
+  await page.getByTestId('note-delete').click();
+  await expect(page.getByTestId('note-item')).toHaveCount(0);
+  await page.waitForTimeout(700); // the whole window the old timer could fire in
+  await page.goto('/?local');
+  await expect(page.getByTestId('note-item')).toHaveCount(0);
+});
+
+test('a write that fails is kept and retried, never discarded', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('keep me');
+  await expect(page.getByTestId('note-title')).toHaveText('keep me');
+  await page.waitForTimeout(500); // per-note save debounce
+
+  await page.evaluate(() => localStorage.setItem('notezzz:test:failSaves', '1'));
+  await page.getByTestId('title-input').fill('keep me please');
+  await expect(page.getByTestId('sync-error')).toBeVisible();
+
+  // A refresh while the write is still owed must not replace the edit with
+  // the server's older copy -- that was the "silently discarded" path.
+  await syncAndSettle(page);
+  await expect(page.getByTestId('note-title')).toHaveText('keep me please');
+
+  // Storage recovers; Reconnect retries everything owed at once.
+  await page.evaluate(() => localStorage.removeItem('notezzz:test:failSaves'));
+  await page.getByTestId('reconnect').click();
+  await expect(page.getByTestId('sync-error')).toBeHidden();
+  await page.goto('/?local');
+  await expect(page.getByTestId('note-title')).toHaveText('keep me please');
+});
+
+test('a write that never landed survives closing the page', async ({ page }) => {
+  await createNote(page);
+  await page.evaluate(() => localStorage.setItem('notezzz:test:failSaves', '1'));
+  await page.getByTestId('title-input').fill('written after restart');
+  await expect(page.getByTestId('sync-error')).toBeVisible();
+
+  await page.evaluate(() => localStorage.removeItem('notezzz:test:failSaves'));
+  await page.goto('/?local'); // a fresh page load: the queue restores and drains
+  await expect(page.getByTestId('note-title')).toHaveText('written after restart');
+  await page.goto('/?local'); // and it actually reached storage
+  await expect(page.getByTestId('note-title')).toHaveText('written after restart');
 });

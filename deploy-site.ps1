@@ -5,12 +5,17 @@
 #   powershell -ExecutionPolicy Bypass -File .\deploy-site.ps1
 #
 # Uses Git's curl - the Windows System32 build can't reach this FTPS host.
+# FTP credentials come from deploy.env (gitignored; see README, 'Deploy').
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
+. (Join-Path $PSScriptRoot 'deploy-lib.ps1')
 
 $Curl = 'C:\Program Files\Git\mingw64\bin\curl.exe'
 if (-not (Test-Path $Curl)) { throw "Git curl not found at $Curl" }
+
+# Fail fast on a missing deploy.env, before touching any files.
+$cfg = Read-DeployEnv (Join-Path $PSScriptRoot 'deploy.env')
 
 $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
 $exe = "src-tauri\target\release\bundle\nsis\NotezZz_${version}_x64-setup.exe"
@@ -32,23 +37,21 @@ $html = [regex]::Replace($html, '(<span data-version>)[^<]*(</span>)', "`${1}$st
 Copy-Item $exe site\NotezZz-Setup.exe -Force
 Write-Host "Publishing $stamp" -ForegroundColor Cyan
 
-$FtpUser = '***REMOVED***'
-$FtpPass = '***REMOVED***'
-$FtpHost = 'divine-butterfly.flatvoxelcom.webinf.buildingtogether.io'
+$FtpHost = $cfg.FTP_HOST
 $Remote  = 'domains/flatvoxel.com/htdocs/www/notezzz'
 
 $root = (Resolve-Path site).Path
 $fail = 0
-foreach ($f in Get-ChildItem -Recurse -File site -Force) {
-  $rel = $f.FullName.Substring($root.Length + 1) -replace '\\', '/'
-  $ok = $false
-  for ($a = 0; $a -lt 3; $a++) {
-    & $Curl -s --ftp-ssl-control -k --connect-timeout 60 --ftp-create-dirs `
-      -T $f.FullName "ftp://${FtpUser}:${FtpPass}@${FtpHost}/${Remote}/${rel}" | Out-Null
-    # 56 = TLS teardown quirk after the file has already landed
-    if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 56) { $ok = $true; break }
+$netrc = New-CurlNetrc $cfg
+try {
+  foreach ($f in Get-ChildItem -Recurse -File site -Force) {
+    $rel = $f.FullName.Substring($root.Length + 1) -replace '\\', '/'
+    $ok = Send-FtpFile -Curl $Curl -Netrc $netrc -FtpHost $FtpHost `
+      -LocalPath $f.FullName -RemotePath "$Remote/$rel" -ConnectTimeout 60
+    if (-not $ok) { $fail++ }
   }
-  if (-not $ok) { Write-Host "FAIL $rel" -ForegroundColor Red; $fail++ }
+} finally {
+  Remove-Item $netrc -Force -ErrorAction SilentlyContinue
 }
 if ($fail -gt 0) { throw "$fail file(s) failed to upload" }
 

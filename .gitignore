@@ -17,3 +17,6 @@ vite.config.ts.timestamp-*
 
 # Landing-page copy of the installer (rebuilt per release)
 /site/NotezZz-Setup.exe
+
+# FTP credentials for the deploy scripts
+/deploy.env
