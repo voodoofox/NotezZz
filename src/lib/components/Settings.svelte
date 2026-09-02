@@ -21,13 +21,25 @@
   async function signInDesktop() {
     gBusy = true;
     try {
-      const { desktopSignIn } = await import('$lib/drive/desktopAuth');
-      gAccount = await desktopSignIn();
+      const { desktopSignIn, desktopAccount } = await import('$lib/drive/desktopAuth');
+      let warning = '';
+      try {
+        gAccount = await desktopSignIn();
+      } catch (e) {
+        // gauth.rs keeps the tokens when only the account-email lookup
+        // fails, so an error here is a real failure only if we are still
+        // signed out. Otherwise carry on and just say the email is unknown.
+        gAccount = await desktopAccount();
+        if (!gAccount) throw e;
+        warning = e instanceof Error ? e.message : String(e);
+      }
       // Lift local-only notes into Drive before switching backends, so
       // nothing drops out of the list and every note becomes app-owned.
       const moved = await store.migrateLocalToDrive().catch(() => 0);
       await store.reconnect();
-      if (moved) alert(`Signed in. ${moved} local note(s) uploaded to Google Drive.`);
+      const uploaded = moved ? ` ${moved} local note(s) uploaded to Google Drive.` : '';
+      if (warning) alert(`Signed in, but ${warning}.${uploaded}`);
+      else if (moved) alert(`Signed in.${uploaded}`);
     } catch (e) {
       alert(`Sign-in failed: ${e instanceof Error ? e.message : e}`);
     } finally {

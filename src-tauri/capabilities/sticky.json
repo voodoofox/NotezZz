@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "sticky",
+  "description": "Sticky note windows: only what src/routes/sticky/+page.svelte and src/lib/desktop.ts use there — the change-event bus, own-window geometry (scaleFactor/outerPosition/innerSize + moved/resized events), drag region, close-on-unpin, always-on-top. No window creation, no dialog/opener/autostart: a sticky renders note content, so it gets the smallest surface.",
+  "windows": ["sticky-*"],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-outer-position",
+    "core:window:allow-inner-size",
+    "core:window:allow-scale-factor",
+    "core:window:allow-close",
+    "core:window:allow-set-always-on-top"
+  ]
+}

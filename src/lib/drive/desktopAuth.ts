@@ -22,10 +22,18 @@ export function desktopToken(): Promise<string> {
   return invoke<string>('google_token', creds());
 }
 
-/** Signed-in account address, or null. */
+/** Shown when tokens exist but the userinfo lookup failed at sign-in. */
+export const UNKNOWN_ACCOUNT = 'Google account (email unavailable)';
+
+/** Signed-in account address, or null when signed out. */
 export async function desktopAccount(): Promise<string | null> {
   try {
-    return (await invoke<string | null>('google_account')) ?? null;
+    const email = await invoke<string | null>('google_account');
+    if (email == null) return null;
+    // Rust stores the tokens even when it couldn't read the email (gauth.rs).
+    // An empty string used to read as "signed out" here, so a working
+    // sign-in fell back to local files. Signed in = tokens exist.
+    return email || UNKNOWN_ACCOUNT;
   } catch {
     return null;
   }

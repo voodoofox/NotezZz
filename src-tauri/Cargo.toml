@@ -1,8 +1,11 @@
 [package]
 name = "notezzz"
-version = "0.1.0"
+# Single source of the app version: tauri.conf.json has no "version" key and
+# inherits this one. Keep in step with package.json (deploy-site.ps1 reads
+# that to find the installer, which is named after THIS value).
+version = "0.16.3"
 description = "NotezZz — fast sticky notes"
-authors = ["you"]
+authors = ["voodoofox"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

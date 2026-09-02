@@ -1,8 +1,10 @@
 // NotezZz desktop core: file-based storage in the sync (Drive) folder, sticky
 // note windows (transparent, always-on-top), system tray, and close-to-tray.
 
+use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::io::Write as _;
+use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 mod gauth;
@@ -16,85 +18,200 @@ use tauri::{Emitter, Manager};
 // ----------------------------------------------------------------------------
 
 /// App-private folder (holds config.json and acts as fallback store).
-fn local_dir(app: &tauri::AppHandle) -> PathBuf {
+/// Errors reach the command boundary instead of panicking: an unwritable
+/// profile dir used to take the whole process down on first launch.
+fn local_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app
         .path()
         .app_local_data_dir()
-        .expect("no app local data dir");
-    let _ = fs::create_dir_all(&dir);
-    dir
+        .map_err(|e| format!("no app local data dir: {e}"))?;
+    fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    Ok(dir)
 }
 
-fn config_file(app: &tauri::AppHandle) -> PathBuf {
-    local_dir(app).join("config.json")
+fn config_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(local_dir(app)?.join("config.json"))
 }
 
-/// The user-chosen sync folder (a Google Drive folder), if set and present.
-fn read_sync_folder(app: &tauri::AppHandle) -> Option<PathBuf> {
-    let txt = fs::read_to_string(config_file(app)).ok()?;
-    let v: Value = serde_json::from_str(&txt).ok()?;
-    let p = v.get("syncFolder")?.as_str()?;
-    Some(PathBuf::from(p))
+/// The user-chosen sync folder (a Google Drive folder), if one is configured.
+/// Presence on disk is NOT checked here — see `base_dir`.
+fn read_sync_folder(app: &tauri::AppHandle) -> Result<Option<PathBuf>, String> {
+    let Ok(txt) = fs::read_to_string(config_file(app)?) else {
+        return Ok(None);
+    };
+    let v: Value = match serde_json::from_str(&txt) {
+        Ok(v) => v,
+        Err(_) => return Ok(None),
+    };
+    Ok(v.get("syncFolder").and_then(Value::as_str).map(PathBuf::from))
 }
 
-/// Where notes + settings actually live: the sync folder if usable, else local.
-fn base_dir(app: &tauri::AppHandle) -> PathBuf {
-    match read_sync_folder(app) {
-        Some(p) if p.is_dir() => p,
-        _ => local_dir(app),
+/// Where notes + settings actually live: the configured sync folder, else the
+/// local app dir. A configured folder that is missing is an ERROR, not a
+/// fallback: falling back silently (while Drive was unmounted or the drive
+/// letter changed) sent edits into a second, local store, and the two copies
+/// diverged until notes turned up "missing" on the other device. The message
+/// is shown verbatim by the Sidebar's sync-error strip, with a Reconnect button.
+fn base_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    match read_sync_folder(app)? {
+        Some(p) if p.is_dir() => Ok(p),
+        Some(p) => Err(format!("Sync folder unavailable: {}", p.display())),
+        None => local_dir(app),
     }
 }
 
-fn notes_dir(app: &tauri::AppHandle) -> PathBuf {
-    let d = base_dir(app).join("notes");
-    let _ = fs::create_dir_all(&d);
-    d
+fn notes_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let d = base_dir(app)?.join("notes");
+    fs::create_dir_all(&d).map_err(|e| format!("cannot create {}: {e}", d.display()))?;
+    Ok(d)
 }
 
-/// Keep only filesystem-safe characters from a note id.
-fn safe_id(id: &str) -> String {
-    id.chars()
+/// Keep only filesystem-safe characters from a note id. An id with nothing
+/// left after sanitising used to map to a bare ".json" that every such note
+/// then shared (and overwrote) — refuse it instead.
+fn safe_id(id: &str) -> Result<String, String> {
+    let s: String = id
+        .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
-        .collect()
+        .collect();
+    if s.is_empty() {
+        return Err(format!("note id {id:?} has no filesystem-safe characters"));
+    }
+    Ok(s)
+}
+
+/// Write `<name>.tmp` beside the target, flush it, then rename it over the
+/// target. A plain `fs::write` truncates first and fills afterwards; Drive
+/// Desktop picked up that window and shipped a half-written JSON to every
+/// other device, where it then failed to parse. Rename is atomic on NTFS and
+/// POSIX, so readers see either the old file or the complete new one.
+pub(crate) fn write_atomic(path: &Path, data: &str) -> Result<(), String> {
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| format!("bad target path {}", path.display()))?;
+    let tmp = path.with_file_name(format!("{name}.tmp"));
+    let write = || -> std::io::Result<()> {
+        let mut f = fs::File::create(&tmp)?;
+        f.write_all(data.as_bytes())?;
+        f.sync_all()
+    };
+    write().map_err(|e| format!("cannot write {}: {e}", tmp.display()))?;
+    fs::rename(&tmp, path).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        format!("cannot replace {}: {e}", path.display())
+    })
 }
 
 // ----------------------------------------------------------------------------
 // Storage commands
 // ----------------------------------------------------------------------------
 
-#[tauri::command]
-fn list_notes(app: tauri::AppHandle) -> Result<Vec<Value>, String> {
-    let dir = notes_dir(&app);
+/// First free `<name>.bak`, `<name>.1.bak`, ... beside `path`. Losers of a
+/// conflict are parked, never deleted — the "stale" copy has more than once
+/// turned out to hold the only copy of an edit.
+fn bak_path(path: &Path) -> PathBuf {
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("note.json");
+    let first = path.with_file_name(format!("{name}.bak"));
+    if !first.exists() {
+        return first;
+    }
+    (1..)
+        .map(|n| path.with_file_name(format!("{name}.{n}.bak")))
+        .find(|p| !p.exists())
+        .unwrap()
+}
+
+fn updated_at(v: &Value) -> u64 {
+    v.get("updatedAt").and_then(Value::as_u64).unwrap_or(0)
+}
+
+fn list_notes_blocking(app: &tauri::AppHandle) -> Result<Vec<Value>, String> {
+    let dir = notes_dir(app)?;
+    let entries = fs::read_dir(&dir).map_err(|e| format!("cannot read {}: {e}", dir.display()))?;
+
+    // Every parsed file, grouped by the note id INSIDE the file (not the file
+    // name): a Drive conflict copy "<id> (1).json" carries the same id.
+    let mut by_id: HashMap<String, Vec<(PathBuf, Value)>> = HashMap::new();
+    // Unreadable files are skipped so one bad file cannot sink the whole
+    // list, but they are no longer skipped silently: a note that "vanished"
+    // took a day to trace back to a corrupt file nobody had been told about.
+    let mut unreadable: Vec<String> = Vec::new();
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("json") {
+            continue; // .tmp (in-flight write), .bak (parked loser), etc.
+        }
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("?").to_string();
+        let parsed = fs::read_to_string(&path)
+            .map_err(|e| e.to_string())
+            .and_then(|txt| serde_json::from_str::<Value>(&txt).map_err(|e| e.to_string()));
+        match parsed {
+            Ok(v) => match v.get("id").and_then(Value::as_str) {
+                Some(id) => by_id.entry(id.to_string()).or_default().push((path, v)),
+                None => unreadable.push(format!("{name}: no \"id\" field")),
+            },
+            Err(e) => unreadable.push(format!("{name}: {e}")),
+        }
+    }
+
+    if !unreadable.is_empty() {
+        eprintln!(
+            "[notezzz] list_notes: skipped {} unreadable note file(s) in {}:\n  {}",
+            unreadable.len(),
+            dir.display(),
+            unreadable.join("\n  ")
+        );
+    }
+
     let mut out = Vec::new();
-    if let Ok(entries) = fs::read_dir(&dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) != Some("json") {
+    for (id, mut copies) in by_id {
+        let canonical = match safe_id(&id) {
+            Ok(s) => dir.join(format!("{s}.json")),
+            Err(e) => {
+                eprintln!("[notezzz] list_notes: {e}");
                 continue;
             }
-            // Skip Google Drive conflict copies ("<id> (1).json") when the
-            // canonical file exists — they resurrect stale content and would
-            // collide on note id. Left on disk rather than deleted.
-            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                if let Some(base) = stem.rsplit_once(" (").and_then(|(b, rest)| {
-                    rest.strip_suffix(')').filter(|n| n.chars().all(|c| c.is_ascii_digit())).map(|_| b)
-                }) {
-                    if dir.join(format!("{base}.json")).exists() {
-                        continue;
-                    }
-                }
+        };
+        // Drive conflict copies: the "(1)" copy used to be skipped whenever
+        // the canonical file existed, but it is frequently the NEWER edit
+        // from the other device. Keep the copy with the highest updatedAt
+        // (ties go to the canonical file), park every loser as .bak, and
+        // promote the winner to "<id>.json" so save/delete keep addressing it.
+        copies.sort_by_key(|(p, v)| (std::cmp::Reverse(updated_at(v)), *p != canonical));
+        let (winner_path, winner) = copies.swap_remove(0);
+        for (loser, _) in copies {
+            let bak = bak_path(&loser);
+            if let Err(e) = fs::rename(&loser, &bak) {
+                eprintln!("[notezzz] list_notes: cannot park {} as {}: {e}", loser.display(), bak.display());
             }
-            if let Ok(txt) = fs::read_to_string(&path) {
-                if let Ok(v) = serde_json::from_str::<Value>(&txt) {
-                    let deleted = v.get("deleted").and_then(Value::as_bool).unwrap_or(false);
-                    if !deleted {
-                        out.push(v);
-                    }
-                }
+        }
+        if winner_path != canonical {
+            if let Err(e) = fs::rename(&winner_path, &canonical) {
+                eprintln!(
+                    "[notezzz] list_notes: cannot promote {} to {}: {e}",
+                    winner_path.display(),
+                    canonical.display()
+                );
             }
+        }
+        let deleted = winner.get("deleted").and_then(Value::as_bool).unwrap_or(false);
+        if !deleted {
+            out.push(winner);
         }
     }
     Ok(out)
+}
+
+#[tauri::command]
+async fn list_notes(app: tauri::AppHandle) -> Result<Vec<Value>, String> {
+    // Directory scan + parsing every note ran on the main thread and froze
+    // every window (stickies included) for the duration on a large or slow
+    // (Drive-backed) folder. Same pattern as google_sign_in.
+    tauri::async_runtime::spawn_blocking(move || list_notes_blocking(&app))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -103,14 +220,14 @@ fn save_note(app: tauri::AppHandle, note: Value) -> Result<(), String> {
         .get("id")
         .and_then(Value::as_str)
         .ok_or("note is missing an id")?;
-    let path = notes_dir(&app).join(format!("{}.json", safe_id(id)));
+    let path = notes_dir(&app)?.join(format!("{}.json", safe_id(id)?));
     let txt = serde_json::to_string_pretty(&note).map_err(|e| e.to_string())?;
-    fs::write(path, txt).map_err(|e| e.to_string())
+    write_atomic(&path, &txt)
 }
 
 #[tauri::command]
 fn delete_note(app: tauri::AppHandle, id: String) -> Result<(), String> {
-    let path = notes_dir(&app).join(format!("{}.json", safe_id(&id)));
+    let path = notes_dir(&app)?.join(format!("{}.json", safe_id(&id)?));
     if path.exists() {
         fs::remove_file(path).map_err(|e| e.to_string())?;
     }
@@ -119,7 +236,7 @@ fn delete_note(app: tauri::AppHandle, id: String) -> Result<(), String> {
 
 #[tauri::command]
 fn load_settings(app: tauri::AppHandle) -> Result<Option<Value>, String> {
-    let path = base_dir(&app).join("settings.json");
+    let path = base_dir(&app)?.join("settings.json");
     match fs::read_to_string(path) {
         Ok(txt) => serde_json::from_str(&txt).map(Some).map_err(|e| e.to_string()),
         Err(_) => Ok(None),
@@ -128,21 +245,26 @@ fn load_settings(app: tauri::AppHandle) -> Result<Option<Value>, String> {
 
 #[tauri::command]
 fn save_settings(app: tauri::AppHandle, settings: Value) -> Result<(), String> {
-    let path = base_dir(&app).join("settings.json");
+    let path = base_dir(&app)?.join("settings.json");
     let txt = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
-    fs::write(path, txt).map_err(|e| e.to_string())
+    write_atomic(&path, &txt)
 }
 
 #[tauri::command]
-fn get_sync_folder(app: tauri::AppHandle) -> Option<String> {
-    read_sync_folder(&app).map(|p| p.to_string_lossy().into_owned())
+fn get_sync_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    Ok(read_sync_folder(&app)?.map(|p| p.to_string_lossy().into_owned()))
 }
 
 #[tauri::command]
 fn set_sync_folder(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    // Refuse up front: once configured, a missing folder is a hard error for
+    // every storage command (see base_dir), so never configure one blindly.
+    if !Path::new(&path).is_dir() {
+        return Err(format!("Sync folder unavailable: {path}"));
+    }
     let cfg = serde_json::json!({ "syncFolder": path });
     let txt = serde_json::to_string_pretty(&cfg).map_err(|e| e.to_string())?;
-    fs::write(config_file(&app), txt).map_err(|e| e.to_string())
+    write_atomic(&config_file(&app)?, &txt)
 }
 
 // ----------------------------------------------------------------------------
@@ -165,22 +287,33 @@ async fn google_sign_in(
 }
 
 #[tauri::command]
-fn google_token(
+async fn google_token(
     app: tauri::AppHandle,
     client_id: String,
     client_secret: String,
 ) -> Result<String, String> {
-    gauth::valid_access_token(&app, &client_id, &client_secret)
+    // The refresh is a network round-trip to Google; done synchronously it
+    // held the main thread and every window went "Not Responding" until the
+    // request finished (or, before timeouts, forever on a stalled connection).
+    tauri::async_runtime::spawn_blocking(move || {
+        gauth::valid_access_token(&app, &client_id, &client_secret)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
+/// Signed-in account, or None when no tokens are stored. The email may be ""
+/// when the userinfo lookup failed at sign-in (gauth::sign_in keeps the
+/// tokens regardless) — still Some, because "signed in" means tokens exist.
+/// desktopAuth.ts substitutes a placeholder label for the empty string.
 #[tauri::command]
 fn google_account(app: tauri::AppHandle) -> Option<String> {
-    gauth::load_tokens(&app).map(|t| t.email).filter(|e| !e.is_empty())
+    gauth::load_tokens(&app).map(|t| t.email)
 }
 
 #[tauri::command]
-fn google_sign_out(app: tauri::AppHandle) {
-    gauth::clear_tokens(&app);
+fn google_sign_out(app: tauri::AppHandle) -> Result<(), String> {
+    gauth::clear_tokens(&app)
 }
 
 // Sticky note windows are created from the frontend via the WebviewWindow JS

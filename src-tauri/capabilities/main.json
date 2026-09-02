@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "default",
-  "description": "Capabilities for the main window and sticky note windows",
-  "windows": ["main", "sticky-*"],
+  "identifier": "main",
+  "description": "Main window: full set. Only this window may create webview windows (stickies) and touch dialog/opener/autostart.",
+  "windows": ["main"],
   "permissions": [
     "core:default",
     "core:event:default",
