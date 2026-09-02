@@ -543,3 +543,58 @@ test('an edit made elsewhere lands in an editor that is already open', async ({ 
   await page.getByTestId('sync-now').click();
   await expect(page.locator('.ProseMirror')).toContainText('added from my phone');
 });
+
+test('a dead Google session does not flash the sign-in screen over cached notes', async ({
+  page,
+}) => {
+  // Restarting on mobile after the token has aged out: the renewal happens in
+  // the background, and when it fails the app used to jump to the full
+  // sign-in screen -- over notes it could already show. Sign-in belongs
+  // behind a deliberate tap, not in front of the notes.
+  await page.addInitScript(() => {
+    localStorage.setItem('notezzz:hasAuthed', '1');
+    localStorage.setItem('notezzz:tok', JSON.stringify({ t: 'stale', e: Date.now() + 3_600_000 }));
+    localStorage.setItem(
+      'notezzz:cache:notes',
+      JSON.stringify([
+        {
+          id: 'cached-1',
+          title: 'From yesterday',
+          contentHtml: '<p>still here</p>',
+          paletteId: 'paper',
+          fontSize: 18,
+          pinned: false,
+          opacity: 1,
+          win: null,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ])
+    );
+  });
+  // Stand in for Google Identity Services reporting an interrupted silent
+  // renewal -- what actually happens when the session has aged out and
+  // background code (no user gesture) asks for a token.
+  await page.addInitScript(() => {
+    (window as unknown as { google: unknown }).google = {
+      accounts: {
+        oauth2: {
+          initTokenClient: (cfg: { error_callback?: (e: unknown) => void }) => ({
+            requestAccessToken: () =>
+              setTimeout(() => cfg.error_callback?.({ type: 'popup_closed_by_user' }), 10),
+          }),
+        },
+      },
+    };
+  });
+  await page.route('**://www.googleapis.com/**', (r) =>
+    r.fulfill({ status: 401, body: '{"error":"invalid_credentials"}' })
+  );
+
+  await page.goto('/');
+
+  await expect(page.getByTestId('note-title')).toHaveText('From yesterday');
+  await expect(page.getByTestId('open-local')).toBeHidden();
+  // The way back is a real tap on Reconnect, which is allowed to be interactive.
+  await expect(page.getByTestId('reconnect')).toBeVisible();
+});

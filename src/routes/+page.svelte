@@ -19,9 +19,14 @@
     store.mobileOpen = (page.state as { fs?: boolean }).fs === true;
   });
 
-  // If loading failed because the Google session is dead (revoked token,
-  // blocked silent popup, auth timeout), drop back to the sign-in gate — one
-  // real tap re-auths cleanly, which background code is not allowed to do.
+  // The Google session dies roughly hourly, so most launches begin with a
+  // silent renewal — and background code is not allowed to open the
+  // interactive flow, so that renewal can simply fail. Mark the token stale
+  // so the next attempt re-auths properly, but do NOT put the sign-in screen
+  // in front of someone who has notes on screen: that flash, over content
+  // that was already usable, is the whole complaint. The sync banner's
+  // Reconnect button is the way back, and a real tap is allowed to be
+  // interactive. Gate only when there is genuinely nothing to show.
   $effect(() => {
     if (
       store.syncStatus === 'error' &&
@@ -30,6 +35,7 @@
       !localMode
     ) {
       void import('$lib/drive/auth').then(({ markTokenStale }) => markTokenStale());
+      if (store.notes.length) return;
       booted = false;
       authed = false;
     }
