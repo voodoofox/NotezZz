@@ -31,7 +31,7 @@
     {:else if state.kind === 'installing'}
       Installing… {state.percent}%
     {:else if state.kind === 'restart'}
-      Installed. Restart NotezZz to finish.
+      Installing… NotezZz will restart itself.
     {:else if state.kind === 'error'}
       Couldn't check for updates: {state.message}
     {/if}

@@ -5,6 +5,8 @@
   import type { Note } from '$lib/types';
   import Settings from './Settings.svelte';
   import Icon from './Icon.svelte';
+  import { updates } from '$lib/update.svelte';
+  import { installUpdate } from '$lib/updater';
 
   let showSettings = $state(false);
   let searching = $state(false);
@@ -85,6 +87,17 @@
     if (i === -1 || j < 0 || j >= ids.length) return;
     [ids[i], ids[j]] = [ids[j], ids[i]];
     void store.reorder(ids);
+  }
+
+  let installing = $state<number | null>(null);
+  let installError = $state('');
+  async function installNow() {
+    store.flush(); // the process exits as the installer starts
+    installing = 0;
+    installError = '';
+    const r = await installUpdate((p) => (installing = p));
+    if (r.kind === 'error') installError = r.message;
+    installing = null;
   }
 
   let syncing = $state(false);
@@ -201,6 +214,20 @@
 
   <!-- Sync is invisible when healthy; only problems earn screen space
        (full status always available in Settings -> Diagnostics). -->
+  {#if updates.available && !updates.dismissed}
+    <div class="sync-err update" data-testid="update-banner">
+      {#if installing !== null}
+        Installing v{updates.available.version}… {installing}%
+      {:else}
+        NotezZz v{updates.available.version} is ready to install.
+        {#if installError}<br />{installError}{/if}
+        <span class="row">
+          <button class="reconnect" data-testid="update-banner-install" onclick={installNow}>Install</button>
+          <button class="later" onclick={() => (updates.dismissed = true)}>Later</button>
+        </span>
+      {/if}
+    </div>
+  {/if}
   {#if store.syncStatus === 'error'}
     <div class="sync-err" data-testid="sync-error" title={store.syncError}>
       {store.syncError || 'Sync failed.'}
@@ -415,6 +442,29 @@
     max-height: 110px;
     overflow: auto;
     flex-shrink: 0;
+  }
+  /* An update is news, not an error: app ink instead of the danger colour. */
+  .sync-err.update {
+    color: var(--app-fg);
+  }
+  .row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .row .reconnect {
+    margin-top: 6px;
+  }
+  .later {
+    margin-top: 6px;
+    font: inherit;
+    font-size: 13px;
+    padding: 5px 10px;
+    border: 1px solid var(--app-border);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--app-fg);
+    cursor: pointer;
   }
   .reconnect {
     display: block;

@@ -9,6 +9,7 @@
   import ShareIntake from '$lib/components/ShareIntake.svelte';
   import { page } from '$app/state';
   import { hasPriorAuth, isDriveAuthed, signIn, tokenExpiringSoon } from '$lib/drive/auth';
+  import { scheduleUpdateChecks } from '$lib/update.svelte';
 
   /** Text arriving via the Android share sheet (see routes/share). */
   let sharedText = $state<string | null>(null);
@@ -80,6 +81,8 @@
       const { listen } = await import('@tauri-apps/api/event');
       await listen('tray-new-note', () => store.create());
       window.addEventListener('focus', () => void store.reload());
+      // "Updates itself" has to mean it looks without being asked.
+      scheduleUpdateChecks();
     } else if (!localMode) {
       // Renew the Google token when the user RETURNS to the app if it's close
       // to expiry — the silent-refresh popup blink happens at open, not while

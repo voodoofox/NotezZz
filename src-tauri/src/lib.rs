@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 mod fullscreen;
 mod gauth;
+mod updates;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
@@ -403,6 +404,8 @@ pub fn run() {
             google_token,
             google_account,
             google_sign_out,
+            updates::check_update,
+            updates::install_update,
         ])
         .setup(|app| {
             build_tray(app.handle())?;

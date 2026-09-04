@@ -25,6 +25,11 @@ export function initDiag(): void {
   };
 }
 
+/** Leave a line for the Diagnostics panel (update checks, sync milestones). */
+export function logDiag(line: string): void {
+  push(line);
+}
+
 export function getDiag(): readonly string[] {
   return buf;
 }
