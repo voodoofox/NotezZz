@@ -11,6 +11,8 @@ import type { Note, Settings } from '../types';
 export interface StorageBackend {
   readonly kind: 'local' | 'fs' | 'drive';
   listNotes(): Promise<Note[]>;
+  /** One note, fresh from storage. Backends without a cheap single read may omit it. */
+  getNote?(id: string): Promise<Note | null>;
   saveNote(note: Note): Promise<void>;
   deleteNote(id: string): Promise<void>;
   loadSettings(): Promise<Settings | null>;

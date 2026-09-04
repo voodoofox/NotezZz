@@ -16,7 +16,16 @@
 
 import type { Note } from './types';
 
-export type OutboxOp = { kind: 'save'; note: Note } | { kind: 'delete'; id: string };
+export type OutboxOp =
+  | { kind: 'save'; note: Note }
+  | { kind: 'delete'; id: string }
+  /**
+   * Add HTML to the end of a note, whatever it currently says. Performed
+   * against a freshly fetched copy, so the share sheet can close the moment
+   * the user taps instead of waiting for a full sync — and so appending on a
+   * phone can never write yesterday's cached text back over today's edits.
+   */
+  | { kind: 'append'; id: string; html: string; pin: boolean };
 
 type Failed = { op: OutboxOp; attempts: number; nextAt: number };
 
@@ -111,6 +120,17 @@ export class Outbox {
   retryAll(): void {
     for (const f of this.#failed.values()) f.nextAt = 0;
     this.retryDue();
+  }
+
+  /**
+   * Resolves once nothing is queued or executing, or after maxMs. Failed ops
+   * waiting on backoff don't count: offline must not stall the caller.
+   */
+  async idle(maxMs: number): Promise<void> {
+    const until = Date.now() + maxMs;
+    while (this.busy && Date.now() < until) {
+      await new Promise((r) => setTimeout(r, 25));
+    }
   }
 
   /** Bring back whatever a previous page load left unlanded. */

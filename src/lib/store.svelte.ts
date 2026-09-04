@@ -164,6 +164,10 @@ class AppStore {
     // Writes a previous page load never finished (closed mid-upload, offline)
     // go first, so the list we fetch below already reflects them where it can.
     this.#outbox.restore();
+    // Let them land before we read, or the list comes back without them and
+    // the screen shows the old copy until the next poll. Bounded: offline,
+    // they fail fast and the merge keeps them as pending instead.
+    await this.#outbox.idle(3000);
     try {
       // Watchdog: whatever goes wrong below, "Loading…" may never be forever —
       // surface an error (with its Reconnect button) instead.
@@ -346,11 +350,57 @@ class AppStore {
     if (!this.#backend) await this.#ready;
     if (!this.#backend) throw new Error('No storage available');
     if (op.kind === 'delete') return this.#backend.deleteNote(op.id);
+    if (op.kind === 'append') return this.#performAppend(op);
     // A save that was queued before the note was deleted must not resurrect
     // it: this was the "deleted notes come back" bug in its original form.
     if (this.#isDeleted(op.note.id)) return;
     this.#cacheNotes(); // instant-start cache stays current even if Drive lags
     await this.#backend.saveNote(op.note);
+  }
+
+  /**
+   * Fetch the note as storage has it NOW, add the text, write it back. Never
+   * from the on-screen list: an op restored on a fresh launch runs before the
+   * list has loaded, and the screen copy can be stale on any launch.
+   */
+  async #performAppend(op: Extract<OutboxOp, { kind: 'append' }>) {
+    if (!this.#backend || this.#isDeleted(op.id)) return;
+    const fresh = this.#backend.getNote
+      ? await this.#backend.getNote(op.id)
+      : ((await this.#backend.listNotes()).find((n) => n.id === op.id) ?? null);
+    if (!fresh) return; // deleted elsewhere meanwhile: nothing to append to
+    const next: Note = {
+      ...$state.snapshot(fresh),
+      contentHtml: (fresh.contentHtml || '') + op.html,
+      pinned: fresh.pinned || op.pin,
+      updatedAt: Date.now(),
+    };
+    if (op.pin && !fresh.pinned) next.tilt = rollTilt();
+    await this.#backend.saveNote(next);
+    // Show the result and tell the other windows; a pin arriving this way
+    // needs its sticky opened, same as one that arrived from another device.
+    const idx = this.notes.findIndex((n) => n.id === op.id);
+    if (idx !== -1) this.notes[idx] = next;
+    this.#cacheNotes();
+    void broadcastChange({ note: next });
+    if (op.pin && !fresh.pinned) void openSticky(next);
+  }
+
+  /**
+   * Append text to a note without waiting for anything: the share sheet's
+   * "…or append to" path. Queued like any write, so it lands when the
+   * network does and survives the page closing.
+   */
+  appendTo(id: string, html: string, pin = false): Promise<void> {
+    if (this.isCloud) this.syncStatus = 'saving';
+    // Optimistic paint so the note reads right immediately; the queued op
+    // re-derives from fresh content when it runs.
+    const idx = this.notes.findIndex((n) => n.id === id);
+    if (idx !== -1) {
+      const n = this.notes[idx];
+      this.notes[idx] = { ...n, contentHtml: (n.contentHtml || '') + html, pinned: n.pinned || pin };
+    }
+    return this.#outbox.push({ kind: 'append', id, html, pin });
   }
 
   #settled(ok: boolean, e?: unknown) {

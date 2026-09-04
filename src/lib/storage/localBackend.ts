@@ -26,6 +26,15 @@ export class LocalBackend implements StorageBackend {
     return notes.sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
+  async getNote(id: string): Promise<Note | null> {
+    try {
+      const raw = localStorage.getItem(NOTE_PREFIX + id);
+      return raw ? (JSON.parse(raw) as Note) : null;
+    } catch {
+      return null;
+    }
+  }
+
   async saveNote(note: Note): Promise<void> {
     // Test hook: the E2E suite flips this to prove a failed write is retried
     // rather than discarded. Nothing in the app sets it.

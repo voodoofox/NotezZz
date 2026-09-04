@@ -13,6 +13,11 @@ export class FsBackend implements StorageBackend {
     return await invoke<Note[]>('list_notes');
   }
 
+  async getNote(id: string): Promise<Note | null> {
+    // Local files: a full list is one IPC call, no need for a dedicated command.
+    return (await this.listNotes()).find((n) => n.id === id) ?? null;
+  }
+
   async saveNote(note: Note): Promise<void> {
     await invoke('save_note', { note });
   }

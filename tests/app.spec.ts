@@ -739,3 +739,33 @@ test('switching notes mid-recording stops the recording cleanly', async ({ page 
   await expect(page.locator('.ProseMirror .nz-audio')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test('appending a share closes at once and lands on the note', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Target');
+  await page.waitForTimeout(500); // per-note save debounce
+  await page.evaluate(() => localStorage.setItem('notezzz:pendingShare', 'appended line'));
+  await page.reload();
+  await page.getByTestId('share-append-item').first().click();
+  await expect(page.getByTestId('share-overlay')).toBeHidden();
+  await expect(page.locator('.ProseMirror')).toContainText('appended line');
+  await page.goto('/?local'); // it reached storage, not just the screen
+  await expect(page.locator('.ProseMirror')).toContainText('appended line');
+});
+
+test('an append queued while storage is down lands when it recovers', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Target');
+  await page.waitForTimeout(500);
+  await page.evaluate(() => {
+    localStorage.setItem('notezzz:pendingShare', 'late arrival');
+    localStorage.setItem('notezzz:test:failSaves', '1');
+  });
+  await page.reload();
+  await page.getByTestId('share-append-item').first().click();
+  await expect(page.getByTestId('share-overlay')).toBeHidden();
+  await expect(page.getByTestId('sync-error')).toBeVisible();
+  await page.evaluate(() => localStorage.removeItem('notezzz:test:failSaves'));
+  await page.goto('/?local'); // queue restores and drains on the next launch
+  await expect(page.locator('.ProseMirror')).toContainText('late arrival');
+});

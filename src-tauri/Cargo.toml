@@ -3,7 +3,7 @@ name = "notezzz"
 # Single source of the app version: tauri.conf.json has no "version" key and
 # inherits this one. Keep in step with package.json (deploy-site.ps1 reads
 # that to find the installer, which is named after THIS value).
-version = "0.17.0"
+version = "0.17.1"
 description = "NotezZz — fast sticky notes"
 authors = ["voodoofox"]
 edition = "2021"
@@ -39,3 +39,6 @@ tauri-plugin-process = "2.3.1"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2"
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi"] }

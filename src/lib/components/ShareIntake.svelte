@@ -33,25 +33,14 @@
     onDone();
   }
 
-  /**
-   * Appending is the one action that can't run on cached content: the copy
-   * shown in this list may predate an edit made on another device, and
-   * writing old text back with new text on the end would erase it. So wait
-   * for the real note to land — the user has already chosen by then.
-   */
   let appending = $state<string | null>(null);
-  async function appendTo(id: string) {
-    appending = id;
-    await store.whenReady();
-    const note = store.notes.find((n) => n.id === id);
-    if (note) {
-      store.update(id, {
-        contentHtml: (note.contentHtml || '') + asHtml(),
-        ...(pinIt ? { pinned: true } : {}),
-      });
-      store.activeId = id;
-    }
-    appending = null;
+  function appendTo(id: string) {
+    // Queued as an append op: it fetches the note fresh when it runs, so
+    // there is nothing to wait for here. On a phone with a slow connection
+    // the old "wait for the full sync first" left this row saying "adding…"
+    // for as long as the whole account took to download.
+    void store.appendTo(id, asHtml(), pinIt);
+    store.activeId = id;
     onDone();
   }
 </script>

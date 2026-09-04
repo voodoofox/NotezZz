@@ -303,6 +303,16 @@ export class DriveBackend implements StorageBackend {
     return 'failed';
   }
 
+  async getNote(id: string): Promise<Note | null> {
+    const folderId = await this.#notesFolder();
+    const fileId = this.#ids.get(id) ?? (await this.#findByName(`${id}.json`, folderId));
+    if (!fileId) return null;
+    const res = await authFetch(`${API}/files/${fileId}?alt=media`);
+    const note = (await res.json()) as Note;
+    this.#ids.set(id, fileId);
+    return note?.id ? note : null;
+  }
+
   async saveNote(note: Note): Promise<void> {
     const folderId = await this.#notesFolder();
     let fileId = this.#ids.get(note.id) ?? (await this.#findByName(`${note.id}.json`, folderId));

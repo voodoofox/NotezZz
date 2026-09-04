@@ -7,6 +7,7 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
+mod fullscreen;
 mod gauth;
 
 use tauri::menu::{Menu, MenuItem};
@@ -405,6 +406,8 @@ pub fn run() {
         ])
         .setup(|app| {
             build_tray(app.handle())?;
+            // Stickies step aside for fullscreen video/games (see fullscreen.rs).
+            fullscreen::watch(app.handle().clone());
 
             // Closing the main window hides it to the tray instead of quitting.
             if let Some(main) = app.get_webview_window("main") {
