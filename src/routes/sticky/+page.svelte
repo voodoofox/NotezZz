@@ -117,7 +117,7 @@
       --note-accent: {pal.accent};
     "
   >
-    <header class="bar" data-tauri-drag-region>
+    <header class="bar {pal.pattern ? `nz-pat-${pal.pattern}` : ''}" data-tauri-drag-region>
       <span class="ttl" data-tauri-drag-region>{note.title || 'Note'}</span>
       <button class="x" title="Unpin (close sticker)" aria-label="Unpin" onclick={unpin}>
         <Icon name="close" size={15} />
@@ -165,7 +165,8 @@
     align-items: center;
     gap: 6px;
     padding: 4px 6px 4px 10px;
-    background: var(--note-header);
+    /* -color, not the shorthand: the shorthand would wipe a pattern's background-image */
+    background-color: var(--note-header);
     cursor: move;
     user-select: none;
   }

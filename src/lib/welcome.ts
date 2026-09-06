@@ -35,7 +35,7 @@ const welcome = (cloud: boolean): Array<Pick<Note, 'id' | 'title' | 'contentHtml
   {
     id: 'welcome-pin',
     title: 'Pin it to your desktop',
-    paletteId: 'mint',
+    paletteId: 'teal',
     contentHtml: [
       '<p>Tap the <strong>pin</strong> on any note in the list and it becomes a sticker on your PC desktop — always on top, out of the way of everything else.</p>',
       '<p>The good part: pin it <strong>from your phone</strong> and it appears on your PC. Share something to NotezZz from any Android app, tick <em>Pin it to my desktop</em>, and it is waiting on your screen when you sit down.</p>',

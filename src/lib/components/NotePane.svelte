@@ -3,7 +3,7 @@
   import { page } from '$app/state';
   import { store } from '$lib/store.svelte';
   import { isTauri } from '$lib/storage/backend';
-  import { PALETTES, getPalette, hslToHex, hexToHsl } from '$lib/palettes';
+  import { PALETTES, PATTERNS, getPalette, hslToHex, hexToHsl } from '$lib/palettes';
   import Editor from './Editor.svelte';
   import Icon from './Icon.svelte';
 
@@ -90,7 +90,7 @@
       color-scheme: {pal.dark ? 'dark' : 'light'};
     "
   >
-    <div class="topbar">
+    <div class="topbar {pal.pattern ? `nz-pat-${pal.pattern}` : ''}">
       {#if fullscreen}
         <button
           class="icon mob"
@@ -134,6 +134,27 @@
                   data-testid="palette-chip"
                   data-palette={p.id}
                   style="background: {p.bg}"
+                  title={p.name}
+                  aria-label={p.name}
+                  onclick={() => {
+                    store.update(note!.id, { paletteId: p.id });
+                    openPop = null;
+                  }}
+                >
+                  {#if note.paletteId === p.id}
+                    <span class="pcheck" style="color: {p.fg}"><Icon name="check" size={15} /></span>
+                  {/if}
+                </button>
+              {/each}
+              <!-- Nine colours in a five-wide grid: this holds the tenth slot so
+                   the patterns are the whole third row, not a wrapped tail. -->
+              <span class="pchip spacer" aria-hidden="true"></span>
+              {#each PATTERNS as p}
+                <button
+                  class="pchip nz-pat-{p.pattern}"
+                  data-testid="palette-chip"
+                  data-palette={p.id}
+                  style="--pat-base: {p.header}; --pat-ink: color-mix(in srgb, {p.fg} 34%, {p.header})"
                   title={p.name}
                   aria-label={p.name}
                   onclick={() => {
@@ -298,7 +319,8 @@
     align-items: center;
     gap: 6px;
     padding: 8px 18px 8px 12px; /* insets: left matches list, right keeps trash off the edge */
-    background: var(--note-header);
+    /* -color, not the shorthand: the shorthand would wipe a pattern's background-image */
+    background-color: var(--note-header);
   }
   .title {
     flex: 1 1 0;
@@ -406,8 +428,16 @@
   .pchip.current {
     cursor: default;
   }
+  .pchip.spacer {
+    visibility: hidden;
+  }
   .pcheck {
     display: inline-flex;
+  }
+  [class*='nz-pat-'] .pcheck {
+    background: var(--pat-base);
+    border-radius: var(--radius-sm);
+    padding: 1px;
   }
   /* Inline custom color: hue wheel flattened into a slider + shade. */
   .crow {

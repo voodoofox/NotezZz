@@ -95,12 +95,12 @@ test('changing palette updates the note color live (the frozen-UI bug)', async (
   const pane = page.getByTestId('note-pane');
   await expect(pane).toHaveAttribute('data-palette', 'paper');
   await page.getByTestId('note-color').click(); // open the color popover
-  await page.locator('[data-testid="palette-chip"][data-palette="mint"]').click();
-  await expect(pane).toHaveAttribute('data-palette', 'mint');
-  // Mint bg (#C2F0CD) actually paints:
-  await expect(pane).toHaveCSS('background-color', 'rgb(194, 240, 205)');
+  await page.locator('[data-testid="palette-chip"][data-palette="sky"]').click();
+  await expect(pane).toHaveAttribute('data-palette', 'sky');
+  // Sky bg (#C2D9F0) actually paints:
+  await expect(pane).toHaveCSS('background-color', 'rgb(194, 217, 240)');
   // And the sidebar swatch recolors too:
-  await expect(page.getByTestId('note-swatch')).toHaveCSS('background-color', 'rgb(194, 240, 205)');
+  await expect(page.getByTestId('note-swatch')).toHaveCSS('background-color', 'rgb(194, 217, 240)');
 });
 
 test('image import inserts a picture into the note', async ({ page }) => {
@@ -768,4 +768,33 @@ test('an append queued while storage is down lands when it recovers', async ({ p
   await page.evaluate(() => localStorage.removeItem('notezzz:test:failSaves'));
   await page.goto('/?local'); // queue restores and drains on the next launch
   await expect(page.locator('.ProseMirror')).toContainText('late arrival');
+});
+
+test('a pixel pattern paints the title bar and the selected row', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('note-color').click();
+  await expect(page.locator('[data-testid="palette-chip"][data-palette^="pattern:"]')).toHaveCount(5);
+  await page.locator('[data-testid="palette-chip"][data-palette="pattern:checker"]').click();
+
+  const pane = page.getByTestId('note-pane');
+  await expect(pane).toHaveAttribute('data-palette', 'pattern:checker');
+  // The body stays flat; the pattern lives on the title bar...
+  const topbar = pane.locator('.topbar');
+  await expect(topbar).toHaveClass(/nz-pat-checker/);
+  expect(await topbar.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('conic-gradient');
+  expect(await topbar.evaluate((el) => getComputedStyle(el).animationName)).toBe('nz-drift-diag');
+  // ...and on the note's row in the list, which is selected right now.
+  const row = page.getByTestId('note-item').first();
+  await expect(row).toHaveClass(/active/);
+  expect(await row.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('conic-gradient');
+  // Retired palette ids still open (they fall back to Paper).
+  await page.waitForTimeout(500); // let the debounced save land before rewriting storage
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!;
+    const n = JSON.parse(localStorage.getItem(key)!);
+    n.paletteId = 'mint';
+    localStorage.setItem(key, JSON.stringify(n));
+  });
+  await page.goto('/?local');
+  await expect(page.getByTestId('note-pane')).toHaveCSS('background-color', 'rgb(251, 250, 246)');
 });

@@ -14,7 +14,11 @@ export interface Palette {
   accent: string;
   /** True for dark-on-light inversion. */
   dark?: boolean;
+  /** Pixel pattern painted over the header and list selection (see app.css). */
+  pattern?: PatternId;
 }
+
+export type PatternId = 'checker' | 'stripes' | 'dots' | 'stairs' | 'bricks';
 
 // The seven hues are evenly stepped around the color wheel (15° → 330°) with
 // IDENTICAL saturation/lightness (hsl S60 L85 bg, S55 L78 header, S35 L20
@@ -25,7 +29,6 @@ export const PALETTES: Palette[] = [
   { id: 'coral',     name: 'Coral',     bg: '#F0CDC2', header: '#E6B7A8', fg: '#452A21', accent: '#A64E30' },
   { id: 'sunflower', name: 'Sunflower', bg: '#F0E7C2', header: '#E6D9A8', fg: '#453E21', accent: '#A68E30' },
   { id: 'lime',      name: 'Lime',      bg: '#D9F0C2', header: '#C7E6A8', fg: '#334521', accent: '#6BA630' },
-  { id: 'mint',      name: 'Mint',      bg: '#C2F0CD', header: '#A8E6B7', fg: '#21452A', accent: '#30A64E' },
   { id: 'teal',      name: 'Teal',      bg: '#C2F0EC', header: '#A8E6E1', fg: '#214542', accent: '#30A69C' },
   { id: 'sky',       name: 'Sky',       bg: '#C2D9F0', header: '#A8C7E6', fg: '#213345', accent: '#306BA6' },
   { id: 'lavender',  name: 'Lavender',  bg: '#D3C2F0', header: '#BFA8E6', fg: '#2E2145', accent: '#5B30A6' },
@@ -35,9 +38,26 @@ export const PALETTES: Palette[] = [
 
 export const PALETTE_MAP = new Map(PALETTES.map((p) => [p.id, p]));
 
+/**
+ * Patterns: the third row of the picker. Each is a pixel texture (drawn in
+ * app.css as `.nz-pat-<id>`) that animates across the note's title bar and
+ * its row in the list when selected. The body stays a flat colour so text
+ * stays readable; the pattern is the note's identity, not its wallpaper.
+ * Ids are `pattern:<id>`, alongside `custom:<hex>`.
+ */
+export const PATTERNS: Palette[] = [
+  { id: 'pattern:checker', name: 'Checker', pattern: 'checker', bg: '#D3C2F0', header: '#C3AEE6', fg: '#2E2145', accent: '#2E2145' },
+  { id: 'pattern:stripes', name: 'Stripes', pattern: 'stripes', bg: '#F0E7C2', header: '#E3D6A0', fg: '#453E21', accent: '#453E21' },
+  { id: 'pattern:dots',    name: 'Dots',    pattern: 'dots',    bg: '#F0C2D9', header: '#E3A4C1', fg: '#452133', accent: '#452133' },
+  { id: 'pattern:stairs',  name: 'Stairs',  pattern: 'stairs',  bg: '#C2D9F0', header: '#A3C2E2', fg: '#213345', accent: '#213345' },
+  { id: 'pattern:bricks',  name: 'Bricks',  pattern: 'bricks',  bg: '#F0CDC2', header: '#E2B1A2', fg: '#452A21', accent: '#452A21' },
+];
+const PATTERN_MAP = new Map(PATTERNS.map((p) => [p.id, p]));
+
 export function getPalette(id: string): Palette {
   if (id?.startsWith('custom:')) return customPalette(id.slice(7));
-  return PALETTE_MAP.get(id) ?? PALETTES[0];
+  // Retired ids (mint) fall back to Paper rather than breaking old notes.
+  return PALETTE_MAP.get(id) ?? PATTERN_MAP.get(id) ?? PALETTES[0];
 }
 
 /** Any hex from the color picker becomes a full note palette: contrast-safe

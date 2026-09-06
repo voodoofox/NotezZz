@@ -174,21 +174,21 @@
     {#each visibleNotes as note (note.id)}
       {@const pal = getPalette(note.paletteId)}
       <div
-        class="item"
+        class="item {note.id === store.activeId && pal.pattern ? `nz-pat-${pal.pattern}` : ''}"
         data-testid="note-item"
         role="listitem"
         class:active={note.id === store.activeId}
         class:dragging={dragId === note.id}
-        style="--swatch: {pal.bg}"
+        style="--swatch: {pal.pattern ? pal.header : pal.bg}"
       >
         <span
-          class="swatch"
+          class="swatch {pal.pattern ? `nz-pat-${pal.pattern}` : ''}"
           data-testid="note-swatch"
           role="button"
           tabindex="0"
           title="Drag to reorder (keyboard: Alt+Arrow Up/Down)"
           aria-label="Reorder {noteLabel(note)}: drag, or Alt+Arrow Up/Down"
-          style="background: {pal.bg}"
+          style="background-color: {pal.pattern ? pal.header : pal.bg}; --pat-base: {pal.header}; --pat-ink: color-mix(in srgb, {pal.fg} 42%, {pal.header})"
           onpointerdown={(e) => startDrag(e, note.id)}
           onkeydown={(e) => keyMove(e, note.id)}
         ></span>
@@ -328,20 +328,24 @@
     color: var(--app-fg);
   }
   .item:hover {
-    background: var(--app-bg);
+    background-color: var(--app-bg);
   }
   /* Monochrome selection: full inversion — light theme gets a dark card,
      dark theme gets a white card with dark text. */
   .item.active {
-    background: var(--app-fg);
+    /* -color, not the shorthand: a selected pattern note paints its texture
+       here through the global .nz-pat-* rules, in these two tones. */
+    background-color: var(--app-fg);
     color: var(--app-bg);
+    --pat-base: var(--app-fg);
+    --pat-ink: color-mix(in srgb, var(--app-bg) 34%, var(--app-fg));
   }
   .item.active .pick,
   .item.active .pin {
     color: var(--app-bg);
   }
   .item.active:hover {
-    background: var(--app-fg);
+    background-color: var(--app-fg);
   }
   .pick {
     display: flex;
@@ -365,7 +369,7 @@
     align-self: stretch;
     min-height: 38px;
     flex-shrink: 0;
-    background: var(--swatch);
+    background-color: var(--swatch);
     cursor: grab;
     touch-action: none; /* a touch here drags the row instead of scrolling */
   }

@@ -112,3 +112,91 @@ textarea {
   user-select: text;
 }
 
+/* ---- Pixel patterns ------------------------------------------------------
+   Five textures for the picker's third row. Every one is built from
+   hard-stop gradients on a 2px pixel unit, so edges stay crisp at any zoom,
+   and animates by drifting background-position by exactly one tile — the
+   loop is seamless because the tile repeats.
+
+   Two tones, supplied by whatever is painting the pattern:
+     --pat-base  the surface (a note's header, or the selected row)
+     --pat-ink   the pixels (the note's ink, or the row's text colour)
+   so the same class reads correctly on a pale title bar, a dark selected
+   row and a sticky window. The conic-gradient "dot" trick paints one square
+   at a tile's corner: angles 270–360° around a point are its top-left
+   quadrant, clipped by the tile to a pixel. */
+[class*='nz-pat-'] {
+  --pat-base: var(--note-header, var(--app-panel));
+  --pat-ink: color-mix(in srgb, var(--note-fg, var(--app-fg)) 24%, var(--pat-base));
+  background-color: var(--pat-base);
+  background-repeat: repeat;
+}
+/* Checker: 4px squares, drifting on the diagonal. */
+.nz-pat-checker {
+  background-image: conic-gradient(var(--pat-ink) 25%, transparent 0 50%, var(--pat-ink) 0 75%, transparent 0);
+  background-size: 8px 8px;
+  animation: nz-drift-diag 2.4s linear infinite;
+}
+/* Stripes: a barcode of 2px and 1px bars, marching right. */
+.nz-pat-stripes {
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--pat-ink) 0 2px,
+    transparent 2px 5px,
+    var(--pat-ink) 5px 6px,
+    transparent 6px 10px
+  );
+  background-size: 10px 100%;
+  animation: nz-drift-x10 1.6s linear infinite;
+}
+/* Dots: 2px pixels on a diamond lattice, rising slowly. */
+.nz-pat-dots {
+  background-image:
+    conic-gradient(at 2px 2px, transparent 75%, var(--pat-ink) 0),
+    conic-gradient(at 2px 2px, transparent 75%, var(--pat-ink) 0);
+  background-size: 8px 8px;
+  background-position: 0 0, 4px 4px;
+  animation: nz-drift-up 3s linear infinite;
+}
+/* Stairs: a 45° pixel line as four stacked steps, sliding along itself. */
+.nz-pat-stairs {
+  background-image:
+    conic-gradient(at 2px 2px, transparent 75%, var(--pat-ink) 0),
+    conic-gradient(at 2px 2px, transparent 75%, var(--pat-ink) 0),
+    conic-gradient(at 2px 2px, transparent 75%, var(--pat-ink) 0),
+    conic-gradient(at 2px 2px, transparent 75%, var(--pat-ink) 0);
+  background-size: 8px 8px;
+  background-position: 0 0, 2px 2px, 4px 4px, 6px 6px;
+  animation: nz-drift-stairs 2s linear infinite;
+}
+/* Bricks: 1px mortar, courses offset by half a brick, creeping right. */
+.nz-pat-bricks {
+  background-image:
+    linear-gradient(var(--pat-ink) 1px, transparent 0),
+    conic-gradient(at 1px 5px, transparent 75%, var(--pat-ink) 0),
+    conic-gradient(at 1px 5px, transparent 75%, var(--pat-ink) 0);
+  background-size: 12px 6px, 12px 12px, 12px 12px;
+  background-position: 0 0, 0 0, 6px 6px;
+  animation: nz-drift-bricks 4s linear infinite;
+}
+
+@keyframes nz-drift-diag {
+  to { background-position: 8px 8px; }
+}
+@keyframes nz-drift-x10 {
+  to { background-position: 10px 0; }
+}
+@keyframes nz-drift-up {
+  to { background-position: 0 -8px, 4px -4px; }
+}
+@keyframes nz-drift-stairs {
+  to { background-position: 8px 8px, 10px 10px, 12px 12px, 14px 14px; }
+}
+@keyframes nz-drift-bricks {
+  to { background-position: 12px 0, 12px 0, 18px 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [class*='nz-pat-'] {
+    animation: none;
+  }
+}

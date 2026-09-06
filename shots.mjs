@@ -49,7 +49,7 @@ const NOTES = [
   }),
   note(2, {
     title: 'Layout idea',
-    paletteId: 'mint',
+    paletteId: 'teal',
     contentHtml: `<p>Rough shape for the landing section:</p><p><img src="data:image/svg+xml;utf8,${sketch}"></p>`,
   }),
   note(3, {
