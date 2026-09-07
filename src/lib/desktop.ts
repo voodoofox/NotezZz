@@ -62,7 +62,9 @@ export async function openSticky(note: Note): Promise<void> {
   // Creating the window from the frontend dispatches correctly to the event
   // loop (unlike a Rust command, which deadlocks on window creation).
   const win = new WebviewWindow(label, {
-    url: 'sticky',
+    // Versioned for the same reason the main window's URL is (see lib.rs):
+    // WebView2 caches the app's pages across updates.
+    url: `sticky?v=${__APP_VERSION__}`,
     title: 'NotezZz',
     decorations: false,
     transparent: true,

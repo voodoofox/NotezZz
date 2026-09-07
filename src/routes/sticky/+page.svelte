@@ -141,26 +141,16 @@
   /** How much of the note shows while the pointer hovers a tucked one. */
   const PEEK_FRACTION = 0.3;
   let tuckSide = $state<'left' | 'right'>('right');
-  const easeInOutQuad = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 
-  async function slideTo(x: number, y: number, ms = 380) {
+  async function slideTo(x: number, y: number, ms = 340) {
     if (!winRef) return;
-    const { PhysicalPosition } = await import('@tauri-apps/api/dpi');
-    const from = await winRef.outerPosition();
+    const { invoke } = await import('@tauri-apps/api/core');
     sliding = true;
-    const t0 = performance.now();
-    await new Promise<void>((done) => {
-      const step = (now: number) => {
-        const k = easeInOutQuad(Math.min(1, (now - t0) / ms));
-        void winRef!.setPosition(
-          new PhysicalPosition(Math.round(from.x + (x - from.x) * k), Math.round(from.y + (y - from.y) * k))
-        );
-        if (k < 1) requestAnimationFrame(step);
-        else done();
-      };
-      requestAnimationFrame(step);
-    });
-    sliding = false;
+    try {
+      await invoke('slide_window', { x, y, ms });
+    } finally {
+      sliding = false;
+    }
   }
 
   /**

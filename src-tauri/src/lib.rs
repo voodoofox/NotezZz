@@ -325,6 +325,35 @@ fn google_sign_out(app: tauri::AppHandle) -> Result<(), String> {
 // App setup: tray, close-to-tray
 // ----------------------------------------------------------------------------
 
+/// Move the calling window to (x, y) over `ms` with an ease-in-out quart
+/// curve. Done here rather than per-frame from JS: each JS frame was an IPC
+/// round-trip, which throttled the motion until it read as linear.
+#[tauri::command]
+async fn slide_window(window: tauri::Window, x: i32, y: i32, ms: u32) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let from = window.outer_position().map_err(|e| e.to_string())?;
+        let start = std::time::Instant::now();
+        let total = ms.max(1) as f64 / 1000.0;
+        loop {
+            let t = (start.elapsed().as_secs_f64() / total).min(1.0);
+            // Tight: slow off the mark, fast through the middle, soft landing.
+            let k = if t < 0.5 { 8.0 * t * t * t * t } else { 1.0 - (-2.0 * t + 2.0).powi(4) / 2.0 };
+            let nx = from.x as f64 + (x as f64 - from.x as f64) * k;
+            let ny = from.y as f64 + (y as f64 - from.y as f64) * k;
+            window
+                .set_position(tauri::PhysicalPosition::new(nx.round() as i32, ny.round() as i32))
+                .map_err(|e| e.to_string())?;
+            if t >= 1.0 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(6));
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 fn show_main(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -406,6 +435,7 @@ pub fn run() {
             google_sign_out,
             updates::check_update,
             updates::install_update,
+            slide_window,
         ])
         .setup(|app| {
             build_tray(app.handle())?;
@@ -414,6 +444,21 @@ pub fn run() {
 
             // Closing the main window hides it to the tray instead of quitting.
             if let Some(main) = app.get_webview_window("main") {
+                // WebView2 keeps the app's own pages in its HTTP cache across
+                // updates. After an update the main window kept loading the
+                // PREVIOUS build's index.html and chunks from cache while sticky
+                // windows, which load a different path, got the new build — two
+                // versions in one process, and "the pattern doesn't show in the
+                // main window". A version in the query makes every build a new
+                // cache key. The window is created hidden so the stale page never
+                // paints; it is shown here once it points at the right URL.
+                if let Ok(mut url) = main.url() {
+                    if url.scheme() != "about" {
+                        url.set_query(Some(&format!("v={}", env!("CARGO_PKG_VERSION"))));
+                        let _ = main.navigate(url);
+                    }
+                }
+                let _ = main.show();
                 let main_clone = main.clone();
                 main.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
