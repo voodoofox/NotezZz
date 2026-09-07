@@ -434,7 +434,11 @@
   .pcheck {
     display: inline-flex;
   }
-  [class*='nz-pat-'] .pcheck {
+  .pchip.nz-pat-checker .pcheck,
+  .pchip.nz-pat-stripes .pcheck,
+  .pchip.nz-pat-dots .pcheck,
+  .pchip.nz-pat-stairs .pcheck,
+  .pchip.nz-pat-bricks .pcheck {
     background: var(--pat-base);
     border-radius: var(--radius-sm);
     padding: 1px;

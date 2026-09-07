@@ -124,8 +124,19 @@ textarea {
    so the same class reads correctly on a pale title bar, a dark selected
    row and a sticky window. The conic-gradient "dot" trick paints one square
    at a tile's corner: angles 270–360° around a point are its top-left
-   quadrant, clipped by the tile to a pixel. */
-[class*='nz-pat-'] {
+   quadrant, clipped by the tile to a pixel.
+
+   Listed by class, never [class*='nz-pat-']: Chrome doesn't reliably
+   re-evaluate attribute-substring selectors when a class attribute changes,
+   so a note switched to a pattern after first paint kept its animation
+   (class rule) but lost these two variables (attribute rule), and an
+   invalid gradient computes to none. Stickies looked fine only because
+   they render with the class already present. */
+.nz-pat-checker,
+.nz-pat-stripes,
+.nz-pat-dots,
+.nz-pat-stairs,
+.nz-pat-bricks {
   --pat-base: var(--note-header, var(--app-panel));
   --pat-ink: color-mix(in srgb, var(--note-fg, var(--app-fg)) 24%, var(--pat-base));
   background-color: var(--pat-base);
@@ -196,7 +207,11 @@ textarea {
   to { background-position: 12px 0, 12px 0, 18px 6px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  [class*='nz-pat-'] {
+  .nz-pat-checker,
+  .nz-pat-stripes,
+  .nz-pat-dots,
+  .nz-pat-stairs,
+  .nz-pat-bricks {
     animation: none;
   }
 }

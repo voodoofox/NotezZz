@@ -66,21 +66,27 @@
       });
 
       if (!win) return; // plain browser: no window geometry to track
+      winRef = win;
+      hasWin = true;
 
       // Window geometry is device-local: where a sticky sits on THIS screen
       // means nothing on a phone or another PC. It used to be saved onto the
       // note, which meant a nudge of the window republished the sticky's
       // whole (possibly stale) copy over newer edits from another device.
       const scale = await win.scaleFactor();
+      scaleRef = scale;
       let timer: ReturnType<typeof setTimeout> | undefined;
       const saveGeom = async () => {
         if (!noteId) return;
         const pos = await win.outerPosition();
         const size = await win.innerSize();
         try {
+          const key = `notezzz:win:${noteId}`;
+          const prev = JSON.parse(localStorage.getItem(key) ?? '{}'); // keeps tucked/home
           localStorage.setItem(
-            `notezzz:win:${noteId}`,
+            key,
             JSON.stringify({
+              ...prev,
               x: Math.round(pos.x / scale),
               y: Math.round(pos.y / scale),
               w: Math.round(size.width / scale),
@@ -97,8 +103,138 @@
       };
       await win.onMoved(debounced);
       await win.onResized(debounced);
+
+      // Reopen tucked if it was tucked when the app last closed.
+      try {
+        const saved = JSON.parse(localStorage.getItem(`notezzz:win:${noteId}`) ?? '{}');
+        if (saved.tucked && saved.home) {
+          home = { x: Math.round(saved.home.x * scale), y: Math.round(saved.home.y * scale) };
+          tucked = true;
+          const spot = await tuckedSpot();
+          if (spot) {
+            const { PhysicalPosition } = await import('@tauri-apps/api/dpi');
+            await win.setPosition(new PhysicalPosition(spot.x, spot.y));
+          }
+        }
+      } catch {
+        /* nothing saved */
+      }
+      document.addEventListener('pointerenter', onPointerEnter);
+      document.addEventListener('pointerleave', onPointerLeave);
     })();
   });
+
+  // ---- tuck away -----------------------------------------------------------
+  // A pinned note you want out of the way but not gone: it slides to the
+  // nearer side of the screen until only a sliver of card shows, slides in
+  // while the pointer is over that sliver, and comes back for good from the
+  // same button. Device-local, like window position.
+  let winRef: import('@tauri-apps/api/window').Window | null = null;
+  let scaleRef = 1;
+  let hasWin = $state(false);
+  let tucked = $state(false);
+  let peeking = $state(false);
+  let sliding = false;
+  /** Physical position the note returns to. */
+  let home: { x: number; y: number } | null = null;
+  const PEEK_PX = 12;
+  const easeInOutQuad = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
+
+  async function slideTo(x: number, y: number, ms = 380) {
+    if (!winRef) return;
+    const { PhysicalPosition } = await import('@tauri-apps/api/dpi');
+    const from = await winRef.outerPosition();
+    sliding = true;
+    const t0 = performance.now();
+    await new Promise<void>((done) => {
+      const step = (now: number) => {
+        const k = easeInOutQuad(Math.min(1, (now - t0) / ms));
+        void winRef!.setPosition(
+          new PhysicalPosition(Math.round(from.x + (x - from.x) * k), Math.round(from.y + (y - from.y) * k))
+        );
+        if (k < 1) requestAnimationFrame(step);
+        else done();
+      };
+      requestAnimationFrame(step);
+    });
+    sliding = false;
+  }
+
+  /** Where a tucked note sits: off the nearer side edge, PEEK_PX of card showing. */
+  async function tuckedSpot(): Promise<{ x: number; y: number } | null> {
+    if (!winRef) return null;
+    const { currentMonitor } = await import('@tauri-apps/api/window');
+    const mon = await currentMonitor();
+    if (!mon) return null;
+    const size = await winRef.outerSize();
+    const base = home ?? (await winRef.outerPosition());
+    // A tilted card is inset from the window edge, so show that much more.
+    const inset = tilt !== 0 ? 14 : 0;
+    const peek = Math.round((PEEK_PX + inset) * scaleRef);
+    const onRight = base.x + size.width / 2 > mon.position.x + mon.size.width / 2;
+    return {
+      x: onRight ? mon.position.x + mon.size.width - peek : mon.position.x - size.width + peek,
+      y: base.y,
+    };
+  }
+
+  function persistTuck() {
+    if (!noteId) return;
+    try {
+      const key = `notezzz:win:${noteId}`;
+      const prev = JSON.parse(localStorage.getItem(key) ?? '{}');
+      localStorage.setItem(
+        key,
+        JSON.stringify({
+          ...prev,
+          tucked,
+          home: home ? { x: Math.round(home.x / scaleRef), y: Math.round(home.y / scaleRef) } : undefined,
+        })
+      );
+    } catch {
+      /* private mode */
+    }
+  }
+
+  async function tuck() {
+    if (!winRef || sliding) return;
+    home = await winRef.outerPosition();
+    const spot = await tuckedSpot();
+    if (!spot) return;
+    tucked = true;
+    peeking = false;
+    persistTuck();
+    await slideTo(spot.x, spot.y);
+  }
+
+  async function untuck() {
+    if (!winRef || sliding || !home) return;
+    tucked = false;
+    peeking = false;
+    persistTuck();
+    await slideTo(home.x, home.y);
+  }
+
+  let leaveTimer: ReturnType<typeof setTimeout> | undefined;
+  async function onPointerEnter() {
+    clearTimeout(leaveTimer);
+    if (!tucked || peeking || sliding || !home) return;
+    peeking = true;
+    await slideTo(home.x, home.y, 300);
+  }
+  function onPointerLeave() {
+    if (!tucked || !peeking) return;
+    clearTimeout(leaveTimer);
+    // A short grace period: the window moving under a still pointer fires
+    // leave/enter pairs that would otherwise make it jitter.
+    leaveTimer = setTimeout(async () => {
+      if (!tucked || sliding) return;
+      const spot = await tuckedSpot();
+      if (!spot) return;
+      peeking = false;
+      await slideTo(spot.x, spot.y, 300);
+    }, 250);
+  }
 
   async function unpin() {
     if (noteId) store.update(noteId, { pinned: false }); // closes this window
@@ -119,6 +255,18 @@
   >
     <header class="bar {pal.pattern ? `nz-pat-${pal.pattern}` : ''}" data-tauri-drag-region>
       <span class="ttl" data-tauri-drag-region>{note.title || 'Note'}</span>
+      {#if hasWin}
+        <button
+          class="x"
+          data-testid="sticky-tuck"
+          title={tucked ? 'Bring it back' : 'Tuck away to the screen edge'}
+          aria-label={tucked ? 'Bring it back' : 'Tuck away'}
+          aria-pressed={tucked}
+          onclick={() => void (tucked ? untuck() : tuck())}
+        >
+          <Icon name={tucked ? 'untuck' : 'tuck'} size={15} />
+        </button>
+      {/if}
       <button class="x" title="Unpin (close sticker)" aria-label="Unpin" onclick={unpin}>
         <Icon name="close" size={15} />
       </button>
