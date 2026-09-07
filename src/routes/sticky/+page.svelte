@@ -137,7 +137,10 @@
   let sliding = false;
   /** Physical position the note returns to. */
   let home: { x: number; y: number } | null = null;
-  const PEEK_PX = 12;
+  const PEEK_PX = 20;
+  /** How much of the note shows while the pointer hovers a tucked one. */
+  const PEEK_FRACTION = 0.3;
+  let tuckSide = $state<'left' | 'right'>('right');
   const easeInOutQuad = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 
   async function slideTo(x: number, y: number, ms = 380) {
@@ -160,22 +163,35 @@
     sliding = false;
   }
 
-  /** Where a tucked note sits: off the nearer side edge, PEEK_PX of card showing. */
-  async function tuckedSpot(): Promise<{ x: number; y: number } | null> {
+  /**
+   * Where the note sits hanging off the nearer side edge with `visible`
+   * physical pixels of window showing. Tucked = a sliver; hovered = a third.
+   */
+  async function edgeSpot(visible: number): Promise<{ x: number; y: number } | null> {
     if (!winRef) return null;
     const { currentMonitor } = await import('@tauri-apps/api/window');
     const mon = await currentMonitor();
     if (!mon) return null;
     const size = await winRef.outerSize();
     const base = home ?? (await winRef.outerPosition());
-    // A tilted card is inset from the window edge, so show that much more.
-    const inset = tilt !== 0 ? 14 : 0;
-    const peek = Math.round((PEEK_PX + inset) * scaleRef);
     const onRight = base.x + size.width / 2 > mon.position.x + mon.size.width / 2;
+    tuckSide = onRight ? 'right' : 'left';
     return {
-      x: onRight ? mon.position.x + mon.size.width - peek : mon.position.x - size.width + peek,
+      x: onRight ? mon.position.x + mon.size.width - visible : mon.position.x - size.width + visible,
       y: base.y,
     };
+  }
+  async function sliverPx(): Promise<number> {
+    // A tilted card is inset from the window edge, so show that much more.
+    return Math.round((PEEK_PX + (tilt !== 0 ? 14 : 0)) * scaleRef);
+  }
+  async function tuckedSpot() {
+    return edgeSpot(await sliverPx());
+  }
+  async function peekSpot() {
+    if (!winRef) return null;
+    const size = await winRef.outerSize();
+    return edgeSpot(Math.max(await sliverPx(), Math.round(size.width * PEEK_FRACTION)));
   }
 
   function persistTuck() {
@@ -219,8 +235,10 @@
   async function onPointerEnter() {
     clearTimeout(leaveTimer);
     if (!tucked || peeking || sliding || !home) return;
+    const spot = await peekSpot();
+    if (!spot) return;
     peeking = true;
-    await slideTo(home.x, home.y, 300);
+    await slideTo(spot.x, spot.y, 300);
   }
   function onPointerLeave() {
     if (!tucked || !peeking) return;
@@ -250,12 +268,20 @@
       --note-bg: {bgRgba(pal.bg, note.opacity)};
       --note-header: {bgRgba(pal.header, Math.min(1, note.opacity + 0.08))};
       --note-fg: {pal.fg};
+      --note-ink: {pal.ink ?? pal.fg};
       --note-accent: {pal.accent};
     "
   >
     <header class="bar {pal.pattern ? `nz-pat-${pal.pattern}` : ''}" data-tauri-drag-region>
+      {#if hasWin && tucked && tuckSide === 'right'}
+        <!-- Tucked to the right edge, only the left of the bar shows: the
+             way back has to live there. -->
+        <button class="x" data-testid="sticky-tuck" title="Bring it back" aria-label="Bring it back" aria-pressed="true" onclick={() => void untuck()}>
+          <Icon name="untuck" size={15} />
+        </button>
+      {/if}
       <span class="ttl" data-tauri-drag-region>{note.title || 'Note'}</span>
-      {#if hasWin}
+      {#if hasWin && !(tucked && tuckSide === 'right')}
         <button
           class="x"
           data-testid="sticky-tuck"

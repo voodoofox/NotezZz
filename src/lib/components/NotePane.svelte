@@ -2,6 +2,7 @@
   import { pushState, replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { store } from '$lib/store.svelte';
+  import { logDiag } from '$lib/diag';
   import { isTauri } from '$lib/storage/backend';
   import { PALETTES, PATTERNS, getPalette, hslToHex, hexToHsl } from '$lib/palettes';
   import Editor from './Editor.svelte';
@@ -46,6 +47,22 @@
     if (!palWrap?.contains(t) && !sizeWrapEl?.contains(t)) openPop = null;
   }
 
+  // Evidence for Diagnostics: a pattern that fails to paint on some machine
+  // is a report we can't reproduce here, so record what the title bar
+  // computes the moment a pattern is shown.
+  $effect(() => {
+    const id = pal.pattern ? pal.id : null;
+    if (!id) return;
+    requestAnimationFrame(() => {
+      const tb = document.querySelector('.topbar');
+      if (!tb) return;
+      const cs = getComputedStyle(tb);
+      logDiag(
+        `PAT ${id} cls=${tb.className.includes('nz-pat-')} img=${cs.backgroundImage.slice(0, 14)} anim=${cs.animationName} ink=${cs.getPropertyValue('--pat-ink').trim()}`
+      );
+    });
+  });
+
   let isCustom = $derived(note?.paletteId.startsWith('custom:') ?? false);
 
   // Inline custom color: hue + shade sliders apply instantly — no native
@@ -87,6 +104,7 @@
       --note-bg: {pal.bg};
       --note-header: {pal.header};
       --note-fg: {pal.fg};
+      --note-ink: {pal.ink ?? pal.fg};
       color-scheme: {pal.dark ? 'dark' : 'light'};
     "
   >
@@ -154,7 +172,7 @@
                   class="pchip nz-pat-{p.pattern}"
                   data-testid="palette-chip"
                   data-palette={p.id}
-                  style="--pat-base: {p.header}; --pat-ink: color-mix(in srgb, {p.fg} 34%, {p.header})"
+                  style="--pat-base: {p.header}; --pat-ink: {p.inkStrong}"
                   title={p.name}
                   aria-label={p.name}
                   onclick={() => {

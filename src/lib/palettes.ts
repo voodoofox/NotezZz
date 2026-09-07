@@ -16,6 +16,11 @@ export interface Palette {
   dark?: boolean;
   /** Pixel pattern painted over the header and list selection (see app.css). */
   pattern?: PatternId;
+  /** Pattern pixel colour on the header (fg mixed into header). Precomputed:
+   *  the paint path must not depend on color-mix() resolving at runtime. */
+  ink?: string;
+  /** Stronger mix for small areas (list swatch, picker chip). */
+  inkStrong?: string;
 }
 
 export type PatternId = 'checker' | 'stripes' | 'dots' | 'stairs' | 'bricks';
@@ -52,7 +57,26 @@ export const PATTERNS: Palette[] = [
   { id: 'pattern:stairs',  name: 'Stairs',  pattern: 'stairs',  bg: '#C2D9F0', header: '#A3C2E2', fg: '#213345', accent: '#213345' },
   { id: 'pattern:bricks',  name: 'Bricks',  pattern: 'bricks',  bg: '#F0CDC2', header: '#E2B1A2', fg: '#452A21', accent: '#452A21' },
 ];
+for (const p of PATTERNS) {
+  p.ink = mixHex(p.fg, p.header, 0.28);
+  p.inkStrong = mixHex(p.fg, p.header, 0.42);
+}
 const PATTERN_MAP = new Map(PATTERNS.map((p) => [p.id, p]));
+
+/** `t` of colour a mixed into colour b, both #rrggbb. */
+function mixHex(a: string, b: string, t: number): string {
+  const ch = (h: string, i: number) => parseInt(h.slice(i, i + 2), 16);
+  return (
+    '#' +
+    [1, 3, 5]
+      .map((i) =>
+        Math.round(ch(a, i) * t + ch(b, i) * (1 - t))
+          .toString(16)
+          .padStart(2, '0')
+      )
+      .join('')
+  );
+}
 
 export function getPalette(id: string): Palette {
   if (id?.startsWith('custom:')) return customPalette(id.slice(7));

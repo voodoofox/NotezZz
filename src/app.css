@@ -15,6 +15,8 @@
   --app-bg: #f4f5f7;
   --app-panel: #ffffff;
   --app-fg: #1f2328;
+  /* Pattern pixels on a selected list row: app-bg mixed a third into app-fg. */
+  --app-pat-ink: #676a6e;
   --app-muted: #6b7280;
   --app-border: #e2e4e8;
   --app-danger: #e0245e; /* semantic error color (text only) */
@@ -27,6 +29,7 @@
   --app-bg: #16181d;
   --app-panel: #1e2127;
   --app-fg: #e8eaed;
+  --app-pat-ink: #a1a3a6;
   --app-muted: #9aa0a6;
   --app-border: #2c2f36;
 }
@@ -138,7 +141,7 @@ textarea {
 .nz-pat-stairs,
 .nz-pat-bricks {
   --pat-base: var(--note-header, var(--app-panel));
-  --pat-ink: color-mix(in srgb, var(--note-fg, var(--app-fg)) 24%, var(--pat-base));
+  --pat-ink: var(--note-ink, var(--app-pat-ink));
   background-color: var(--pat-base);
   background-repeat: repeat;
 }

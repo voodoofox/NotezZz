@@ -188,7 +188,7 @@
           tabindex="0"
           title="Drag to reorder (keyboard: Alt+Arrow Up/Down)"
           aria-label="Reorder {noteLabel(note)}: drag, or Alt+Arrow Up/Down"
-          style="background-color: {pal.pattern ? pal.header : pal.bg}; --pat-base: {pal.header}; --pat-ink: color-mix(in srgb, {pal.fg} 42%, {pal.header})"
+          style="background-color: {pal.pattern ? pal.header : pal.bg}; --pat-base: {pal.header}; --pat-ink: {pal.inkStrong ?? pal.fg}"
           onpointerdown={(e) => startDrag(e, note.id)}
           onkeydown={(e) => keyMove(e, note.id)}
         ></span>
@@ -338,7 +338,7 @@
     background-color: var(--app-fg);
     color: var(--app-bg);
     --pat-base: var(--app-fg);
-    --pat-ink: color-mix(in srgb, var(--app-bg) 34%, var(--app-fg));
+    --pat-ink: var(--app-pat-ink);
   }
   .item.active .pick,
   .item.active .pin {
