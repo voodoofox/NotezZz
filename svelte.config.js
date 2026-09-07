@@ -17,6 +17,13 @@ const config = {
     paths: {
       base: process.env.BASE_PATH ?? "",
     },
+    // The offline shell is for the installed PWA only. Auto-registration put
+    // it in the desktop app too, where it pinned the main window to the build
+    // it first cached (WebView2 never let it update): every release after
+    // 0.17.0 ran on desktop with 0.17.0's shell. +layout registers it on web.
+    serviceWorker: {
+      register: false,
+    },
   },
 };
 

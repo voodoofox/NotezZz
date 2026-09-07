@@ -30,6 +30,25 @@
   `;
 
   // Installed PWAs relaunch from HTTP cache and can linger on a stale build.
+  // Service worker: web only. On desktop, evict one if it exists — the
+  // page you are reading this from may itself have been served by a stale
+  // worker (see svelte.config.js), so after unregistering, reload.
+  onMount(() => {
+    if (import.meta.env.DEV || !('serviceWorker' in navigator)) return;
+    if (isTauri()) {
+      void (async () => {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        if (!regs.length) return;
+        await Promise.all(regs.map((r) => r.unregister()));
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+        location.reload();
+      })();
+      return;
+    }
+    void navigator.serviceWorker.register(`${base}/service-worker.js`);
+  });
+
   // On launch + every return to foreground, poll version.json (cache-busted —
   // the host's front proxy ignores request cache headers) and reload onto the
   // new build when the stamp differs from our baked-in __BUILD_TIME__.

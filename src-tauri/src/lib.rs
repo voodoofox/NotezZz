@@ -336,8 +336,9 @@ async fn slide_window(window: tauri::Window, x: i32, y: i32, ms: u32) -> Result<
         let total = ms.max(1) as f64 / 1000.0;
         loop {
             let t = (start.elapsed().as_secs_f64() / total).min(1.0);
-            // Tight: slow off the mark, fast through the middle, soft landing.
-            let k = if t < 0.5 { 8.0 * t * t * t * t } else { 1.0 - (-2.0 * t + 2.0).powi(4) / 2.0 };
+            // Ease-in-out quint: barely moves for the first stretch, snaps
+            // through the middle, settles softly.
+            let k = if t < 0.5 { 16.0 * t.powi(5) } else { 1.0 - (-2.0 * t + 2.0).powi(5) / 2.0 };
             let nx = from.x as f64 + (x as f64 - from.x as f64) * k;
             let ny = from.y as f64 + (y as f64 - from.y as f64) * k;
             window
@@ -352,6 +353,26 @@ async fn slide_window(window: tauri::Window, x: i32, y: i32, ms: u32) -> Result<
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Delete WebView2's service-worker store for this app before the webview
+/// exists. A worker registered by an earlier build (0.17.0 shipped one by
+/// accident) kept serving that build's shell to the main window through every
+/// update. Runs on each start: cheap, and no desktop build should ever have a
+/// worker again. The path mirrors Tauri's app-local-data dir for this identifier.
+fn remove_stale_service_worker() {
+    let Some(local) = std::env::var_os("LOCALAPPDATA") else { return };
+    let dir = PathBuf::from(local)
+        .join("com.administrator.notezzz")
+        .join("EBWebView")
+        .join("Default")
+        .join("Service Worker");
+    if dir.is_dir() {
+        match fs::remove_dir_all(&dir) {
+            Ok(()) => eprintln!("[NotezZz] removed stale service worker at {}", dir.display()),
+            Err(e) => eprintln!("[NotezZz] could not remove service worker dir: {e}"),
+        }
+    }
 }
 
 fn show_main(app: &tauri::AppHandle) {
@@ -400,6 +421,8 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    remove_stale_service_worker();
+
     let mut builder = tauri::Builder::default();
 
     // single-instance MUST be registered first (desktop only).
