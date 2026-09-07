@@ -132,6 +132,15 @@ class AppStore {
   }
 
   async init() {
+    // A returning Drive user's notes are already on this device. Paint them
+    // BEFORE anything that can touch the network: choosing the backend below
+    // is a chunk fetch, and on a phone with a slow radio it can take the
+    // whole 20s guard — during which the screen used to be a bare spinner
+    // over an empty list, indistinguishable from the app being broken.
+    if (!isTauri()) {
+      const { hasPriorAuth } = await import('./drive/auth'); // static elsewhere: no fetch
+      if (hasPriorAuth()) this.#paintCache();
+    }
     // Choosing a backend does dynamic imports, which are network fetches: on a
     // phone waking with the radio asleep — or on a page restored from cache
     // after a deploy, whose chunks are gone from the server — this rejects or

@@ -46,7 +46,12 @@
       })();
       return;
     }
-    void navigator.serviceWorker.register(`${base}/service-worker.js`);
+    // Versioned URL: the host's front proxy caches by URL and ignores cache
+    // headers, so a fixed /service-worker.js kept handing every phone the same
+    // days-old worker (seen: age 411178s), and Chrome's update check has no
+    // way past that. A new URL per build is a new registration on the same
+    // scope, which replaces the old worker.
+    void navigator.serviceWorker.register(`${base}/service-worker.js?v=${encodeURIComponent(__BUILD_TIME__)}`);
   });
 
   // On launch + every return to foreground, poll version.json (cache-busted —
