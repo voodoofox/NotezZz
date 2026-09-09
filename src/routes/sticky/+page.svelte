@@ -139,7 +139,7 @@
   let home: { x: number; y: number } | null = null;
   const PEEK_PX = 20;
   /** How much of the note shows while the pointer hovers a tucked one. */
-  const PEEK_FRACTION = 0.3;
+  const PEEK_FRACTION = 0.5;
   let tuckSide = $state<'left' | 'right'>('right');
 
   async function slideTo(x: number, y: number, ms = 340) {
