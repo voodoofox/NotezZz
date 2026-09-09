@@ -299,8 +299,13 @@ class AppStore {
       if (isTauri()) {
         // Desktop tokens are managed by Rust — never the browser popup flow,
         // which simply fails inside the app window.
-        const { desktopToken } = await import('./drive/desktopAuth');
-        await desktopToken().catch(() => {}); // signed out -> local files
+        const { desktopToken, desktopSignIn, desktopAuthConfigured } = await import('./drive/desktopAuth');
+        // A dead refresh token can't be refreshed; Reconnect is a real click,
+        // so it may open the system browser for a fresh sign-in. Declining
+        // that (or being offline) falls back to local files below.
+        await desktopToken().catch(async () => {
+          if (desktopAuthConfigured()) await desktopSignIn().catch(() => {});
+        });
       } else if (this.#backend?.kind !== 'local') {
         // Local mode has no account to reconnect; re-init and retry is all
         // "Reconnect" can mean there.

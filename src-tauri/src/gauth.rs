@@ -120,13 +120,34 @@ struct TokenResponse {
     expires_in: u64,
 }
 
-fn exchange(params: Vec<(&str, &str)>) -> Result<TokenResponse, String> {
-    http()
-        .post(TOKEN_URL)
-        .send_form(&params)
-        .map_err(|e| format!("token exchange failed: {e}"))?
-        .into_json::<TokenResponse>()
-        .map_err(|e| format!("bad token response: {e}"))
+/// Google's `error` field from a rejected token request, e.g. "invalid_grant".
+/// The status code alone ("400") told the user nothing and told us nothing.
+pub struct ExchangeError {
+    pub code: String,
+    pub message: String,
+}
+
+fn exchange(params: Vec<(&str, &str)>) -> Result<TokenResponse, ExchangeError> {
+    match http().post(TOKEN_URL).send_form(&params) {
+        Ok(resp) => resp.into_json::<TokenResponse>().map_err(|e| ExchangeError {
+            code: "bad_response".into(),
+            message: format!("bad token response: {e}"),
+        }),
+        Err(ureq::Error::Status(status, resp)) => {
+            let body = resp.into_string().unwrap_or_default();
+            let v: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
+            let code = v["error"].as_str().unwrap_or("").to_string();
+            let desc = v["error_description"].as_str().unwrap_or("").to_string();
+            Err(ExchangeError {
+                message: format!("token exchange failed ({status} {code}): {desc}"),
+                code,
+            })
+        }
+        Err(e) => Err(ExchangeError {
+            code: "network".into(),
+            message: format!("token exchange failed: {e}"),
+        }),
+    }
 }
 
 /// Fetch the signed-in address so the UI can show which account is connected.
@@ -281,7 +302,8 @@ pub fn sign_in(app: &tauri::AppHandle, client_id: &str, client_secret: &str) -> 
         ("redirect_uri", &redirect),
         ("grant_type", "authorization_code"),
         ("code_verifier", &verifier),
-    ])?;
+    ])
+    .map_err(|e| e.message)?;
 
     let email = fetch_email(&tr.access_token);
     let tokens = Tokens {
@@ -312,12 +334,24 @@ pub fn valid_access_token(
     if tokens.refresh_token.is_empty() {
         return Err("session expired — sign in again".into());
     }
-    let tr = exchange(vec![
+    let tr = match exchange(vec![
         ("client_id", client_id),
         ("client_secret", client_secret),
         ("refresh_token", &tokens.refresh_token),
         ("grant_type", "refresh_token"),
-    ])?;
+    ]) {
+        Ok(tr) => tr,
+        // A refresh token Google has revoked or expired never comes back.
+        // Keeping it meant every poll re-asked Google with the same dead token
+        // and the user saw "status code 400" with a Reconnect that retried
+        // exactly that. Forget it, so the app knows it is signed out and
+        // Reconnect runs a real sign-in.
+        Err(e) if e.code == "invalid_grant" => {
+            let _ = clear_tokens(app);
+            return Err("Google sign-in has expired or was revoked — tap Reconnect to sign in again".into());
+        }
+        Err(e) => return Err(e.message),
+    };
     tokens.access_token = tr.access_token;
     tokens.expires_at = now() + tr.expires_in.max(60) - 60;
     // The refreshed token is good even if it could not be persisted; the
