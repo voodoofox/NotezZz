@@ -437,6 +437,23 @@ class AppStore {
     return note;
   }
 
+  /**
+   * A note born pinned: the + on a sticky's title bar. Written before its
+   * window is created, like any pin, and opened beside the sticky that asked.
+   */
+  async createPinned(near?: { x: number; y: number }): Promise<Note> {
+    const note = newNote({
+      paletteId: this.settings.defaultPaletteId,
+      fontSize: this.settings.defaultFontSize,
+      pinned: true,
+      tilt: rollTilt(),
+    });
+    this.notes = [note, ...this.notes];
+    await this.#save(note);
+    await openSticky(note, near);
+    return note;
+  }
+
   /** Patch a note in place and schedule a debounced save. */
   update(id: string, patch: Partial<Note>) {
     const idx = this.notes.findIndex((n) => n.id === id);
@@ -494,7 +511,13 @@ class AppStore {
       // this window hasn't written yet.
       if (this.#pending(n.id)) return;
       const idx = this.notes.findIndex((x) => x.id === n.id);
-      if (idx === -1 || n.updatedAt < this.notes[idx].updatedAt) return;
+      // A note this window has never seen (created from a sticky's + button)
+      // joins the list now rather than on the next poll.
+      if (idx === -1) {
+        if (!this.#isDeleted(n.id)) this.notes = [n, ...this.notes];
+        return;
+      }
+      if (n.updatedAt < this.notes[idx].updatedAt) return;
       this.notes[idx] = n;
     });
   }

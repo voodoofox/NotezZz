@@ -44,7 +44,12 @@ function savedGeometry(id: string): { x: number; y: number; w: number; h: number
   }
 }
 
-export async function openSticky(note: Note): Promise<void> {
+/**
+ * `near` (logical px): where to put a sticky that has no remembered place —
+ * a note created from another sticky's + button lands beside that sticky,
+ * not wherever the default happens to be.
+ */
+export async function openSticky(note: Note, near?: { x: number; y: number }): Promise<void> {
   if (!isTauri()) return;
   const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
   const label = stickyLabel(note.id);
@@ -73,8 +78,8 @@ export async function openSticky(note: Note): Promise<void> {
     shadow: false,
     width: geom?.w ?? 260,
     height: geom?.h ?? 260,
-    x: geom?.x,
-    y: geom?.y,
+    x: geom?.x ?? near?.x,
+    y: geom?.y ?? near?.y,
     minWidth: 170,
     minHeight: 130,
   });

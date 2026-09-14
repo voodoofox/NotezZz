@@ -101,7 +101,25 @@
         clearTimeout(timer);
         timer = setTimeout(saveGeom, 500);
       };
-      await win.onMoved(debounced);
+      // Windows moves any mostly-off-screen window back on-screen when
+      // displays reconnect (sleep, monitor wake). A tucked note is exactly
+      // that, and it came back fully revealed while the app still believed
+      // it was tucked — only a hover-and-leave put it away again. If we are
+      // tucked and something other than our own slide moved us, go back.
+      let retuck: ReturnType<typeof setTimeout> | undefined;
+      await win.onMoved(() => {
+        debounced();
+        if (!tucked || sliding || peeking) return;
+        clearTimeout(retuck);
+        retuck = setTimeout(async () => {
+          if (!tucked || sliding || peeking) return;
+          const spot = await tuckedSpot();
+          const pos = await win.outerPosition();
+          if (spot && (Math.abs(pos.x - spot.x) > 4 || Math.abs(pos.y - spot.y) > 4)) {
+            await slideTo(spot.x, spot.y);
+          }
+        }, 900);
+      });
       await win.onResized(debounced);
 
       // Reopen tucked if it was tucked when the app last closed.
@@ -244,6 +262,16 @@
     }, 250);
   }
 
+  /** The + on the bar: a new note, already pinned, opened beside this one. */
+  async function addPinned() {
+    let near: { x: number; y: number } | undefined;
+    if (winRef) {
+      const p = await winRef.outerPosition();
+      near = { x: Math.round(p.x / scaleRef) + 28, y: Math.round(p.y / scaleRef) + 28 };
+    }
+    await store.createPinned(near);
+  }
+
   async function unpin() {
     if (noteId) store.update(noteId, { pinned: false }); // closes this window
   }
@@ -271,6 +299,11 @@
         </button>
       {/if}
       <span class="ttl" data-tauri-drag-region>{note.title || 'Note'}</span>
+      {#if hasWin && !tucked}
+        <button class="x" data-testid="sticky-add" title="New pinned note" aria-label="New pinned note" onclick={addPinned}>
+          <Icon name="add" size={15} />
+        </button>
+      {/if}
       {#if hasWin && !(tucked && tuckSide === 'right')}
         <button
           class="x"
