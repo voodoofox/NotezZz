@@ -7,6 +7,8 @@
   import Icon from './Icon.svelte';
   import { chooseSyncFolder, getSyncFolder } from '$lib/desktop';
   import { PALETTES } from '$lib/palettes';
+  import { hotkey, NEW_NOTE_SHORTCUT_LABEL } from '$lib/hotkey.svelte';
+  import { buildExport, downloadBlob, exportFileName } from '$lib/export';
 
   let { onClose }: { onClose: () => void } = $props();
 
@@ -22,25 +24,12 @@
   async function signInDesktop() {
     gBusy = true;
     try {
-      const { desktopSignIn, desktopAccount } = await import('$lib/drive/desktopAuth');
-      let warning = '';
-      try {
-        gAccount = await desktopSignIn();
-      } catch (e) {
-        // gauth.rs keeps the tokens when only the account-email lookup
-        // fails, so an error here is a real failure only if we are still
-        // signed out. Otherwise carry on and just say the email is unknown.
-        gAccount = await desktopAccount();
-        if (!gAccount) throw e;
-        warning = e instanceof Error ? e.message : String(e);
-      }
-      // Lift local-only notes into Drive before switching backends, so
-      // nothing drops out of the list and every note becomes app-owned.
-      const moved = await store.migrateLocalToDrive().catch(() => 0);
-      await store.reconnect();
-      const uploaded = moved ? ` ${moved} local note(s) uploaded to Google Drive.` : '';
-      if (warning) alert(`Signed in, but ${warning}.${uploaded}`);
-      else if (moved) alert(`Signed in.${uploaded}`);
+      // The same sequence the first-run dialog runs (desktopFlow.ts).
+      const { signInDesktopAndMigrate, signInSummary } = await import('$lib/desktopFlow');
+      const result = await signInDesktopAndMigrate();
+      gAccount = result.account;
+      const summary = signInSummary(result);
+      if (summary) alert(summary);
     } catch (e) {
       alert(`Sign-in failed: ${e instanceof Error ? e.message : e}`);
     } finally {
@@ -125,6 +114,12 @@
       autostartOn = true;
     }
     await store.saveSettings({ autostart: autostartOn });
+  }
+
+  /** Everything, as files the user can open anywhere (see export.ts). */
+  function exportAll() {
+    const blob = buildExport($state.snapshot(store.notes), $state.snapshot(store.settings));
+    downloadBlob(blob, exportFileName());
   }
 </script>
 
@@ -263,6 +258,45 @@
       </section>
     {/if}
 
+    <!-- Shown on every build, not just desktop: settings travel with the
+         account, so the switch flipped here on a phone is the switch the PC
+         reads. Only the wording differs. -->
+    <section>
+      <h3>Shortcuts</h3>
+      <label class="row">
+        <span><kbd>{NEW_NOTE_SHORTCUT_LABEL}</kbd> — new sticky note under the cursor</span>
+        <input
+          type="checkbox"
+          data-testid="hotkey-newnote"
+          checked={store.settings.hotkeyNewNote ?? true}
+          onchange={(e) =>
+            store.saveSettings({ hotkeyNewNote: (e.currentTarget as HTMLInputElement).checked })}
+        />
+      </label>
+      {#if hotkey.status === 'unavailable'}
+        <p class="hint warn" data-testid="hotkey-unavailable">unavailable — in use by another app</p>
+      {:else}
+        <p class="hint">
+          {desktop
+            ? 'Works from any app, even while this window sits in the tray.'
+            : 'Used by the desktop app.'}
+        </p>
+      {/if}
+    </section>
+
+    <section>
+      <h3>Your files</h3>
+      <p class="hint">
+        Every note as JSON and as Markdown, plus your settings, in one ZIP — yours to keep, open
+        anywhere.
+      </p>
+      <div class="folder">
+        <button data-testid="export-all" onclick={exportAll} disabled={!store.loaded}>
+          Export all notes
+        </button>
+      </div>
+    </section>
+
     <section>
       <h3>Diagnostics</h3>
       <p class="hint diagline">
@@ -359,6 +393,17 @@
     color: var(--app-muted);
     margin: 4px 0 10px;
     line-height: 1.4;
+  }
+  .hint.warn {
+    color: var(--app-danger);
+  }
+  kbd {
+    font: inherit;
+    font-size: 14px;
+    padding: 1px 6px;
+    border: 1px solid var(--app-border);
+    border-radius: var(--radius-sm);
+    background: var(--app-bg);
   }
   .folder {
     display: flex;
