@@ -1,4 +1,7 @@
 <script lang="ts">
+  // Static, like Onboarding's: a dynamic import here made Vite warn that the
+  // module couldn't be split, and the warning (on stderr) aborted deploys.
+  import { signInDesktopAndMigrate, signInSummary } from '$lib/desktopFlow';
   import UpdateCheck from './UpdateCheck.svelte';
   import { onMount } from 'svelte';
   import { store } from '$lib/store.svelte';
@@ -25,8 +28,7 @@
     gBusy = true;
     try {
       // The same sequence the first-run dialog runs (desktopFlow.ts).
-      const { signInDesktopAndMigrate, signInSummary } = await import('$lib/desktopFlow');
-      const result = await signInDesktopAndMigrate();
+            const result = await signInDesktopAndMigrate();
       gAccount = result.account;
       const summary = signInSummary(result);
       if (summary) alert(summary);

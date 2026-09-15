@@ -22,7 +22,10 @@ $cfg = Read-DeployEnv (Join-Path $PSScriptRoot 'deploy.env')
 
 Write-Host "Building web bundle (base=/NotezZz)..." -ForegroundColor Cyan
 $env:BASE_PATH = '/NotezZz'
-npm run build
+# Through cmd with stderr merged: PowerShell 5.1 turns any native stderr line
+# (a Vite warning) into a terminating error under Stop, and aborted a deploy.
+cmd /c "npm run build 2>&1"
+if ($LASTEXITCODE -ne 0) { throw "web build failed (exit $LASTEXITCODE)" }
 Remove-Item Env:\BASE_PATH
 if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 
