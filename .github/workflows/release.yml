@@ -1,7 +1,9 @@
 # Tag vX.Y.Z -> signed Windows installer + updater manifest as a GitHub
-# Release. Mirrors what deploy-site.ps1 does by hand, minus the FTP upload:
-# the site's latest.json still comes from that script, so this workflow is a
-# second, independent place the same build lives.
+# Release. This is where installed apps look for updates
+# (releases/latest/download/latest.json, see src-tauri/src/updates.rs) and
+# where the site's download link points. deploy-site.ps1 (FTP) is optional
+# now: kept only while installs older than 0.18.12 still read the old
+# flatvoxel.com manifest.
 #
 # Repo secrets:
 #   TAURI_SIGNING_PRIVATE_KEY           contents of ~/.tauri/notezzz-updater.key
@@ -85,6 +87,9 @@ jobs:
           test -f "$exe.sig" || { echo "no signature at $exe.sig - signing key missing?" >&2; exit 1; }
           mkdir -p dist
           cp "$exe" "$exe.sig" dist/
+          # A fixed-name copy so the site's download link never changes:
+          # .../releases/latest/download/NotezZz-Setup.exe
+          cp "$exe" dist/NotezZz-Setup.exe
           node -e '
             const fs = require("fs");
             const [v, tag, repo, exe] = process.argv.slice(1);

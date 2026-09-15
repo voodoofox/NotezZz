@@ -1,0 +1,58 @@
+# The marketing site (site/) on GitHub Pages: the download link, the privacy
+# and terms pages the OAuth consent screen points at. Deployed on every push
+# that touches the site or the version, and after each release so the
+# version stamp on the page matches what the download link serves.
+#
+# First run enables Pages on the repo by itself (configure-pages enablement).
+# The site then lives at https://<owner>.github.io/<repo>/.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', 'package.json', '.github/workflows/pages.yml']
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same stamp deploy-site.ps1 writes into <span data-version>, built from
+      # package.json so the page never advertises a version it can't serve.
+      - name: Stage site with version stamp
+        shell: bash
+        run: |
+          v=$(node -p "require('./package.json').version")
+          stamp="v$v · $(date -u +'%-d %b %Y')"
+          mkdir -p _site
+          cp -r site/. _site/
+          rm -f _site/.htaccess _site/NotezZz-Setup.exe _site/NotezZz-Setup.exe.sig _site/latest.json
+          sed -i "s|<span data-version>[^<]*</span>|<span data-version>$stamp</span>|g" _site/index.html
+          echo "stamped: $stamp"
+
+      # enablement: turns Pages on for the repo the first time (source: Actions),
+      # so no click in Settings is needed.
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4

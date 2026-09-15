@@ -1,3 +1,7 @@
+# OPTIONAL since 0.18.12: the site lives on GitHub Pages (pages.yml) and
+# installs look for updates on GitHub Releases (release.yml). Run this only
+# to keep the flatvoxel.com copy in step for installs older than 0.18.12.
+#
 # Publishes the marketing site to https://flatvoxel.com/notezzz/ and refreshes
 # the downloadable installer, stamping the current version into the page so the
 # site can never advertise a build it isn't serving.

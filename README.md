@@ -94,6 +94,16 @@ temporary netrc file (deleted afterwards), never on the command line.
 `deploy-web.ps1` uploads everything under `_app/` first and `index.html` /
 `version.json` last, so a visitor mid-upload keeps the old working build.
 
+## Where things are served from
+
+| What | Where | How it gets there |
+|---|---|---|
+| Installer + updater manifest | GitHub Releases (`releases/latest/download/…`) | `release.yml` on a `v*` tag |
+| Marketing site, privacy, terms | GitHub Pages (`https://voodoofox.github.io/NotezZz/`) | `pages.yml` on push / release |
+| Web app (PWA) | `https://flatvoxel.com/NotezZz/` | `deploy-web.ps1` (FTP) — moving it changes the PWA's origin, so it stays for now |
+
+Enable Pages once: repo Settings → Pages → Source "GitHub Actions".
+
 ## CI and releases
 
 `.github/workflows/ci.yml` runs on every push / PR to `main`, as two jobs:

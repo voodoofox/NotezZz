@@ -8,7 +8,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_updater::UpdaterExt;
 
-const MANIFEST: &str = "https://flatvoxel.com/notezzz/latest.json";
+// GitHub resolves releases/latest/download/<asset> to the newest release
+// with a redirect, which the updater follows. Builds before 0.18.12 read
+// flatvoxel.com/notezzz/latest.json; that file keeps being published until
+// they have all moved on.
+const MANIFEST: &str = "https://github.com/voodoofox/NotezZz/releases/latest/download/latest.json";
 
 #[derive(serde::Serialize, Clone)]
 pub struct UpdateInfo {
