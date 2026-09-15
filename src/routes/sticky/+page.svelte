@@ -272,6 +272,18 @@
     await store.createPinned(near);
   }
 
+  /**
+   * Resize from the card, not the window. The OS resize edges follow the
+   * rectangular window, so on a tilted note they sit in the transparent
+   * margin, nowhere near the card's corner. This grip lives on the card and
+   * hands the drag to the OS, so the cursor and the resize itself are native.
+   */
+  async function startResize(e: PointerEvent) {
+    if (!winRef || e.button !== 0) return;
+    e.preventDefault();
+    await winRef.startResizeDragging('SouthEast');
+  }
+
   async function unpin() {
     if (noteId) store.update(noteId, { pinned: false }); // closes this window
   }
@@ -320,6 +332,9 @@
         <Icon name="close" size={15} />
       </button>
     </header>
+    {#if hasWin}
+      <div class="grip" title="Resize" aria-hidden="true" onpointerdown={startResize}></div>
+    {/if}
     <div class="body">
       {#key note.id}
         <Editor
@@ -393,6 +408,31 @@
   .body {
     flex: 1;
     min-height: 0;
+  }
+  /* Two short diagonal lines in the card's corner, the classic grip. Drawn
+     with the note's ink so it follows every palette. */
+  .grip {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 18px;
+    height: 18px;
+    cursor: nwse-resize;
+    opacity: 0.35;
+    background: linear-gradient(
+      135deg,
+      transparent 0 44%,
+      var(--note-fg) 44% 50%,
+      transparent 50% 66%,
+      var(--note-fg) 66% 72%,
+      transparent 72%
+    );
+    background-size: 22px 22px;
+    background-position: 100% 100%;
+    background-repeat: no-repeat;
+  }
+  .grip:hover {
+    opacity: 0.8;
   }
   .loading {
     position: fixed;
