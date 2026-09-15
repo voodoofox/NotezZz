@@ -23,3 +23,6 @@ vite.config.ts.timestamp-*
 /updater.env
 /site/NotezZz-Setup.exe.sig
 /site/latest.json
+
+# agent worktrees
+/.claude/
