@@ -270,7 +270,7 @@
         <input
           type="checkbox"
           data-testid="hotkey-newnote"
-          checked={store.settings.hotkeyNewNote ?? true}
+          checked={store.settings.hotkeyNewNote ?? false}
           onchange={(e) =>
             store.saveSettings({ hotkeyNewNote: (e.currentTarget as HTMLInputElement).checked })}
         />

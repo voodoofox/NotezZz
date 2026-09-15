@@ -875,16 +875,16 @@ test('export: downloads a ZIP with every note as JSON and Markdown', async ({ pa
   expect(JSON.parse(entries.find((e) => e.name === 'settings.json')!.text)).toHaveProperty('appTheme');
 });
 
-test('settings: the new-sticky shortcut can be switched off, and it sticks', async ({ page }) => {
+test('settings: the new-sticky shortcut is off by default and sticks when enabled', async ({ page }) => {
   await page.getByTestId('open-settings').click();
-  await expect(page.getByRole('dialog')).toContainText('Ctrl+Shift+N');
+  await expect(page.getByRole('dialog')).toContainText('Ctrl+Alt+N');
   const box = page.getByTestId('hotkey-newnote');
-  await expect(box).toBeChecked(); // on by default
-  await box.uncheck();
-  await expect(box).not.toBeChecked();
+  await expect(box).not.toBeChecked(); // a global shortcut is opt-in
+  await box.check();
+  await expect(box).toBeChecked();
 
   // A setting, not a session flag: it survives a relaunch.
   await page.goto('/?local');
   await page.getByTestId('open-settings').click();
-  await expect(page.getByTestId('hotkey-newnote')).not.toBeChecked();
+  await expect(page.getByTestId('hotkey-newnote')).toBeChecked();
 });

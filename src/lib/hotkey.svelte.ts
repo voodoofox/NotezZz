@@ -1,4 +1,4 @@
-// The desktop-wide "new sticky" shortcut: Ctrl+Shift+N from any app, even
+// The desktop-wide "new sticky" shortcut: Ctrl+Alt+N from any app, even
 // with the main window hidden in the tray, drops a pinned note under the
 // cursor. Registered by the main window only — every sticky window runs the
 // same code, and registering from each would fire N notes per press. Off the
@@ -8,9 +8,11 @@ import { isTauri } from './storage/backend';
 import { logDiag } from './diag';
 import { store } from './store.svelte';
 
-export const NEW_NOTE_SHORTCUT = 'CommandOrControl+Shift+N';
+// Not Ctrl+Shift+N: that is Chrome's incognito window, and a global
+// shortcut steals it from every app. Off by default for the same reason.
+export const NEW_NOTE_SHORTCUT = 'CommandOrControl+Alt+N';
 /** How the Settings row spells it (Windows is the only desktop build). */
-export const NEW_NOTE_SHORTCUT_LABEL = 'Ctrl+Shift+N';
+export const NEW_NOTE_SHORTCUT_LABEL = 'Ctrl+Alt+N';
 
 /** `unavailable`: another app owns the combo, so the OS refused it to us. */
 export type HotkeyStatus = 'off' | 'on' | 'unavailable';

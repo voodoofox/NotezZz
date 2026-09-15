@@ -278,10 +278,11 @@
    * margin, nowhere near the card's corner. This grip lives on the card and
    * hands the drag to the OS, so the cursor and the resize itself are native.
    */
-  async function startResize(e: PointerEvent) {
+  type Corner = 'NorthWest' | 'NorthEast' | 'SouthWest' | 'SouthEast';
+  async function startResize(e: PointerEvent, corner: Corner) {
     if (!winRef || e.button !== 0) return;
     e.preventDefault();
-    await winRef.startResizeDragging('SouthEast');
+    await winRef.startResizeDragging(corner);
   }
 
   async function unpin() {
@@ -333,7 +334,13 @@
       </button>
     </header>
     {#if hasWin}
-      <div class="grip" title="Resize" aria-hidden="true" onpointerdown={startResize}></div>
+      <!-- Invisible 10px handles on every card corner (the OS edges are on the
+           window, which on a tilted note is nowhere near the card); the
+           bottom-right one also draws a small grip as the hint. -->
+      <div class="corner nw" aria-hidden="true" onpointerdown={(e) => startResize(e, 'NorthWest')}></div>
+      <div class="corner ne" aria-hidden="true" onpointerdown={(e) => startResize(e, 'NorthEast')}></div>
+      <div class="corner sw" aria-hidden="true" onpointerdown={(e) => startResize(e, 'SouthWest')}></div>
+      <div class="corner se grip" title="Resize" aria-hidden="true" onpointerdown={(e) => startResize(e, 'SouthEast')}></div>
     {/if}
     <div class="body">
       {#key note.id}
@@ -409,30 +416,34 @@
     flex: 1;
     min-height: 0;
   }
-  /* Two short diagonal lines in the card's corner, the classic grip. Drawn
-     with the note's ink so it follows every palette. */
-  .grip {
+  .corner {
     position: absolute;
-    right: 0;
-    bottom: 0;
-    width: 18px;
-    height: 18px;
-    cursor: nwse-resize;
-    opacity: 0.35;
+    width: 10px;
+    height: 10px;
+    z-index: 2;
+  }
+  .corner.nw { left: 0; top: 0; cursor: nwse-resize; }
+  .corner.ne { right: 0; top: 0; cursor: nesw-resize; }
+  .corner.sw { left: 0; bottom: 0; cursor: nesw-resize; }
+  .corner.se { right: 0; bottom: 0; cursor: nwse-resize; }
+  /* Two short diagonal hairlines in the bottom-right corner, drawn with the
+     note's ink: the one visible hint that the card resizes. */
+  .grip {
+    opacity: 0.3;
     background: linear-gradient(
       135deg,
-      transparent 0 44%,
-      var(--note-fg) 44% 50%,
-      transparent 50% 66%,
-      var(--note-fg) 66% 72%,
-      transparent 72%
+      transparent 0 50%,
+      var(--note-fg) 50% 56%,
+      transparent 56% 72%,
+      var(--note-fg) 72% 78%,
+      transparent 78%
     );
-    background-size: 22px 22px;
+    background-size: 12px 12px;
     background-position: 100% 100%;
     background-repeat: no-repeat;
   }
   .grip:hover {
-    opacity: 0.8;
+    opacity: 0.7;
   }
   .loading {
     position: fixed;

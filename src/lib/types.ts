@@ -45,7 +45,7 @@ export interface Settings {
   noteOrder?: string[];
   /** First-run welcome notes have been written; never write them again. */
   seeded?: boolean;
-  /** Ctrl+Shift+N anywhere on the desktop drops a new sticky under the cursor. */
+  /** Ctrl+Alt+N anywhere on the desktop drops a new sticky under the cursor. Off unless asked for. */
   hotkeyNewNote?: boolean;
 }
 
@@ -56,7 +56,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autostart: false,
   syncFolder: null,
   stickyTilt: false,
-  hotkeyNewNote: true,
+  hotkeyNewNote: false,
 };
 
 /**

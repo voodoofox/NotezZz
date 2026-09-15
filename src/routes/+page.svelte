@@ -68,7 +68,7 @@
   // was unavailable gets another try each time (the other app may have quit).
   $effect(() => {
     if (!hotkeyArmed) return;
-    void hotkey.apply(store.settings.hotkeyNewNote ?? true);
+    void hotkey.apply(store.settings.hotkeyNewNote ?? false);
   });
 
   /**
@@ -99,7 +99,7 @@
       window.addEventListener('focus', () => void store.reload());
       // "Updates itself" has to mean it looks without being asked.
       scheduleUpdateChecks();
-      // Ctrl+Shift+N from anywhere (see hotkey.svelte.ts). Released on the
+      // Ctrl+Alt+N from anywhere, when enabled (see hotkey.svelte.ts). Released on the
       // way out so a relaunch never finds the combo held by a dead handler.
       hotkeyArmed = true;
       window.addEventListener('beforeunload', () => void hotkey.release());
