@@ -31,7 +31,10 @@ src/
     +page.svelte           main window (sign-in gate on web)
     sticky/+page.svelte    a pinned sticky window (desktop; id from window label)
 src-tauri/                 Rust shell: fs storage commands, tray, autostart
+  src/backup.rs            daily local backup of the notes folder
+  src/tests.rs             unit tests for the storage logic (cargo test)
 tests/app.spec.ts          Playwright E2E suite (44 tests)
+.github/workflows/         CI (check + E2E + cargo test) and tag-driven releases
 deploy-web.ps1             build + full FTPS deploy + live-asset verification
 deploy-site.ps1            stamp version into site/, publish page + installer
 deploy-lib.ps1             shared deploy helpers (deploy.env loader, FTPS upload)
@@ -51,6 +54,17 @@ One JSON file per note + `settings.json`. The same layout everywhere:
 Desktop + web converge when the desktop sync folder points at the local mirror
 of the same Drive folder (Google Drive for Desktop does the transport).
 
+## Backups
+
+The desktop app copies its notes folder (whichever one is in use: the sync
+folder or the local fallback) into
+`%LOCALAPPDATA%\com.administrator.notezzz\backups\YYYY-MM-DD\` on start and
+then every 24 h, keeping the 7 newest days. It is plain file copies — restore
+by copying a day's files back into the notes folder. `.bak` files (parked
+conflict losers) are included; a day is skipped, with a line on stderr, when
+the sync folder is unavailable. The `backups_dir` command returns the folder
+path for the UI. Implemented in `src-tauri/src/backup.rs`.
+
 ## Commands
 
 | Command | What |
@@ -60,6 +74,7 @@ of the same Drive folder (Google Drive for Desktop does the transport).
 | `npm run tauri build` | Windows installers → `src-tauri/target/release/bundle/{nsis,msi}/` |
 | `npm test` | Playwright E2E suite (uses system Chrome, auto-starts dev server) |
 | `npm run check` | svelte-check / TypeScript |
+| `cargo test` (in `src-tauri/`) | Rust unit tests: atomic writes, id sanitising, conflict-copy resolution, backups |
 | `powershell -ExecutionPolicy Bypass -File .\deploy-web.ps1` | build + deploy web to flatvoxel.com |
 | `powershell -ExecutionPolicy Bypass -File .\deploy-site.ps1` | publish landing page + installer (after `tauri build`) |
 
@@ -78,6 +93,37 @@ The scripts refuse to run without it. Credentials are handed to curl through a
 temporary netrc file (deleted afterwards), never on the command line.
 `deploy-web.ps1` uploads everything under `_app/` first and `index.html` /
 `version.json` last, so a visitor mid-upload keeps the old working build.
+
+## CI and releases
+
+`.github/workflows/ci.yml` runs on every push / PR to `main`, as two jobs:
+
+- **web** (ubuntu): `npm ci`, `npm run check`, then the Playwright suite
+  against the system Chrome (installed via `npx playwright install chrome`
+  only if the runner image lacks it; the config's `webServer` starts Vite).
+- **rust** (windows): `cargo test` in `src-tauri/`. Windows because the Tauri
+  crate needs WebView2 headers.
+
+`.github/workflows/release.yml` runs on a `v*` tag: builds the signed NSIS
+installer on windows-latest and publishes a GitHub Release with the `.exe`,
+its `.exe.sig`, and a `latest.json` in the same shape `deploy-site.ps1`
+produces (its `url` points at the release asset). It needs three repo secrets:
+
+| Secret | Value |
+|---|---|
+| `TAURI_SIGNING_PRIVATE_KEY` | the **contents** of `~/.tauri/notezzz-updater.key` (see `updater.env` below) |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | that key's password |
+| `GOOGLE_CLIENT_SECRET` | the desktop OAuth client secret from `.env.local`; the workflow writes it to `.env.local` before the build because Vite injects it only for the desktop build mode |
+
+To cut a release: bump `version` in `package.json` **and** `src-tauri/Cargo.toml`
+(the workflow refuses a tag that matches neither), commit, then
+
+```sh
+git tag vX.Y.Z && git push origin main vX.Y.Z
+```
+
+The site's `latest.json` is still published by `deploy-site.ps1`; the GitHub
+Release is a second, independent home for the same build.
 
 ## Where secrets live
 

@@ -1,0 +1,67 @@
+# Two independent jobs so a Rust compile never waits on Chrome and vice versa.
+#   web  (ubuntu):  svelte-check + Playwright E2E against the Vite dev server
+#   rust (windows): cargo test in src-tauri. Windows because the Tauri crate
+#                   pulls WebView2/windows-sys headers that only build there.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run check
+
+      # playwright.config.ts uses channel 'chrome' (the system Chrome, not a
+      # bundled Chromium). The ubuntu image already ships Google Chrome, and
+      # `playwright install chrome` refuses to run over an existing install
+      # without --force, so only install when it is actually missing.
+      - name: Ensure Google Chrome
+        run: |
+          if ! command -v google-chrome >/dev/null 2>&1; then
+            npx playwright install chrome
+          fi
+          google-chrome --version
+
+      # The config's webServer block starts `npm run dev` on :1420 itself.
+      - run: npx playwright test
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: test-results/
+          if-no-files-found: ignore
+
+  rust:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: cargo test

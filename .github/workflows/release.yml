@@ -1,0 +1,114 @@
+# Tag vX.Y.Z -> signed Windows installer + updater manifest as a GitHub
+# Release. Mirrors what deploy-site.ps1 does by hand, minus the FTP upload:
+# the site's latest.json still comes from that script, so this workflow is a
+# second, independent place the same build lives.
+#
+# Repo secrets:
+#   TAURI_SIGNING_PRIVATE_KEY           contents of ~/.tauri/notezzz-updater.key
+#                                       (the minisign private key; NOT its path)
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  its password
+#   GOOGLE_CLIENT_SECRET                desktop OAuth client secret. Vite bakes
+#                                       it in from .env.local for the desktop
+#                                       build mode only, so it is written to
+#                                       that file right before the build.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      # The installer is named after Cargo.toml's version and deploy-site.ps1
+      # looks it up by package.json's, so a tag that matches neither would
+      # publish a release whose asset name lies about its contents.
+      - name: Check the tag matches package.json and Cargo.toml
+        shell: bash
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$pkg" != "$v" ]; then
+            echo "tag $GITHUB_REF_NAME but package.json says $pkg" >&2; exit 1
+          fi
+          if ! grep -q "^version = \"$v\"" src-tauri/Cargo.toml; then
+            echo "tag $GITHUB_REF_NAME but src-tauri/Cargo.toml says otherwise" >&2; exit 1
+          fi
+
+      - name: Write .env.local
+        shell: bash
+        env:
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: |
+          if [ -z "$GOOGLE_CLIENT_SECRET" ]; then
+            echo "GOOGLE_CLIENT_SECRET secret is not set; the build would ship without desktop sign-in" >&2
+            exit 1
+          fi
+          printf 'GOOGLE_CLIENT_SECRET=%s\n' "$GOOGLE_CLIENT_SECRET" > .env.local
+
+      # Only the NSIS bundle: that is what the site serves and the updater
+      # installs. The .sig beside it is produced because the signing key is
+      # in the environment (createUpdaterArtifacts in tauri.conf.json).
+      - name: Build the signed installer
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri build -- --bundles nsis
+
+      # latest.json has the same shape deploy-site.ps1 writes; only the url
+      # differs, pointing at this release's asset.
+      - name: Stage release assets and latest.json
+        shell: bash
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          exe="src-tauri/target/release/bundle/nsis/NotezZz_${v}_x64-setup.exe"
+          test -f "$exe"     || { echo "no installer at $exe" >&2; exit 1; }
+          test -f "$exe.sig" || { echo "no signature at $exe.sig - signing key missing?" >&2; exit 1; }
+          mkdir -p dist
+          cp "$exe" "$exe.sig" dist/
+          node -e '
+            const fs = require("fs");
+            const [v, tag, repo, exe] = process.argv.slice(1);
+            const name = require("path").basename(exe);
+            const manifest = {
+              version: v,
+              pub_date: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+              notes: `NotezZz ${v}`,
+              platforms: {
+                "windows-x86_64": {
+                  signature: fs.readFileSync(exe + ".sig", "utf8").trim(),
+                  url: `https://github.com/${repo}/releases/download/${tag}/${name}`,
+                },
+              },
+            };
+            fs.writeFileSync("dist/latest.json", JSON.stringify(manifest, null, 2) + "\n");
+          ' "$v" "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" "$exe"
+          cat dist/latest.json
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: NotezZz ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            dist/*.exe
+            dist/*.exe.sig
+            dist/latest.json
