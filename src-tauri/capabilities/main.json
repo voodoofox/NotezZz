@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "Main window: full set. Only this window may create webview windows (stickies) and touch dialog/opener/autostart.",
+  "description": "Main window: full set. Only this window may create webview windows (stickies) and touch dialog/opener/autostart. It also owns the global shortcut (CommandOrControl+Shift+N -> new sticky at the cursor, hence cursor-position).",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -14,6 +14,10 @@
     "core:window:allow-close",
     "core:window:allow-minimize",
     "core:window:allow-set-always-on-top",
+    "core:window:allow-cursor-position",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-is-registered",
     "opener:default",
     "dialog:default",
     "autostart:allow-enable",

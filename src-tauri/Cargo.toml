@@ -36,9 +36,15 @@ rand = "0.8"
 urlencoding = "2"
 tauri-plugin-updater = "2.11.0"
 tauri-plugin-process = "2.3.1"
+# Registered in lib.rs; the shortcut itself is bound from the frontend.
+tauri-plugin-global-shortcut = "2.3.2"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2"
 
 [target."cfg(windows)".dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi"] }
+
+[dev-dependencies]
+# Unit tests (src/tests.rs, backup.rs) run the file logic on temp dirs.
+tempfile = "3.27.0"

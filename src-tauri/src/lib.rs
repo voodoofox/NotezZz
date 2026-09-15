@@ -7,8 +7,11 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
+mod backup;
 mod fullscreen;
 mod gauth;
+#[cfg(test)]
+mod tests;
 mod updates;
 
 use tauri::menu::{Menu, MenuItem};
@@ -129,8 +132,13 @@ fn updated_at(v: &Value) -> u64 {
 }
 
 fn list_notes_blocking(app: &tauri::AppHandle) -> Result<Vec<Value>, String> {
-    let dir = notes_dir(app)?;
-    let entries = fs::read_dir(&dir).map_err(|e| format!("cannot read {}: {e}", dir.display()))?;
+    list_notes_in(&notes_dir(app)?)
+}
+
+/// Read every note in `dir`, resolving Drive conflict copies on the way
+/// (see below). Takes a plain path so tests can run it on a temp dir.
+fn list_notes_in(dir: &Path) -> Result<Vec<Value>, String> {
+    let entries = fs::read_dir(dir).map_err(|e| format!("cannot read {}: {e}", dir.display()))?;
 
     // Every parsed file, grouped by the note id INSIDE the file (not the file
     // name): a Drive conflict copy "<id> (1).json" carries the same id.
@@ -436,6 +444,10 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // Registered here, but no shortcut is bound in Rust: the frontend
+        // registers CommandOrControl+Shift+N through the JS API (it also owns
+        // the "place the new sticky at the cursor" part).
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         // Self-update: the app checks latest.json on the site (signed with the
         // key in updater.env) so users stop re-downloading installers.
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -458,12 +470,15 @@ pub fn run() {
             google_sign_out,
             updates::check_update,
             updates::install_update,
+            backup::backups_dir,
             slide_window,
         ])
         .setup(|app| {
             build_tray(app.handle())?;
             // Stickies step aside for fullscreen video/games (see fullscreen.rs).
             fullscreen::watch(app.handle().clone());
+            // Daily copy of the notes folder into the local app dir (see backup.rs).
+            backup::start(app.handle().clone());
 
             // Closing the main window hides it to the tray instead of quitting.
             if let Some(main) = app.get_webview_window("main") {
