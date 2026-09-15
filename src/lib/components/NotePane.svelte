@@ -4,14 +4,15 @@
   import { store } from '$lib/store.svelte';
   import { logDiag } from '$lib/diag';
   import { isTauri } from '$lib/storage/backend';
-  import { PALETTES, PATTERNS, getPalette, hslToHex, hexToHsl } from '$lib/palettes';
+  import { getPalette } from '$lib/palettes';
+  import ColorPicker from './ColorPicker.svelte';
   import Editor from './Editor.svelte';
   import Icon from './Icon.svelte';
 
   import { popoverStyle } from '$lib/popover';
 
   let note = $derived(store.active);
-  let pal = $derived(note ? getPalette(note.paletteId) : PALETTES[0]);
+  let pal = $derived(getPalette(note?.paletteId ?? ''));
   const desktop = isTauri();
   // Fullscreen is history state (see +page.svelte); read it from there rather
   // than store.mobileOpen so this pane never disagrees with the page.
@@ -28,16 +29,6 @@
     if (openPop === which) return void (openPop = null);
     const anchor = which === 'pal' ? palWrap : sizeWrapEl;
     if (anchor) popStyle = popoverStyle(anchor, which === 'pal' ? 226 : 270);
-    // Open ON the note's current custom colour: with the sliders at their
-    // defaults, the first nudge used to snap the note to a different colour.
-    if (which === 'pal' && note?.paletteId.startsWith('custom:')) {
-      const hsl = hexToHsl(note.paletteId.slice(7));
-      if (hsl) {
-        custHue = hsl.h;
-        custSat = Math.min(90, hsl.s);
-        custLight = Math.max(30, Math.min(94, hsl.l));
-      }
-    }
     openPop = which;
   }
 
@@ -62,18 +53,6 @@
       );
     });
   });
-
-  let isCustom = $derived(note?.paletteId.startsWith('custom:') ?? false);
-
-  // Inline custom color: hue + shade sliders apply instantly — no native
-  // color-dialog chain.
-  let custHue = $state(45);
-  let custLight = $state(82);
-  let custSat = $state(70);
-
-  function applyCustom() {
-    if (note) store.update(note.id, { paletteId: `custom:${hslToHex(custHue, custSat, custLight)}` });
-  }
 
   /** Exit fullscreen via history; if the entry got lost (e.g. a reload while
    *  fullscreen), force the state clear so the button always works. Both
@@ -145,82 +124,14 @@
         ><Icon name="palette" /></button>
         {#if openPop === 'pal'}
           <div class="pop palmenu" style={popStyle}>
-            <div class="pgrid">
-              {#each PALETTES as p}
-                <button
-                  class="pchip"
-                  data-testid="palette-chip"
-                  data-palette={p.id}
-                  style="background: {p.bg}"
-                  title={p.name}
-                  aria-label={p.name}
-                  onclick={() => {
-                    store.update(note!.id, { paletteId: p.id });
-                    openPop = null;
-                  }}
-                >
-                  {#if note.paletteId === p.id}
-                    <span class="pcheck" style="color: {p.fg}"><Icon name="check" size={15} /></span>
-                  {/if}
-                </button>
-              {/each}
-              <!-- Nine colours in a five-wide grid: this holds the tenth slot so
-                   the patterns are the whole third row, not a wrapped tail. -->
-              <span class="pchip spacer" aria-hidden="true"></span>
-              {#each PATTERNS as p}
-                <button
-                  class="pchip nz-pat-{p.pattern}"
-                  data-testid="palette-chip"
-                  data-palette={p.id}
-                  style="--pat-base: {p.header}; --pat-ink: {p.inkStrong}"
-                  title={p.name}
-                  aria-label={p.name}
-                  onclick={() => {
-                    store.update(note!.id, { paletteId: p.id });
-                    openPop = null;
-                  }}
-                >
-                  {#if note.paletteId === p.id}
-                    <span class="pcheck" style="color: {p.fg}"><Icon name="check" size={15} /></span>
-                  {/if}
-                </button>
-              {/each}
-              {#if isCustom}
-                <span class="pchip current" style="background: {pal.bg}">
-                  <span class="pcheck" style="color: {pal.fg}"><Icon name="check" size={15} /></span>
-                </span>
-              {/if}
-            </div>
-            <label class="crow">
-              <input
-                class="hue"
-                type="range" min="0" max="360" step="1"
-                data-testid="custom-hue"
-                aria-label="Custom color hue"
-                bind:value={custHue}
-                oninput={applyCustom}
-              />
-            </label>
-            <label class="crow">
-              <input
-                class="shade"
-                type="range" min="30" max="94" step="1"
-                aria-label="Custom color shade"
-                style="--hue: {custHue}; --sat: {custSat}%"
-                bind:value={custLight}
-                oninput={applyCustom}
-              />
-            </label>
-            <label class="crow">
-              <input
-                class="desat"
-                type="range" min="0" max="90" step="1"
-                aria-label="Custom color saturation"
-                style="--hue: {custHue}"
-                bind:value={custSat}
-                oninput={applyCustom}
-              />
-            </label>
+            <ColorPicker
+              paletteId={note.paletteId}
+              onPick={(id) => {
+                store.update(note!.id, { paletteId: id });
+                // Sliders keep the menu open (they're continuous); a chip closes it.
+                if (!id.startsWith('custom:')) openPop = null;
+              }}
+            />
           </div>
         {/if}
       </span>
@@ -422,91 +333,6 @@
     gap: 12px;
     padding: 14px;
     width: 226px;
-  }
-  .pgrid {
-    display: grid;
-    grid-template-columns: repeat(5, 34px);
-    gap: 8px;
-  }
-  .pchip {
-    width: 34px;
-    height: 34px;
-    border-radius: var(--radius-md);
-    border: 1px solid rgba(0, 0, 0, 0.16);
-    cursor: pointer;
-    padding: 0;
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .pchip:hover {
-    transform: scale(1.08);
-  }
-  .pchip.current {
-    cursor: default;
-  }
-  .pchip.spacer {
-    visibility: hidden;
-  }
-  .pcheck {
-    display: inline-flex;
-  }
-  .pchip.nz-pat-checker .pcheck,
-  .pchip.nz-pat-stripes .pcheck,
-  .pchip.nz-pat-dots .pcheck,
-  .pchip.nz-pat-stairs .pcheck,
-  .pchip.nz-pat-bricks .pcheck {
-    background: var(--pat-base);
-    border-radius: var(--radius-sm);
-    padding: 1px;
-  }
-  /* Inline custom color: hue wheel flattened into a slider + shade. */
-  .crow {
-    display: block;
-  }
-  .crow input[type='range'] {
-    width: 100%;
-    height: 22px;
-    appearance: none;
-    -webkit-appearance: none;
-    border-radius: var(--radius-md);
-    outline: none;
-    cursor: pointer;
-  }
-  .crow input[type='range']::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--app-panel);
-    border: 2px solid var(--app-fg);
-  }
-  .hue {
-    background: linear-gradient(
-      to right,
-      hsl(0, 70%, 70%),
-      hsl(60, 70%, 70%),
-      hsl(120, 70%, 70%),
-      hsl(180, 70%, 70%),
-      hsl(240, 70%, 70%),
-      hsl(300, 70%, 70%),
-      hsl(360, 70%, 70%)
-    );
-  }
-  .shade {
-    background: linear-gradient(
-      to right,
-      hsl(var(--hue), var(--sat, 70%), 30%),
-      hsl(var(--hue), var(--sat, 70%), 94%)
-    );
-  }
-  .desat {
-    background: linear-gradient(
-      to right,
-      hsl(var(--hue), 0%, 75%),
-      hsl(var(--hue), 90%, 75%)
-    );
   }
   .panel {
     display: flex;

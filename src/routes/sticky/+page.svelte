@@ -4,6 +4,7 @@
   import { getPalette } from '$lib/palettes';
   import Editor from '$lib/components/Editor.svelte';
   import Icon from '$lib/components/Icon.svelte';
+  import ColorPicker from '$lib/components/ColorPicker.svelte';
 
   let noteId = $state<string | null>(null);
   let note = $derived(noteId ? store.notes.find((n) => n.id === noteId) ?? null : null);
@@ -285,10 +286,19 @@
     await winRef.startResizeDragging(corner);
   }
 
+  // Colour picker in the bar, same component as the main window's.
+  let showColors = $state(false);
+  let colorWrap = $state<HTMLElement | null>(null);
+  function closeColorsOutside(e: PointerEvent) {
+    if (showColors && colorWrap && !colorWrap.contains(e.target as Node)) showColors = false;
+  }
+
   async function unpin() {
     if (noteId) store.update(noteId, { pinned: false }); // closes this window
   }
 </script>
+
+<svelte:window onpointerdown={closeColorsOutside} />
 
 {#if note}
   <div
@@ -312,6 +322,32 @@
         </button>
       {/if}
       <span class="ttl" data-tauri-drag-region>{note.title || 'Note'}</span>
+      {#if !tucked}
+        <span class="cwrap" bind:this={colorWrap}>
+          <button
+            class="x"
+            class:on={showColors}
+            data-testid="sticky-color"
+            title="Note color"
+            aria-label="Note color"
+            aria-expanded={showColors}
+            onclick={() => (showColors = !showColors)}
+          >
+            <Icon name="palette" size={15} />
+          </button>
+          {#if showColors}
+            <div class="cpop">
+              <ColorPicker
+                paletteId={note.paletteId}
+                onPick={(id) => {
+                  if (noteId) store.update(noteId, { paletteId: id });
+                  if (!id.startsWith('custom:')) showColors = false;
+                }}
+              />
+            </div>
+          {/if}
+        </span>
+      {/if}
       {#if hasWin && !tucked}
         <button class="x" data-testid="sticky-add" title="New pinned note" aria-label="New pinned note" onclick={addPinned}>
           <Icon name="add" size={15} />
@@ -334,13 +370,12 @@
       </button>
     </header>
     {#if hasWin}
-      <!-- Invisible 10px handles on every card corner (the OS edges are on the
-           window, which on a tilted note is nowhere near the card); the
-           bottom-right one also draws a small grip as the hint. -->
+      <!-- Invisible 10px handles on every card corner: the OS resize edges
+           follow the window, which on a tilted note is nowhere near the card. -->
       <div class="corner nw" aria-hidden="true" onpointerdown={(e) => startResize(e, 'NorthWest')}></div>
       <div class="corner ne" aria-hidden="true" onpointerdown={(e) => startResize(e, 'NorthEast')}></div>
       <div class="corner sw" aria-hidden="true" onpointerdown={(e) => startResize(e, 'SouthWest')}></div>
-      <div class="corner se grip" title="Resize" aria-hidden="true" onpointerdown={(e) => startResize(e, 'SouthEast')}></div>
+      <div class="corner se" aria-hidden="true" onpointerdown={(e) => startResize(e, 'SouthEast')}></div>
     {/if}
     <div class="body">
       {#key note.id}
@@ -408,6 +443,36 @@
     display: inline-flex;
     align-items: center;
   }
+  .x.on {
+    opacity: 1;
+    background: var(--note-fg);
+    color: var(--note-bg);
+  }
+  .cwrap {
+    position: relative;
+    display: inline-flex;
+  }
+  /* Hangs under the bar, right-aligned to its button; scrolls if the sticky
+     is shorter than the picker. */
+  .cpop {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    width: 226px;
+    max-height: calc(100vh - 104px); /* bar + bottom toolbar + gaps */
+    overflow-y: auto;
+    background: var(--app-panel);
+    color: var(--app-fg);
+    border: 1px solid var(--app-border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+    cursor: default;
+  }
   .x:hover {
     opacity: 1;
     background: rgba(0, 0, 0, 0.12);
@@ -426,25 +491,6 @@
   .corner.ne { right: 0; top: 0; cursor: nesw-resize; }
   .corner.sw { left: 0; bottom: 0; cursor: nesw-resize; }
   .corner.se { right: 0; bottom: 0; cursor: nwse-resize; }
-  /* Two short diagonal hairlines in the bottom-right corner, drawn with the
-     note's ink: the one visible hint that the card resizes. */
-  .grip {
-    opacity: 0.3;
-    background: linear-gradient(
-      135deg,
-      transparent 0 50%,
-      var(--note-fg) 50% 56%,
-      transparent 56% 72%,
-      var(--note-fg) 72% 78%,
-      transparent 78%
-    );
-    background-size: 12px 12px;
-    background-position: 100% 100%;
-    background-repeat: no-repeat;
-  }
-  .grip:hover {
-    opacity: 0.7;
-  }
   .loading {
     position: fixed;
     inset: 0;
