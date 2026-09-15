@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { test, expect, type Page } from '@playwright/test';
 
 // Start each test on a clean slate: local mode + empty storage.
@@ -797,4 +798,93 @@ test('a pixel pattern paints the title bar and the selected row', async ({ page 
   });
   await page.goto('/?local');
   await expect(page.getByTestId('note-pane')).toHaveCSS('background-color', 'rgb(251, 250, 246)');
+});
+
+/**
+ * Read a store-only ZIP (what src/lib/zip.ts writes): walk the local headers,
+ * hand back each entry's name and text, and check every CRC on the way, so
+ * the test proves the archive is well-formed rather than merely PK-prefixed.
+ */
+function readStoredZip(buf: Buffer): { name: string; text: string }[] {
+  const table = new Uint32Array(256).map((_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc32 = (b: Buffer) => {
+    let c = 0xffffffff;
+    for (const byte of b) c = table[(c ^ byte) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const entries: { name: string; text: string }[] = [];
+  let pos = 0;
+  while (buf.readUInt32LE(pos) === 0x04034b50) {
+    const crc = buf.readUInt32LE(pos + 14);
+    const size = buf.readUInt32LE(pos + 18);
+    const nameLen = buf.readUInt16LE(pos + 26);
+    const extraLen = buf.readUInt16LE(pos + 28);
+    const name = buf.subarray(pos + 30, pos + 30 + nameLen).toString('utf8');
+    const start = pos + 30 + nameLen + extraLen;
+    const data = buf.subarray(start, start + size);
+    expect(crc32(data), `crc of ${name}`).toBe(crc);
+    entries.push({ name, text: data.toString('utf8') });
+    pos = start + size;
+  }
+  // The central directory follows, then the end record names the count.
+  expect(buf.readUInt32LE(pos)).toBe(0x02014b50);
+  const end = buf.length - 22;
+  expect(buf.readUInt32LE(end)).toBe(0x06054b50);
+  expect(buf.readUInt16LE(end + 10)).toBe(entries.length);
+  return entries;
+}
+
+test('export: downloads a ZIP with every note as JSON and Markdown', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Groceries');
+  await typeInEditor(page, 'buy milk');
+  await page.locator('.ProseMirror').press('ControlOrMeta+a');
+  await page.getByTestId('fmt-bold').click();
+  await page.getByTestId('new-note').click();
+  await page.getByTestId('title-input').fill('Work plan');
+  await expect(page.getByTestId('note-item')).toHaveCount(2);
+
+  await page.getByTestId('open-settings').click();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByTestId('export-all').click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(/^notezzz-export-\d{4}-\d{2}-\d{2}\.zip$/);
+
+  const bytes = readFileSync((await download.path())!);
+  expect(bytes.subarray(0, 2).toString('latin1')).toBe('PK');
+  const entries = readStoredZip(bytes);
+  const names = entries.map((e) => e.name).sort();
+  expect(names).toHaveLength(5); // 2 raw + 2 markdown + settings
+  expect(names).toContain('settings.json');
+  expect(names).toContain('markdown/Groceries.md');
+  expect(names).toContain('markdown/Work plan.md');
+  expect(names.filter((n) => /^notes\/[0-9a-f]+\.json$/.test(n))).toHaveLength(2);
+
+  // Markdown: title as the heading, formatting carried over.
+  const md = entries.find((e) => e.name === 'markdown/Groceries.md')!.text;
+  expect(md).toContain('# Groceries');
+  expect(md).toContain('**buy milk**');
+  // Raw JSON is the note as stored.
+  const raw = entries.filter((e) => e.name.startsWith('notes/')).map((e) => JSON.parse(e.text));
+  expect(raw.map((n) => n.title).sort()).toEqual(['Groceries', 'Work plan']);
+  expect(JSON.parse(entries.find((e) => e.name === 'settings.json')!.text)).toHaveProperty('appTheme');
+});
+
+test('settings: the new-sticky shortcut can be switched off, and it sticks', async ({ page }) => {
+  await page.getByTestId('open-settings').click();
+  await expect(page.getByRole('dialog')).toContainText('Ctrl+Shift+N');
+  const box = page.getByTestId('hotkey-newnote');
+  await expect(box).toBeChecked(); // on by default
+  await box.uncheck();
+  await expect(box).not.toBeChecked();
+
+  // A setting, not a session flag: it survives a relaunch.
+  await page.goto('/?local');
+  await page.getByTestId('open-settings').click();
+  await expect(page.getByTestId('hotkey-newnote')).not.toBeChecked();
 });

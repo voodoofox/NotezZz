@@ -7,12 +7,19 @@
   import NotePane from '$lib/components/NotePane.svelte';
   import SignIn from '$lib/components/SignIn.svelte';
   import ShareIntake from '$lib/components/ShareIntake.svelte';
+  import Onboarding from '$lib/components/Onboarding.svelte';
   import { page } from '$app/state';
   import { hasPriorAuth, isDriveAuthed, signIn, tokenExpiringSoon } from '$lib/drive/auth';
   import { scheduleUpdateChecks } from '$lib/update.svelte';
+  import { hotkey } from '$lib/hotkey.svelte';
 
   /** Text arriving via the Android share sheet (see routes/share). */
   let sharedText = $state<string | null>(null);
+  /** First desktop launch: the "where do notes live?" question (see maybeOnboard). */
+  let showOnboarding = $state(false);
+  const ONBOARDED_KEY = 'notezzz:onboarded';
+  /** Set once the desktop listeners are wired; the hotkey effect waits on it. */
+  let hotkeyArmed = $state(false);
 
   // Desktop never gates. Web waits for Google sign-in, unless "local mode" is
   // chosen (offline, localStorage) — also used by the E2E test suite via ?local.
@@ -55,6 +62,15 @@
     }
   });
 
+  // The global shortcut follows its setting wherever the change comes from:
+  // the switch in Settings here, or the same switch flipped on another device
+  // and arriving through sync. Re-applying is idempotent, and a combo that
+  // was unavailable gets another try each time (the other app may have quit).
+  $effect(() => {
+    if (!hotkeyArmed) return;
+    void hotkey.apply(store.settings.hotkeyNewNote ?? true);
+  });
+
   /**
    * Window/document listeners that must exist exactly once. boot() can run
    * again (the effect above drops to the gate and the gate re-boots), and
@@ -83,6 +99,10 @@
       window.addEventListener('focus', () => void store.reload());
       // "Updates itself" has to mean it looks without being asked.
       scheduleUpdateChecks();
+      // Ctrl+Shift+N from anywhere (see hotkey.svelte.ts). Released on the
+      // way out so a relaunch never finds the combo held by a dead handler.
+      hotkeyArmed = true;
+      window.addEventListener('beforeunload', () => void hotkey.release());
     } else if (!localMode) {
       // Renew the Google token when the user RETURNS to the app if it's close
       // to expiry — the silent-refresh popup blink happens at open, not while
@@ -130,6 +150,36 @@
     store.startAutoSync(isTauri() ? 6000 : 45000);
 
     await wireListeners();
+    await maybeOnboard().catch((e) => console.error('onboarding', e));
+  }
+
+  /**
+   * First desktop launch only: ask where the notes should live. The web app
+   * has its own gate (SignIn.svelte) and ?local is the test suite's blank
+   * slate, so neither ever sees this. Someone already signed in has answered
+   * the question; record that, so a later sign-out doesn't re-ask it.
+   */
+  async function maybeOnboard() {
+    if (!isTauri() || localMode) return;
+    try {
+      if (localStorage.getItem(ONBOARDED_KEY)) return;
+    } catch {
+      return; // nowhere to remember the answer: don't ask every launch
+    }
+    const { desktopAuthConfigured, desktopAccount } = await import('$lib/drive/desktopAuth');
+    if (!desktopAuthConfigured()) return;
+    if (await desktopAccount()) return onboardingDone();
+    showOnboarding = true;
+  }
+
+  /** Either answer settles it; the flag is what keeps the question asked once. */
+  function onboardingDone() {
+    showOnboarding = false;
+    try {
+      localStorage.setItem(ONBOARDED_KEY, '1');
+    } catch {
+      /* private mode */
+    }
   }
 
   function shareDone() {
@@ -158,6 +208,9 @@
   </main>
   {#if sharedText}
     <ShareIntake text={sharedText} onDone={shareDone} />
+  {/if}
+  {#if showOnboarding}
+    <Onboarding onDone={onboardingDone} />
   {/if}
 {:else}
   <!-- Both ways past the gate must start the app: opening the pane without
