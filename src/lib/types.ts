@@ -45,6 +45,10 @@ export interface Settings {
   noteOrder?: string[];
   /** First-run welcome notes have been written; never write them again. */
   seeded?: boolean;
+  /** Main window: note list beside the note (default) or above it, like the phone. */
+  layout?: 'side' | 'top';
+  /** With the list above the note: how many columns of notes. */
+  listColumns?: 1 | 2 | 3;
   /** Ctrl+Alt+N anywhere on the desktop drops a new sticky under the cursor. Off unless asked for. */
   hotkeyNewNote?: boolean;
 }
@@ -57,6 +61,8 @@ export const DEFAULT_SETTINGS: Settings = {
   syncFolder: null,
   stickyTilt: false,
   hotkeyNewNote: false,
+  layout: 'side',
+  listColumns: 1,
 };
 
 /**

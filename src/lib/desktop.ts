@@ -86,6 +86,14 @@ export async function openSticky(note: Note, near?: { x: number; y: number }): P
   win.once('tauri://error', (e) => console.error('sticky window error', e.payload));
 }
 
+/** Hide a sticky at once; used while its last write lands before closing. */
+export async function hideSticky(id: string): Promise<void> {
+  if (!isTauri()) return;
+  const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+  const win = await WebviewWindow.getByLabel(stickyLabel(id));
+  if (win) await win.hide();
+}
+
 export async function closeSticky(id: string): Promise<void> {
   if (!isTauri()) return;
   const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');

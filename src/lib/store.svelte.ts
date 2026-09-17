@@ -14,7 +14,7 @@ import { Outbox, type OutboxOp } from './outbox';
 import type { StorageBackend } from './storage/backend';
 import { isTauri } from './storage/backend';
 import { LocalBackend } from './storage/localBackend';
-import { openSticky, closeSticky, broadcastChange, onRemoteChange } from './desktop';
+import { openSticky, closeSticky, hideSticky, broadcastChange, onRemoteChange } from './desktop';
 
 /**
  * Newest-first, one note per id. Duplicate ids (Drive "(1)" copies, file-sync
@@ -449,7 +449,12 @@ class AppStore {
       tilt: rollTilt(),
     });
     this.notes = [note, ...this.notes];
-    await this.#save(note);
+    const saved = this.#save(note);
+    // Cloud: the write's first step puts the note in this device's cache,
+    // synchronously, and a sticky paints from that cache as it boots — so the
+    // window can open now instead of after the upload round-trip (the "delay
+    // when adding" from a sticky). Local files have no cache: wait there.
+    if (!this.isCloud) await saved;
     await openSticky(note, near);
     return note;
   }
@@ -489,6 +494,9 @@ class AppStore {
    */
   async #unpin(note: Note) {
     this.#cancelDebounce(note.id);
+    // Off the screen immediately; the window is destroyed only once the
+    // write has landed (closing it mid-request would abort the request).
+    void hideSticky(note.id);
     await this.#save($state.snapshot(note));
     await closeSticky(note.id);
   }

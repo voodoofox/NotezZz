@@ -174,6 +174,32 @@
       </label>
 
       <label class="row">
+        <span>Note list</span>
+        <select
+          data-testid="set-layout"
+          value={store.settings.layout ?? 'side'}
+          onchange={(e) => store.saveSettings({ layout: (e.currentTarget as HTMLSelectElement).value as 'side' | 'top' })}
+        >
+          <option value="side">Beside the note</option>
+          <option value="top">Above the note (like the phone)</option>
+        </select>
+      </label>
+      {#if (store.settings.layout ?? 'side') === 'top'}
+        <label class="row">
+          <span>List columns</span>
+          <select
+            data-testid="set-columns"
+            value={String(store.settings.listColumns ?? 1)}
+            onchange={(e) => store.saveSettings({ listColumns: +(e.currentTarget as HTMLSelectElement).value as 1 | 2 | 3 })}
+          >
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+          </select>
+        </label>
+      {/if}
+
+      <label class="row">
         <span>Default font size</span>
         <input
           type="number" min="12" max="40"

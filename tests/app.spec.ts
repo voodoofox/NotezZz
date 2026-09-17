@@ -888,3 +888,41 @@ test('settings: the new-sticky shortcut is off by default and sticks when enable
   await page.getByTestId('open-settings').click();
   await expect(page.getByTestId('hotkey-newnote')).toBeChecked();
 });
+
+test('settings: the note list can move above the note, in columns', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('set-layout').selectOption('top');
+  await page.getByTestId('set-columns').selectOption('3');
+  await page.getByTestId('settings-close').click();
+
+  const app = page.locator('main.app');
+  await expect(app).toHaveClass(/stacked/);
+  // Same split as the phone: the list strip is 30% of the app's height.
+  const [appBox, sideBox] = await Promise.all([app.boundingBox(), page.locator('.sidebar').boundingBox()]);
+  expect(Math.abs(sideBox!.height / appBox!.height - 0.3)).toBeLessThan(0.02);
+  expect(await page.locator('.list').evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length)).toBe(3);
+
+  // It is a setting: back to the side layout and it stays.
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('set-layout').selectOption('side');
+  await page.getByTestId('settings-close').click();
+  await expect(app).not.toHaveClass(/stacked/);
+});
+
+test('a sticky can be renamed in place with a double-click on its title', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Before');
+  await page.waitForTimeout(500); // per-note save debounce
+  const id = await page.evaluate(
+    () => Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!.slice('notezzz:note:'.length)
+  );
+  await page.goto(`/sticky?id=${id}`);
+  await page.getByTestId('sticky-title').dblclick();
+  await page.getByTestId('sticky-title-input').fill('After');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('sticky-title')).toHaveText('After');
+  await page.waitForTimeout(500);
+  await page.goto('/?local');
+  await expect(page.getByTestId('note-title')).toHaveText('After');
+});

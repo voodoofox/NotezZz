@@ -140,6 +140,13 @@
       }
       document.addEventListener('pointerenter', onPointerEnter);
       document.addEventListener('pointerleave', onPointerLeave);
+      // The main window's tuck buttons talk to us over the bus.
+      const { listen } = await import('@tauri-apps/api/event');
+      await listen<{ id: string; tucked: boolean }>('notezzz:tuck', (e) => {
+        if (e.payload.id !== noteId) return;
+        void (e.payload.tucked ? tuck() : untuck());
+      });
+      reportTuck();
     })();
   });
 
@@ -203,7 +210,14 @@
     return edgeSpot(Math.max(await sliverPx(), Math.round(size.width * PEEK_FRACTION)));
   }
 
+  /** Tell the main window, so its tuck buttons show the right state. */
+  function reportTuck() {
+    if (!noteId) return;
+    void import('@tauri-apps/api/event').then(({ emit }) => emit('notezzz:tucked', { id: noteId, tucked }));
+  }
+
   function persistTuck() {
+    reportTuck();
     if (!noteId) return;
     try {
       const key = `notezzz:win:${noteId}`;
@@ -293,6 +307,29 @@
     if (showColors && colorWrap && !colorWrap.contains(e.target as Node)) showColors = false;
   }
 
+  // Rename without opening the main window: double-click the title (a single
+  // click is the drag handle), type, Enter. Escape puts the old name back.
+  let editingTitle = $state(false);
+  let titleDraft = $state('');
+  function startRename() {
+    if (!note) return;
+    titleDraft = note.title;
+    editingTitle = true;
+  }
+  function commitRename() {
+    if (!editingTitle) return;
+    editingTitle = false;
+    if (noteId && note && titleDraft !== note.title) store.update(noteId, { title: titleDraft.trim() });
+  }
+  function renameKey(e: KeyboardEvent) {
+    if (e.key === 'Enter') commitRename();
+    else if (e.key === 'Escape') editingTitle = false;
+  }
+  function focusIt(el: HTMLInputElement) {
+    el.focus();
+    el.select();
+  }
+
   async function unpin() {
     if (noteId) store.update(noteId, { pinned: false }); // closes this window
   }
@@ -321,7 +358,29 @@
           <Icon name="untuck" size={15} />
         </button>
       {/if}
-      <span class="ttl" data-tauri-drag-region>{note.title || 'Note'}</span>
+      {#if editingTitle}
+        <input
+          class="ttl-edit"
+          data-testid="sticky-title-input"
+          aria-label="Note title"
+          bind:value={titleDraft}
+          use:focusIt
+          onblur={commitRename}
+          onkeydown={renameKey}
+          onpointerdown={(e) => e.stopPropagation()}
+        />
+      {:else}
+        <span
+          class="ttl"
+          data-testid="sticky-title"
+          data-tauri-drag-region
+          role="button"
+          tabindex="0"
+          title="Double-click to rename"
+          ondblclick={startRename}
+          onkeydown={(e) => (e.key === 'F2' || e.key === 'Enter') && startRename()}
+        >{note.title || 'Note'}</span>
+      {/if}
       {#if !tucked}
         <span class="cwrap" bind:this={colorWrap}>
           <button
@@ -431,6 +490,20 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .ttl-edit {
+    flex: 1;
+    min-width: 0;
+    font: inherit;
+    font-weight: 700;
+    font-size: 15px;
+    padding: 1px 6px;
+    margin: -2px 0;
+    border: 1px solid var(--note-fg);
+    border-radius: var(--radius-sm);
+    background: var(--note-bg);
+    color: var(--note-fg);
+    outline: none;
   }
   .x {
     border: none;

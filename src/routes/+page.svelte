@@ -12,6 +12,7 @@
   import { hasPriorAuth, isDriveAuthed, signIn, tokenExpiringSoon } from '$lib/drive/auth';
   import { scheduleUpdateChecks } from '$lib/update.svelte';
   import { hotkey } from '$lib/hotkey.svelte';
+  import { watchTuckState } from '$lib/tuck.svelte';
 
   /** Text arriving via the Android share sheet (see routes/share). */
   let sharedText = $state<string | null>(null);
@@ -99,6 +100,8 @@
       window.addEventListener('focus', () => void store.reload());
       // "Updates itself" has to mean it looks without being asked.
       scheduleUpdateChecks();
+      // Mirror of each sticky's tucked state, for the tuck buttons here.
+      void watchTuckState();
       // Ctrl+Alt+N from anywhere, when enabled (see hotkey.svelte.ts). Released on the
       // way out so a relaunch never finds the combo held by a dead handler.
       hotkeyArmed = true;
@@ -202,7 +205,7 @@
 </script>
 
 {#if authed}
-  <main class="app" class:note-open={store.mobileOpen}>
+  <main class="app" class:note-open={store.mobileOpen} class:stacked={(store.settings.layout ?? 'side') === 'top'}>
     <Sidebar />
     <NotePane />
   </main>
@@ -232,5 +235,10 @@
     .app {
       flex-direction: column;
     }
+  }
+  /* Settings -> "Note list above the note": the phone arrangement at any
+     width. Same 30/70 split; the panels size themselves (Sidebar/NotePane). */
+  .app.stacked {
+    flex-direction: column;
   }
 </style>

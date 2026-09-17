@@ -6,6 +6,7 @@
   import { isTauri } from '$lib/storage/backend';
   import { getPalette } from '$lib/palettes';
   import ColorPicker from './ColorPicker.svelte';
+  import { tuckState, requestTuck } from '$lib/tuck.svelte';
   import Editor from './Editor.svelte';
   import Icon from './Icon.svelte';
 
@@ -185,6 +186,17 @@
         aria-label="Pin note"
         onclick={() => store.update(note!.id, { pinned: !note!.pinned })}
       ><Icon name="pin" /></button>
+      {#if note.pinned && desktop}
+        <button
+          class="icon"
+          data-testid="pane-tuck"
+          class:on={tuckState.byId[note.id]}
+          aria-pressed={!!tuckState.byId[note.id]}
+          title={tuckState.byId[note.id] ? 'Bring the sticky back' : 'Tuck the sticky to the screen edge'}
+          aria-label="Tuck sticky away"
+          onclick={() => void requestTuck(note!.id, !tuckState.byId[note!.id])}
+        ><Icon name={tuckState.byId[note.id] ? 'untuck' : 'tuck'} /></button>
+      {/if}
       <button
         class="icon danger"
         data-testid="note-delete"
@@ -302,6 +314,11 @@
   }
   /* Phone: the pane is the lower 70% of the stacked split, or all of it in
      fullscreen (.note-open on the page's <main>). */
+  :global(.app.stacked) > .pane {
+    height: 70%;
+    flex: none;
+    width: 100%;
+  }
   @media (max-width: 700px) {
     .mob {
       display: inline-flex;

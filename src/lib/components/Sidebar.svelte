@@ -7,6 +7,8 @@
   import Icon from './Icon.svelte';
   import { updates } from '$lib/update.svelte';
   import { installUpdate } from '$lib/updater';
+  import { tuckState, requestTuck } from '$lib/tuck.svelte';
+  import { isTauri } from '$lib/storage/backend';
 
   let showSettings = $state(false);
   let searching = $state(false);
@@ -49,13 +51,20 @@
     const rows = [...listEl.querySelectorAll<HTMLElement>('[data-testid="note-item"]')];
     const from = dragOrder.findIndex((n) => n.id === dragId);
     if (from === -1) return;
-    // Drop where the pointer sits relative to each row's midpoint.
-    let to = rows.findIndex((r) => {
-      const b = r.getBoundingClientRect();
-      return e.clientY < b.top + b.height / 2;
-    });
-    if (to === -1) to = rows.length - 1;
-    else if (to > from) to -= 1;
+    // Drop on the row under the pointer (works for the multi-column grid);
+    // between rows, fall back to "above the midpoint" as before.
+    const under = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>(
+      '[data-testid="note-item"]'
+    );
+    let to = under ? rows.indexOf(under) : -1;
+    if (to === -1) {
+      to = rows.findIndex((r) => {
+        const b = r.getBoundingClientRect();
+        return e.clientY < b.top + b.height / 2;
+      });
+      if (to === -1) to = rows.length - 1;
+      else if (to > from) to -= 1;
+    }
     if (to !== from && to >= 0) {
       const next = [...dragOrder];
       const [moved] = next.splice(from, 1);
@@ -159,7 +168,7 @@
   {/if}
 
   <div
-    class="list"
+    class="list cols-{(store.settings.layout ?? 'side') === 'top' ? (store.settings.listColumns ?? 1) : 1}"
     role="list"
     bind:this={listEl}
     onpointermove={moveDrag}
@@ -204,6 +213,17 @@
           aria-label="Pin note"
           onclick={() => store.update(note.id, { pinned: !note.pinned })}
         ><Icon name="pin" size={16} /></button>
+        {#if note.pinned && isTauri()}
+          <button
+            class="pin tuck"
+            data-testid="note-tuck"
+            class:on={tuckState.byId[note.id]}
+            aria-pressed={!!tuckState.byId[note.id]}
+            title={tuckState.byId[note.id] ? 'Bring the sticky back' : 'Tuck the sticky to the screen edge'}
+            aria-label="Tuck sticky away"
+            onclick={() => void requestTuck(note.id, !tuckState.byId[note.id])}
+          ><Icon name={tuckState.byId[note.id] ? 'untuck' : 'tuck'} size={16} /></button>
+        {/if}
       </div>
     {/each}
 
@@ -484,6 +504,36 @@
   }
   /* Phone: the list is the upper 30% of the stacked split and disappears in
      fullscreen (.note-open on the page's <main>). */
+  .pin.tuck {
+    padding-left: 0;
+  }
+  /* "List above the note" at any width: the same 30% strip the phone gets. */
+  :global(.app.stacked) > .sidebar {
+    width: 100%;
+    height: 30%;
+    border-right: none;
+    border-bottom: 2px solid var(--app-border);
+  }
+  /* Columns only make sense in the wide strip. Rows keep their full-bleed
+     look inside each column; the grid supplies the columns. */
+  .list.cols-2,
+  .list.cols-3 {
+    display: grid;
+    align-content: start;
+    column-gap: 2px;
+  }
+  .list.cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .list.cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .list.cols-2 .loadrow,
+  .list.cols-3 .loadrow,
+  .list.cols-2 .empty,
+  .list.cols-3 .empty {
+    grid-column: 1 / -1;
+  }
   @media (max-width: 700px) {
     .sidebar {
       width: 100%;
