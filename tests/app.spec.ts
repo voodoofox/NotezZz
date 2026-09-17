@@ -926,3 +926,48 @@ test('a sticky can be renamed in place with a double-click on its title', async 
   await page.goto('/?local');
   await expect(page.getByTestId('note-title')).toHaveText('After');
 });
+
+test('a custom colour can be saved to a slot and reset from Settings', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('note-color').click();
+  await page.getByTestId('custom-hue').fill('120');
+  await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', /custom:#/);
+  await page.getByTestId('save-color').click();
+  await expect(page.getByTestId('saved-color')).toHaveCount(1);
+  const hex = await page.getByTestId('saved-color').getAttribute('data-hex');
+  expect(hex).toMatch(/^#[0-9a-f]{6}$/);
+
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('reset-colors').click();
+  await page.getByTestId('settings-close').click();
+  await page.getByTestId('note-color').click();
+  await expect(page.getByTestId('saved-color')).toHaveCount(0);
+});
+
+test('a painted pattern lands in a slot, styles the note, and survives a reload', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Painted');
+  await page.getByTestId('note-color').click();
+  await expect(page.getByTestId('pattern-empty')).toHaveCount(5);
+  await page.getByTestId('pattern-empty').first().click();
+  await expect(page.getByTestId('pattern-editor')).toBeVisible();
+  const cells = page.getByTestId('pat-cell');
+  await cells.nth(0).click();
+  await cells.nth(9).click();
+  await cells.nth(18).click();
+  await page.getByTestId('pat-save').click();
+  await expect(page.getByTestId('pattern-editor')).toBeHidden();
+
+  const pane = page.getByTestId('note-pane');
+  await expect(pane).toHaveAttribute('data-palette', 'upat:0');
+  const topbar = pane.locator('.topbar');
+  await expect(topbar).toHaveClass(/nz-pat-custom/);
+  expect(await topbar.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('data:image/svg+xml');
+  expect(await topbar.evaluate((el) => getComputedStyle(el).animationName)).toBe('nz-drift-diag16');
+
+  await page.waitForTimeout(500); // per-note save debounce
+  await page.goto('/?local');
+  await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', 'upat:0');
+  await page.getByTestId('note-color').click();
+  await expect(page.getByTestId('pattern-empty')).toHaveCount(4);
+});

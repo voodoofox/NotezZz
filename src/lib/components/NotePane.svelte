@@ -85,6 +85,7 @@
       --note-header: {pal.header};
       --note-fg: {pal.fg};
       --note-ink: {pal.ink ?? pal.fg};
+      --pat-img: {pal.patternImage ?? 'none'};
       color-scheme: {pal.dark ? 'dark' : 'light'};
     "
   >

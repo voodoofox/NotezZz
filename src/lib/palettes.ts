@@ -1,6 +1,8 @@
 // Sticky-note color palettes. Each note picks one by id. Colors are chosen to be
 // legible with dark text; `dark` palettes carry light text via `fg`.
 
+import { customPatternSlot, getCustomPattern, paletteFromTint, patternSvg } from './patterns.svelte';
+
 export interface Palette {
   id: string;
   name: string;
@@ -21,9 +23,11 @@ export interface Palette {
   ink?: string;
   /** Stronger mix for small areas (list swatch, picker chip). */
   inkStrong?: string;
+  /** Custom patterns only: the tile as a CSS url(...) for --pat-img. */
+  patternImage?: string;
 }
 
-export type PatternId = 'checker' | 'stripes' | 'dots' | 'stairs' | 'bricks';
+export type PatternId = 'checker' | 'stripes' | 'dots' | 'stairs' | 'bricks' | 'custom';
 
 // The seven hues are evenly stepped around the color wheel (15° → 330°) with
 // IDENTICAL saturation/lightness (hsl S60 L85 bg, S55 L78 header, S35 L20
@@ -64,7 +68,7 @@ for (const p of PATTERNS) {
 const PATTERN_MAP = new Map(PATTERNS.map((p) => [p.id, p]));
 
 /** `t` of colour a mixed into colour b, both #rrggbb. */
-function mixHex(a: string, b: string, t: number): string {
+export function mixHex(a: string, b: string, t: number): string {
   const ch = (h: string, i: number) => parseInt(h.slice(i, i + 2), 16);
   return (
     '#' +
@@ -80,6 +84,7 @@ function mixHex(a: string, b: string, t: number): string {
 
 export function getPalette(id: string): Palette {
   if (id?.startsWith('custom:')) return customPalette(id.slice(7));
+  if (id?.startsWith('upat:')) return customPatternPalette(id);
   // Retired ids (mint) fall back to Paper rather than breaking old notes.
   return PALETTE_MAP.get(id) ?? PATTERN_MAP.get(id) ?? PALETTES[0];
 }
@@ -100,6 +105,29 @@ function customPalette(hex: string): Palette {
     .join('')}`;
   const fg = dark ? '#ECEDEF' : '#26282B';
   return { id: `custom:${hex}`, name: 'Custom', bg: hex, header, fg, accent: fg, dark };
+}
+
+/**
+ * A user-painted pattern slot (see patterns.ts). An empty or missing slot
+ * falls back to Paper rather than breaking the notes that point at it.
+ */
+function customPatternPalette(id: string): Palette {
+  const slot = customPatternSlot(id);
+  const p = slot >= 0 ? getCustomPattern(slot) : null;
+  if (!p) return PALETTES[0];
+  const t = paletteFromTint(p.tint);
+  return {
+    id,
+    name: `Pattern ${slot + 1}`,
+    pattern: 'custom',
+    patternImage: patternSvg(p.px, t.ink),
+    bg: t.bg,
+    header: t.header,
+    fg: t.fg,
+    accent: t.fg,
+    ink: t.ink,
+    inkStrong: t.inkStrong,
+  };
 }
 
 /** HSL (0-360, 0-100, 0-100) → "#rrggbb". Drives the custom colour sliders. */

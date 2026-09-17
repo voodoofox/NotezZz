@@ -139,7 +139,8 @@ textarea {
 .nz-pat-stripes,
 .nz-pat-dots,
 .nz-pat-stairs,
-.nz-pat-bricks {
+.nz-pat-bricks,
+.nz-pat-custom {
   --pat-base: var(--note-header, var(--app-panel));
   --pat-ink: var(--note-ink, var(--app-pat-ink));
   background-color: var(--pat-base);
@@ -194,6 +195,17 @@ textarea {
   animation: nz-drift-bricks 4s linear infinite;
 }
 
+/* Custom: an 8×8 tile the user painted, as an SVG in --pat-img (patterns.ts).
+   16px per tile = the same 2px cell the built-ins use. */
+.nz-pat-custom {
+  background-image: var(--pat-img, none);
+  background-size: 16px 16px;
+  animation: nz-drift-diag16 3.2s linear infinite;
+}
+
+@keyframes nz-drift-diag16 {
+  to { background-position: 16px 16px; }
+}
 @keyframes nz-drift-diag {
   to { background-position: 8px 8px; }
 }
@@ -214,7 +226,8 @@ textarea {
   .nz-pat-stripes,
   .nz-pat-dots,
   .nz-pat-stairs,
-  .nz-pat-bricks {
+  .nz-pat-bricks,
+  .nz-pat-custom {
     animation: none;
   }
 }

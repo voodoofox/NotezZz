@@ -1,10 +1,22 @@
 <script lang="ts">
-  // The note colour picker: nine palettes, five pixel patterns, and a custom
-  // colour from three sliders. One component, used by the note pane and by
+  // The note colour picker: nine palettes, five pixel patterns, five custom
+  // patterns of your own, a custom colour from three sliders, and five slots
+  // to keep custom colours in. One component, used by the note pane and by
   // the sticky window's title bar, so the two can never drift apart.
   import { PALETTES, PATTERNS, getPalette, hslToHex, hexToHsl } from '$lib/palettes';
+  import {
+    COLOR_SLOTS,
+    PATTERN_SLOTS,
+    customPatternId,
+    getCustomPattern,
+    patternSvg,
+    paletteFromTint,
+    type CustomPattern,
+  } from '$lib/patterns.svelte';
+  import { store } from '$lib/store.svelte';
   import { untrack } from 'svelte';
   import Icon from './Icon.svelte';
+  import PatternEditor from './PatternEditor.svelte';
 
   let { paletteId, onPick }: { paletteId: string; onPick: (id: string) => void } = $props();
 
@@ -12,10 +24,9 @@
   let isCustom = $derived(paletteId.startsWith('custom:'));
 
   // Inline custom colour: hue + shade + saturation apply instantly — no native
-  // colour-dialog chain. Seeded from the note's current custom colour so the
-  // first nudge doesn't snap it somewhere else.
-  // Read once, deliberately: the sliders start where the note is and then
-  // own their values; re-seeding on every prop change would fight the drag.
+  // colour-dialog chain. Read once, deliberately: the sliders start where the
+  // note is and then own their values; re-seeding on every prop change would
+  // fight the drag.
   const seed = untrack(() => (paletteId.startsWith('custom:') ? hexToHsl(paletteId.slice(7)) : null));
   let custHue = $state(seed?.h ?? 45);
   let custSat = $state(seed ? Math.min(90, seed.s) : 70);
@@ -23,6 +34,38 @@
 
   function applyCustom() {
     onPick(`custom:${hslToHex(custHue, custSat, custLight)}`);
+  }
+
+  // ---- saved colours: five slots, first free one, then the oldest ----------
+  let saved = $derived((store.settings.customColors ?? []).slice(0, COLOR_SLOTS));
+  let currentHex = $derived(isCustom ? paletteId.slice(7) : null);
+  let alreadySaved = $derived(!!currentHex && saved.includes(currentHex));
+  function saveColour() {
+    if (!currentHex || alreadySaved) return;
+    const next = saved.length < COLOR_SLOTS ? [...saved, currentHex] : [...saved.slice(1), currentHex];
+    void store.saveSettings({ customColors: next });
+  }
+
+  // ---- custom patterns: five slots; empty opens the editor -----------------
+  // The registry (patterns.ts) follows settings; reading settings here makes
+  // this re-render when a slot changes.
+  let slots = $derived(
+    Array.from({ length: PATTERN_SLOTS }, (_, i) => {
+      void store.settings.customPatterns;
+      return getCustomPattern(i);
+    })
+  );
+  let editing = $state<number | null>(null);
+  function chipStyle(p: CustomPattern): string {
+    const t = paletteFromTint(p.tint);
+    return `--pat-base: ${t.header}; --pat-ink: ${t.inkStrong}; --pat-img: ${patternSvg(p.px, t.inkStrong)}`;
+  }
+  function savePattern(i: number, p: CustomPattern) {
+    const list = Array.from({ length: PATTERN_SLOTS }, (_, k) => store.settings.customPatterns?.[k] ?? null);
+    list[i] = p;
+    void store.saveSettings({ customPatterns: list });
+    editing = null;
+    onPick(customPatternId(i));
   }
 </script>
 
@@ -60,6 +103,39 @@
       {/if}
     </button>
   {/each}
+  <!-- Fourth row: your own patterns. -->
+  {#each slots as p, i}
+    {#if p}
+      <span class="slot">
+        <button
+          class="pchip nz-pat-custom"
+          data-testid="palette-chip"
+          data-palette={customPatternId(i)}
+          style={chipStyle(p)}
+          title="Pattern {i + 1}"
+          aria-label="Pattern {i + 1}"
+          onclick={() => onPick(customPatternId(i))}
+        >
+          {#if paletteId === customPatternId(i)}
+            <span class="pcheck" style="color: #2a2c2e"><Icon name="check" size={15} /></span>
+          {/if}
+        </button>
+        <button class="edit" data-testid="pattern-edit" title="Edit pattern {i + 1}" aria-label="Edit pattern {i + 1}" onclick={() => (editing = i)}>
+          <Icon name="draw" size={11} />
+        </button>
+      </span>
+    {:else}
+      <button
+        class="pchip empty"
+        data-testid="pattern-empty"
+        title="New pattern in slot {i + 1}"
+        aria-label="New pattern in slot {i + 1}"
+        onclick={() => (editing = i)}
+      >
+        <Icon name="add" size={15} />
+      </button>
+    {/if}
+  {/each}
   {#if isCustom}
     <span class="pchip current" style="background: {pal.bg}">
       <span class="pcheck" style="color: {pal.fg}"><Icon name="check" size={15} /></span>
@@ -96,6 +172,34 @@
     oninput={applyCustom}
   />
 </label>
+<!-- Saved colours: the five small chips, and Save while the note has a custom
+     colour that isn't kept yet. -->
+<div class="savedrow">
+  <div class="saved">
+    {#each Array.from({ length: COLOR_SLOTS }) as _, i}
+      {#if saved[i]}
+        <button
+          class="mini"
+          data-testid="saved-color"
+          data-hex={saved[i]}
+          style="background: {saved[i]}"
+          title="Saved colour {i + 1}"
+          aria-label="Saved colour {i + 1}"
+          onclick={() => onPick(`custom:${saved[i]}`)}
+        ></button>
+      {:else}
+        <span class="mini hole" aria-hidden="true"></span>
+      {/if}
+    {/each}
+  </div>
+  <button class="save" data-testid="save-color" disabled={!currentHex || alreadySaved} onclick={saveColour}>
+    {alreadySaved ? 'Saved' : 'Save colour'}
+  </button>
+</div>
+
+{#if editing !== null}
+  <PatternEditor slot={editing} initial={slots[editing]} onSave={(p) => savePattern(editing!, p)} onClose={() => (editing = null)} />
+{/if}
 
 <style>
   .pgrid {
@@ -124,6 +228,41 @@
   .pchip.spacer {
     visibility: hidden;
   }
+  .pchip.empty {
+    background: transparent;
+    border-style: dashed;
+    border-color: var(--app-border);
+    color: var(--app-muted);
+  }
+  .pchip.empty:hover {
+    border-color: var(--app-fg);
+    color: var(--app-fg);
+  }
+  .slot {
+    position: relative;
+    display: inline-flex;
+  }
+  .edit {
+    position: absolute;
+    right: -5px;
+    top: -5px;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid var(--app-border);
+    background: var(--app-panel);
+    color: var(--app-fg);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+  }
+  .slot:hover .edit,
+  .edit:focus-visible {
+    opacity: 1;
+  }
   .pcheck {
     display: inline-flex;
   }
@@ -131,7 +270,8 @@
   .pchip.nz-pat-stripes .pcheck,
   .pchip.nz-pat-dots .pcheck,
   .pchip.nz-pat-stairs .pcheck,
-  .pchip.nz-pat-bricks .pcheck {
+  .pchip.nz-pat-bricks .pcheck,
+  .pchip.nz-pat-custom .pcheck {
     background: var(--pat-base);
     border-radius: var(--radius-sm);
     padding: 1px;
@@ -182,5 +322,48 @@
       hsl(var(--hue), 0%, 75%),
       hsl(var(--hue), 90%, 75%)
     );
+  }
+  /* Chips on one line, the button on its own beneath: side by side they
+     overran the 226px menu and the button clipped. */
+  .savedrow {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .saved {
+    display: flex;
+    gap: 6px;
+  }
+  .mini {
+    width: 22px;
+    height: 22px;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(0, 0, 0, 0.16);
+    padding: 0;
+    cursor: pointer;
+  }
+  .mini:hover {
+    transform: scale(1.1);
+  }
+  .mini.hole {
+    border-style: dashed;
+    border-color: var(--app-border);
+    background: transparent;
+  }
+  .save {
+    width: 100%;
+    font: inherit;
+    font-size: 13px;
+    padding: 6px 10px;
+    border: 1px solid var(--app-border);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--app-fg);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .save:disabled {
+    opacity: 0.45;
+    cursor: default;
   }
 </style>

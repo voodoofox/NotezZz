@@ -6,8 +6,13 @@
   import { store } from '$lib/store.svelte';
   import { isTauri } from '$lib/storage/backend';
   import { initDiag } from '$lib/diag';
+  import { setCustomPatterns } from '$lib/patterns.svelte';
 
   initDiag(); // start capturing errors as early as possible
+  // Custom pattern slots live in settings; getPalette() reads them from a
+  // registry so it can stay a plain function. Every route (main, sticky) runs
+  // this layout, so every window's registry follows its store.
+  $effect(() => setCustomPatterns(store.settings.customPatterns));
   // Vite resolves these to hashed, base-path-aware URLs.
   import fontRegular from '$lib/assets/SofiaSansCondensed.ttf';
   import fontItalic from '$lib/assets/SofiaSansCondensed-Italic.ttf';

@@ -347,6 +347,7 @@
       --note-header: {bgRgba(pal.header, Math.min(1, note.opacity + 0.08))};
       --note-fg: {pal.fg};
       --note-ink: {pal.ink ?? pal.fg};
+      --pat-img: {pal.patternImage ?? 'none'};
       --note-accent: {pal.accent};
     "
   >

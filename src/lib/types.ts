@@ -45,6 +45,10 @@ export interface Settings {
   noteOrder?: string[];
   /** First-run welcome notes have been written; never write them again. */
   seeded?: boolean;
+  /** Custom colours kept from the picker's sliders, up to five #rrggbb. */
+  customColors?: string[];
+  /** Five user-painted pattern slots (see patterns.ts); null = empty. */
+  customPatterns?: ({ px: string; tint: string } | null)[];
   /** Main window: note list beside the note (default) or above it, like the phone. */
   layout?: 'side' | 'top';
   /** With the list above the note: how many columns of notes. */

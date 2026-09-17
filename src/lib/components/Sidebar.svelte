@@ -188,7 +188,7 @@
         role="listitem"
         class:active={note.id === store.activeId}
         class:dragging={dragId === note.id}
-        style="--swatch: {pal.pattern ? pal.header : pal.bg}"
+        style="--swatch: {pal.pattern ? pal.header : pal.bg}; --pat-img: {pal.patternImage ?? 'none'}"
       >
         <span
           class="swatch {pal.pattern ? `nz-pat-${pal.pattern}` : ''}"

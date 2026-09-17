@@ -199,6 +199,14 @@
         </label>
       {/if}
 
+      <div class="row">
+        <span>Saved colours &amp; patterns</span>
+        <span class="btns">
+          <button data-testid="reset-colors" onclick={() => store.saveSettings({ customColors: [] })}>Reset colours</button>
+          <button data-testid="reset-patterns" onclick={() => store.saveSettings({ customPatterns: [] })}>Reset patterns</button>
+        </span>
+      </div>
+
       <label class="row">
         <span>Default font size</span>
         <input
@@ -487,5 +495,9 @@
     color: var(--app-muted);
     text-align: center;
     user-select: text;
+  }
+  .btns {
+    display: flex;
+    gap: 6px;
   }
 </style>
