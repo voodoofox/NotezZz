@@ -1,8 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { store } from '$lib/store.svelte';
-  import { isTauri } from '$lib/storage/backend';
+  import { isTauri, isDesktop, isMobile } from '$lib/storage/backend';
   import { restoreStickies } from '$lib/desktop';
+  import { scheduleWidgetSnapshot } from '$lib/widget';
+  // Static, like desktop.ts's: a dynamic import of a module that is also
+  // imported statically makes Vite warn, and warnings abort deploys.
+  import { invoke } from '@tauri-apps/api/core';
   import Sidebar from '$lib/components/Sidebar.svelte';
   import NotePane from '$lib/components/NotePane.svelte';
   import SignIn from '$lib/components/SignIn.svelte';
@@ -14,9 +18,10 @@
   import { hotkey } from '$lib/hotkey.svelte';
   import { watchTuckState } from '$lib/tuck.svelte';
 
-  /** Text arriving via the Android share sheet (see routes/share). */
+  /** Text arriving via the Android share sheet (see routes/share, pullMobileShare). */
   let sharedText = $state<string | null>(null);
-  /** First desktop launch: the "where do notes live?" question (see maybeOnboard). */
+  const SHARE_KEY = 'notezzz:pendingShare';
+  /** First desktop/Android launch: the "where do notes live?" question (see maybeOnboard). */
   let showOnboarding = $state(false);
   const ONBOARDED_KEY = 'notezzz:onboarded';
   /** Set once the desktop listeners are wired; the hotkey effect waits on it. */
@@ -72,6 +77,16 @@
     void hotkey.apply(store.settings.hotkeyNewNote ?? false);
   });
 
+  // Android home-screen widgets read a file, not the store, so the file has
+  // to follow the list. An effect here, rather than the outbox's settle
+  // callback, because the widget must also reflect changes that never pass
+  // through this device's outbox: the initial load, a poll that brings an
+  // edit or a pin from the PC, a share appended by the chooser. Everything
+  // the widget can show comes through store.notes; nothing else does.
+  $effect(() => {
+    scheduleWidgetSnapshot(store.notes);
+  });
+
   /**
    * Window/document listeners that must exist exactly once. boot() can run
    * again (the effect above drops to the gate and the gate re-boots), and
@@ -94,7 +109,9 @@
     // Edits made in a sticky window land here immediately, not on the poll.
     store.listenForChanges();
 
-    if (isTauri()) {
+    if (isDesktop()) {
+      // Tray, updater, stickies, global hotkey: a PC around the window. None
+      // of it exists on Android, which is Tauri too — hence isDesktop().
       const { listen } = await import('@tauri-apps/api/event');
       await listen('tray-new-note', () => store.create());
       window.addEventListener('focus', () => void store.reload());
@@ -106,6 +123,13 @@
       // way out so a relaunch never finds the combo held by a dead handler.
       hotkeyArmed = true;
       window.addEventListener('beforeunload', () => void hotkey.release());
+    } else if (isMobile()) {
+      // Android hands a share to an app that is ALREADY running rather than
+      // starting a fresh one, so the file has to be re-read on every return
+      // to the foreground, not just at boot.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') void pullMobileShare();
+      });
     } else if (!localMode) {
       // Renew the Google token when the user RETURNS to the app if it's close
       // to expiry — the silent-refresh popup blink happens at open, not while
@@ -115,6 +139,30 @@
           void signIn(false).catch(() => {});
         }
       });
+    }
+  }
+
+  /**
+   * Android only: text shared into the app via the system share sheet. The
+   * Kotlin activity writes it to a file; take_pending_share returns and clears
+   * it. Stashed under the same key the web share route uses, so from here on
+   * the chooser, the reload guard in +layout and shareDone() behave exactly as
+   * they do for a web share. A chooser that is already open keeps its text:
+   * the new share stays in the file and is taken when that chooser closes.
+   */
+  async function pullMobileShare() {
+    if (!isMobile() || sharedText) return;
+    try {
+      const text = await invoke<string | null>('take_pending_share');
+      if (!text?.trim()) return;
+      try {
+        localStorage.setItem(SHARE_KEY, text);
+      } catch {
+        /* private mode: the chooser still shows; it just won't survive a reload */
+      }
+      sharedText = text;
+    } catch (e) {
+      console.error('take_pending_share', e);
     }
   }
 
@@ -128,7 +176,7 @@
     // Drive fetch between the share sheet and the question. Writes made
     // before the store is ready queue behind init rather than being dropped.
     try {
-      const pending = localStorage.getItem('notezzz:pendingShare');
+      const pending = localStorage.getItem(SHARE_KEY);
       if (pending) {
         sharedText = pending;
         // Fills the "append to…" list from cache on the first frame. Drive
@@ -138,6 +186,9 @@
     } catch {
       /* private mode */
     }
+    // Android's share sheet arrives through Rust rather than a URL. Same
+    // rule: before the load, so the question comes up at once.
+    await pullMobileShare();
 
     await store.init();
     // A brand-new account gets a few notes explaining the app. Skipped under
@@ -148,19 +199,22 @@
     await restoreStickies(store.notes).catch((e) => console.error('restoreStickies', e));
 
     // Background sync so changes from other devices (pins, new notes) appear
-    // on their own. Desktop reads local files — cheap, so poll often; web
-    // hits the Drive API, so keep it gentle. (Self-resetting: safe to re-run.)
-    store.startAutoSync(isTauri() ? 6000 : 45000);
+    // on their own. Desktop reads local files — cheap, so poll often; web and
+    // Android hit the Drive API (or, signed out, a folder nobody else writes
+    // to), so keep it gentle. (Self-resetting: safe to re-run.)
+    store.startAutoSync(isDesktop() ? 6000 : 45000);
 
     await wireListeners();
     await maybeOnboard().catch((e) => console.error('onboarding', e));
   }
 
   /**
-   * First desktop launch only: ask where the notes should live. The web app
-   * has its own gate (SignIn.svelte) and ?local is the test suite's blank
-   * slate, so neither ever sees this. Someone already signed in has answered
-   * the question; record that, so a later sign-out doesn't re-ask it.
+   * First launch of the desktop or Android app only: ask where the notes
+   * should live. Both boot without a gate and both sign in through the same
+   * Rust flow, so isTauri() is the right test. The web app has its own gate
+   * (SignIn.svelte) and ?local is the test suite's blank slate, so neither
+   * ever sees this. Someone already signed in has answered the question;
+   * record that, so a later sign-out doesn't re-ask it.
    */
   async function maybeOnboard() {
     if (!isTauri() || localMode) return;
@@ -188,10 +242,12 @@
   function shareDone() {
     sharedText = null;
     try {
-      localStorage.removeItem('notezzz:pendingShare');
+      localStorage.removeItem(SHARE_KEY);
     } catch {
       /* ignore */
     }
+    // A share that arrived while the chooser was up is waiting in the file.
+    void pullMobileShare();
   }
 
   onMount(() => {
