@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="widget_description">Your pinned notes on the home screen</string>
+    <string name="widget_list_description">All your notes, scrollable</string>
+    <string name="widget_single_description">One note of your choice</string>
+    <string name="widget_quick_description">New note, voice note or drawing in one tap</string>
 </resources>

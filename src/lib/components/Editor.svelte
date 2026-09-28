@@ -14,15 +14,18 @@
   import DrawPad from './DrawPad.svelte';
   import EditorToolbar from './EditorToolbar.svelte';
   import FormatBubble from './FormatBubble.svelte';
+  import { store } from '$lib/store.svelte';
 
   interface Props {
     html: string;
     onChange: (html: string) => void;
     /** Base font size (px) for the note body. */
     baseSize?: number;
+    /** The note shown, so a tool requested for it (store.requestedTool) opens here. */
+    noteId?: string;
   }
 
-  let { html, onChange, baseSize = BASE_FONT_PX }: Props = $props();
+  let { html, onChange, baseSize = BASE_FONT_PX, noteId }: Props = $props();
 
   let element: HTMLDivElement;
   let editor = $state<Editor | null>(null);
@@ -56,6 +59,16 @@
     drawInk = cs.getPropertyValue('--note-fg').trim() || undefined;
     showDraw = true;
   }
+
+  // The quick-add widget's Voice and Draw: start the tool as soon as this
+  // editor for that note exists. Cleared first so it runs exactly once.
+  $effect(() => {
+    const req = store.requestedTool;
+    if (!req || !editor || !noteId || req.id !== noteId) return;
+    store.requestedTool = null;
+    if (req.tool === 'voice') void toggleRecord();
+    else openDraw();
+  });
 
   function drawDone(svgDataUrl: string | null) {
     showDraw = false;

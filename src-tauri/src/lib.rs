@@ -415,8 +415,25 @@ fn take_pending_share(app: tauri::AppHandle) -> Result<Option<String>, String> {
     }
 }
 
+/// A home-screen widget tap (open a note, new / voice / draw note), stashed
+/// by MainActivity as `pending-action.json` like a share. Returns the raw JSON
+/// (`{"action": "...", "id": "..."}`) and deletes the file.
+#[tauri::command]
+fn take_pending_action(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let path = local_dir(&app)?.join("pending-action.json");
+    match fs::read_to_string(&path) {
+        Ok(text) => {
+            let _ = fs::remove_file(&path);
+            let text = text.trim().to_string();
+            Ok(if text.is_empty() { None } else { Some(text) })
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("pending action: {e}")),
+    }
+}
+
 /// Android home-screen widget data: the frontend writes a small JSON array
-/// of the notes the widget shows (pinned ones, else the latest). The widget
+/// of every note, in list order, for the list and one-note widgets. The widget
 /// runs in the launcher's process with no access to the webview, so a file
 /// in the app's files dir is the hand-off; the widget re-reads it whenever
 /// the app leaves the foreground (see MainActivity) and on its own schedule.
@@ -538,6 +555,7 @@ pub fn run() {
             backup::backups_dir,
             slide_window,
             take_pending_share,
+            take_pending_action,
             write_widget_snapshot,
         ])
         .setup(|app| {

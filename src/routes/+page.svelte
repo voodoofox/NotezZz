@@ -3,7 +3,8 @@
   import { store } from '$lib/store.svelte';
   import { isTauri, isDesktop, isMobile } from '$lib/storage/backend';
   import { restoreStickies } from '$lib/desktop';
-  import { scheduleWidgetSnapshot } from '$lib/widget';
+  import { scheduleWidgetSnapshot, takeWidgetAction } from '$lib/widget';
+  import { pushState } from '$app/navigation';
   // Static, like desktop.ts's: a dynamic import of a module that is also
   // imported statically makes Vite warn, and warnings abort deploys.
   import { invoke } from '@tauri-apps/api/core';
@@ -128,7 +129,9 @@
       // starting a fresh one, so the file has to be re-read on every return
       // to the foreground, not just at boot.
       document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') void pullMobileShare();
+        if (document.visibilityState !== 'visible') return;
+        void pullMobileShare();
+        void pullWidgetAction();
       });
     } else if (!localMode) {
       // Renew the Google token when the user RETURNS to the app if it's close
@@ -164,6 +167,27 @@
     } catch (e) {
       console.error('take_pending_share', e);
     }
+  }
+
+  /**
+   * Android only: a tap on a home-screen widget. MainActivity stashes it like
+   * a share; this takes it once the notes are loaded. Every action ends on the
+   * note, fullscreen, because that is what the tap was for: reading it, or
+   * writing, speaking or drawing into a fresh one.
+   */
+  async function pullWidgetAction() {
+    const act = await takeWidgetAction();
+    if (!act || act.action === 'show') return; // "show" just brings the app up
+    if (act.action === 'open') {
+      if (!act.id || !store.notes.some((n) => n.id === act.id)) return; // deleted since
+      store.activeId = act.id;
+    } else {
+      const note = store.create();
+      if (act.action === 'voice' || act.action === 'draw') {
+        store.requestedTool = { id: note.id, tool: act.action };
+      }
+    }
+    if ((page.state as { fs?: boolean }).fs !== true) pushState('', { fs: true });
   }
 
   async function boot() {
@@ -205,6 +229,9 @@
     store.startAutoSync(isDesktop() ? 6000 : 45000);
 
     await wireListeners();
+    // A widget tap that started the app. After the load, so "open" finds its
+    // note and a new one lands in the real list rather than an empty one.
+    await pullWidgetAction();
     await maybeOnboard().catch((e) => console.error('onboarding', e));
   }
 

@@ -1,4 +1,5 @@
 {
+  "version": "../package.json",
   "app": {
     "windows": [
       {

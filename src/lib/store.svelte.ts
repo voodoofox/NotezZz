@@ -90,6 +90,12 @@ class AppStore {
 
   /** Phone layout: true while the note is expanded fullscreen (over the 40/60 split). */
   mobileOpen = $state(false);
+  /**
+   * A tool the next editor for this note should open by itself: the voice and
+   * draw buttons on the Android quick-add widget. The Editor showing note
+   * `id` takes it (and clears it) once it has mounted.
+   */
+  requestedTool = $state<{ id: string; tool: 'voice' | 'draw' } | null>(null);
 
   #backend: StorageBackend | null = null;
   /** Keystroke debounce per note — edits waiting to enter the outbox. */

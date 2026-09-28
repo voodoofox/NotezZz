@@ -214,6 +214,7 @@
         <Editor
           html={note.contentHtml}
           baseSize={note.fontSize}
+          noteId={note.id}
           onChange={(html) => store.update(note!.id, { contentHtml: html })}
         />
       {/key}

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Quick add: new note, voice note, drawing. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_panel"
+    android:gravity="center"
+    android:orientation="horizontal"
+    android:padding="6dp">
+    <LinearLayout android:id="@+id/qnew" android:layout_width="0dp" android:layout_height="match_parent"
+        android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+        <ImageView android:layout_width="40dp" android:layout_height="40dp" android:padding="9dp"
+            android:background="@drawable/widget_button" android:src="@drawable/ic_w_add" android:contentDescription="New note" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp"
+            android:text="Note" android:textColor="#2A2C2E" android:textSize="12sp" />
+    </LinearLayout>
+    <LinearLayout android:id="@+id/qvoice" android:layout_width="0dp" android:layout_height="match_parent"
+        android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+        <ImageView android:layout_width="40dp" android:layout_height="40dp" android:padding="9dp"
+            android:background="@drawable/widget_button" android:src="@drawable/ic_w_mic" android:contentDescription="Voice note" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp"
+            android:text="Voice" android:textColor="#2A2C2E" android:textSize="12sp" />
+    </LinearLayout>
+    <LinearLayout android:id="@+id/qdraw" android:layout_width="0dp" android:layout_height="match_parent"
+        android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+        <ImageView android:layout_width="40dp" android:layout_height="40dp" android:padding="9dp"
+            android:background="@drawable/widget_button" android:src="@drawable/ic_w_draw" android:contentDescription="Drawing" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp"
+            android:text="Draw" android:textColor="#2A2C2E" android:textSize="12sp" />
+    </LinearLayout>
+</LinearLayout>

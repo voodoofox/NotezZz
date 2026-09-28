@@ -2,6 +2,7 @@ package com.administrator.notezzz
 
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
@@ -11,6 +12,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import org.json.JSONObject
 import java.io.File
 
 class MainActivity : TauriActivity() {
@@ -21,6 +23,7 @@ class MainActivity : TauriActivity() {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
     stashShare(intent)
+    stashAction(intent)
 
     // Android 15 draws every app edge to edge, so the webview sits under the
     // status bar and the keyboard. The page paints its own colours behind the
@@ -42,8 +45,12 @@ class MainActivity : TauriActivity() {
     webView.addJavascriptInterface(Bridge(), "NotezzzAndroid")
   }
 
-  /** The two things the page needs from the system bars. Local page only. */
+  /** What the page needs from Android: system bars and widgets. Local page only. */
   inner class Bridge {
+    /** Called after the page rewrites widget.json, so widgets follow at once. */
+    @JavascriptInterface
+    fun refreshWidgets() = MainActivity.refreshWidgets(this@MainActivity)
+
     @JavascriptInterface
     fun safeTop(): Float = safeTopCss
 
@@ -59,12 +66,13 @@ class MainActivity : TauriActivity() {
     }
   }
 
-  // launchMode is singleTask, so a share into a running app arrives here,
-  // not in onCreate.
+  // launchMode is singleTask, so a share or a widget tap into a running app
+  // arrives here, not in onCreate.
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     setIntent(intent)
     stashShare(intent)
+    stashAction(intent)
   }
 
   /**
@@ -85,18 +93,49 @@ class MainActivity : TauriActivity() {
     intent.action = null
   }
 
-  // The widget renders from widget.json, which the app rewrites as notes
-  // change. Leaving the app is the moment to tell the launcher to re-read it.
+  /**
+   * A widget tap: open a note, or start a new / voice / draw note. Same hand-
+   * off as a share — a file the frontend takes through `take_pending_action`.
+   */
+  private fun stashAction(intent: Intent?) {
+    val action = intent?.getStringExtra(EXTRA_ACTION) ?: return
+    val json = JSONObject().put("action", action)
+    intent.getStringExtra(EXTRA_NOTE)?.let { json.put("id", it) }
+    runCatching { File(filesDir, "pending-action.json").writeText(json.toString()) }
+    intent.removeExtra(EXTRA_ACTION)
+    intent.removeExtra(EXTRA_NOTE)
+  }
+
+  // Widgets render from widget.json, which the app rewrites as notes change.
+  // Leaving the app is the moment to tell the launcher to re-read it.
   override fun onPause() {
     super.onPause()
-    val mgr = AppWidgetManager.getInstance(this)
-    val ids = mgr.getAppWidgetIds(ComponentName(this, NoteWidget::class.java))
-    if (ids.isNotEmpty()) {
-      sendBroadcast(
-        Intent(this, NoteWidget::class.java)
-          .setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
-          .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
-      )
+    refreshWidgets(this)
+  }
+
+  companion object {
+    const val EXTRA_ACTION = "notezzz_action"
+    const val EXTRA_NOTE = "notezzz_note"
+
+    /** Re-render every NotezZz widget on the home screen. */
+    fun refreshWidgets(context: Context) {
+      val mgr = AppWidgetManager.getInstance(context)
+      for (cls in listOf(NoteWidget::class.java, SingleNoteWidget::class.java, QuickWidget::class.java)) {
+        val ids = mgr.getAppWidgetIds(ComponentName(context, cls))
+        if (ids.isEmpty()) continue
+        context.sendBroadcast(
+          Intent(context, cls)
+            .setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
+            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+        )
+      }
     }
+
+    /** An intent that opens the app and hands it a widget action. */
+    fun actionIntent(context: Context, action: String, noteId: String? = null): Intent =
+      Intent(context, MainActivity::class.java)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        .putExtra(EXTRA_ACTION, action)
+        .apply { noteId?.let { putExtra(EXTRA_NOTE, it) } }
   }
 }

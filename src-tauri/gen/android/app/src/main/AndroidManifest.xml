@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Voice notes: the webview asks for the mic at runtime (RustWebChromeClient),
+         which Android refuses outright unless the manifest declares it. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
@@ -41,17 +45,57 @@
             </intent-filter>
         </activity>
 
-        <!-- Home-screen widget (NoteWidget.kt). -->
+        <!-- Home-screen widgets. List of notes (NoteWidget.kt, rows from
+             NoteListService), one chosen note (SingleNoteWidget.kt, picked in
+             NotePickerActivity) and quick add (QuickWidget.kt). -->
         <receiver
             android:name=".NoteWidget"
             android:exported="true"
-            android:label="NotezZz notes">
+            android:label="NotezZz list">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_note_info" />
+        </receiver>
+        <service
+            android:name=".NoteListService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
+        <receiver
+            android:name=".SingleNoteWidget"
+            android:exported="true"
+            android:label="NotezZz note">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_single_info" />
+        </receiver>
+        <activity
+            android:name=".NotePickerActivity"
+            android:exported="true"
+            android:label="Choose a note"
+            android:theme="@android:style/Theme.DeviceDefault.DayNight"
+            android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <receiver
+            android:name=".QuickWidget"
+            android:exported="true"
+            android:label="NotezZz quick add">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quick_info" />
         </receiver>
 
         <provider
