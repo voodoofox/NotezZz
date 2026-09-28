@@ -78,9 +78,9 @@ class MainActivity : TauriActivity() {
   /**
    * The Android share sheet hands text to this activity as an intent. The
    * webview can't see intents, so the text goes into a file in the app's
-   * files dir; the Rust command `take_pending_share` reads and deletes it,
+   * data dir (WidgetData.dir); the Rust command `take_pending_share` reads and deletes it,
    * and the frontend checks it on launch and on every return to the
-   * foreground. Same file, same folder Tauri's app-data dir resolves to.
+   * foreground.
    */
   private fun stashShare(intent: Intent?) {
     if (intent?.action != Intent.ACTION_SEND) return
@@ -88,7 +88,7 @@ class MainActivity : TauriActivity() {
     val text = intent.getStringExtra(Intent.EXTRA_TEXT)?.trim().orEmpty()
     val joined = listOf(subject, text).filter { it.isNotEmpty() }.joinToString("\n")
     if (joined.isEmpty()) return
-    runCatching { File(filesDir, "pending-share.txt").writeText(joined) }
+    runCatching { File(WidgetData.dir(this), "pending-share.txt").writeText(joined) }
     // Consume it: a rotation or relaunch must not share the same text twice.
     intent.action = null
   }
@@ -101,7 +101,7 @@ class MainActivity : TauriActivity() {
     val action = intent?.getStringExtra(EXTRA_ACTION) ?: return
     val json = JSONObject().put("action", action)
     intent.getStringExtra(EXTRA_NOTE)?.let { json.put("id", it) }
-    runCatching { File(filesDir, "pending-action.json").writeText(json.toString()) }
+    runCatching { File(WidgetData.dir(this), "pending-action.json").writeText(json.toString()) }
     intent.removeExtra(EXTRA_ACTION)
     intent.removeExtra(EXTRA_NOTE)
   }

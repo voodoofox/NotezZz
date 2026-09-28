@@ -20,8 +20,16 @@ data class WidgetNote(
 )
 
 object WidgetData {
+  /**
+   * The folder Rust reads and writes: Tauri's app_local_data_dir, which on
+   * Android is Context.getDataDir() (/data/user/0/<pkg>), NOT filesDir (its
+   * files/ subfolder). Every hand-off file lives here: widget.json,
+   * pending-share.txt, pending-action.json.
+   */
+  fun dir(context: Context): File = context.dataDir
+
   fun read(context: Context): List<WidgetNote> = runCatching {
-    val f = File(context.filesDir, "widget.json")
+    val f = File(dir(context), "widget.json")
     if (!f.exists()) return emptyList()
     val arr = JSONArray(f.readText())
     (0 until arr.length()).map { i ->
