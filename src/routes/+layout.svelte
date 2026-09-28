@@ -59,6 +59,24 @@
     void navigator.serviceWorker.register(`${base}/service-worker.js?v=${encodeURIComponent(__BUILD_TIME__)}`);
   });
 
+  // Android app: the webview draws under the status bar (Android 15 forces
+  // edge-to-edge), so the page pads its top by the bar's height and paints
+  // its own colours behind it. Insets can arrive after first paint and change
+  // on rotation, so read on mount, shortly after, and on every resize.
+  onMount(() => {
+    const bridge = (window as unknown as { NotezzzAndroid?: { safeTop(): number } }).NotezzzAndroid;
+    if (!bridge) return;
+    const apply = () =>
+      document.documentElement.style.setProperty('--safe-top', `${bridge.safeTop()}px`);
+    apply();
+    const t = setTimeout(apply, 400);
+    window.addEventListener('resize', apply);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('resize', apply);
+    };
+  });
+
   // On launch + every return to foreground, poll version.json (cache-busted —
   // the host's front proxy ignores request cache headers) and reload onto the
   // new build when the stamp differs from our baked-in __BUILD_TIME__.
@@ -114,6 +132,11 @@
   $effect(() => {
     const theme = store.settings.appTheme;
     document.documentElement.dataset.theme = theme;
+    // Android app: status-bar icons follow the app theme, not the system's
+    // (MainActivity's bridge; absent everywhere else).
+    (window as unknown as { NotezzzAndroid?: { setDarkTheme(d: boolean): void } }).NotezzzAndroid?.setDarkTheme(
+      theme === 'dark'
+    );
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', theme === 'dark' ? '#16181d' : '#f4f5f7');
   });

@@ -284,6 +284,9 @@
     height: 100dvh; /* tracks the keyboard-resized viewport on mobile */
     width: 100vw;
     overflow: hidden;
+    /* Android app only: room for the status bar (see +layout). 0 elsewhere. */
+    padding-top: var(--safe-top, 0px);
+    box-sizing: border-box;
   }
   /* Phone: stacked split — list on top, note below; .note-open expands the
      note fullscreen. The panels size themselves (Sidebar/NotePane @media). */

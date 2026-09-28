@@ -4,14 +4,59 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import java.io.File
 
 class MainActivity : TauriActivity() {
+  /** Status bar height in CSS px, read by the page (see bridge below). */
+  @Volatile private var safeTopCss = 0f
+
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
     stashShare(intent)
+
+    // Android 15 draws every app edge to edge, so the webview sits under the
+    // status bar and the keyboard. The page paints its own colours behind the
+    // status bar (it reads the height via the bridge and pads its header);
+    // the bottom is padded here, for the navigation bar and for the keyboard,
+    // so the note's toolbar rides above the keyboard like it does in Chrome.
+    val content = findViewById<View>(android.R.id.content)
+    ViewCompat.setOnApplyWindowInsetsListener(content) { v, insets ->
+      val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+      val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+      v.setPadding(bars.left, 0, bars.right, maxOf(bars.bottom, ime.bottom))
+      safeTopCss = bars.top / resources.displayMetrics.density
+      insets
+    }
+  }
+
+  override fun onWebViewCreate(webView: WebView) {
+    super.onWebViewCreate(webView)
+    webView.addJavascriptInterface(Bridge(), "NotezzzAndroid")
+  }
+
+  /** The two things the page needs from the system bars. Local page only. */
+  inner class Bridge {
+    @JavascriptInterface
+    fun safeTop(): Float = safeTopCss
+
+    /** Status-bar icons: light on a dark app theme, dark on a light one. */
+    @JavascriptInterface
+    fun setDarkTheme(dark: Boolean) {
+      runOnUiThread {
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+          isAppearanceLightStatusBars = !dark
+          isAppearanceLightNavigationBars = !dark
+        }
+      }
+    }
   }
 
   // launchMode is singleTask, so a share into a running app arrives here,

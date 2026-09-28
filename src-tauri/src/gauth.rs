@@ -10,6 +10,7 @@
 //! scope grants access per app, so notes written here are visible to the web
 //! app (and vice versa) instead of being invisible uploads from Drive Desktop.
 
+use tauri_plugin_opener::OpenerExt;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{mpsc, Arc, Mutex};
@@ -244,7 +245,12 @@ pub fn sign_in(app: &tauri::AppHandle, client_id: &str, client_secret: &str) -> 
         challenge,
         state
     );
-    tauri_plugin_opener::open_url(&url, None::<&str>).map_err(|e| format!("cannot open browser: {e}"))?;
+    // Through the app handle, not the free function: on Android the free
+    // function tries to exec a desktop opener and fails with "No such file or
+    // directory"; the plugin handle routes to Android's own URL intent.
+    app.opener()
+        .open_url(&url, None::<&str>)
+        .map_err(|e| format!("cannot open browser: {e}"))?;
 
     // Wait for Google to redirect back with ?code=...&state=...
     let (tx, rx) = mpsc::channel::<Result<String, String>>();
