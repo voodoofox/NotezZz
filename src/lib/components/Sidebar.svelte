@@ -8,7 +8,7 @@
   import { updates } from '$lib/update.svelte';
   import { installUpdate } from '$lib/updater';
   import { tuckState, requestTuck } from '$lib/tuck.svelte';
-  import { isTauri } from '$lib/storage/backend';
+  import { isDesktop } from '$lib/storage/backend';
 
   let showSettings = $state(false);
   let searching = $state(false);
@@ -213,7 +213,8 @@
           aria-label="Pin note"
           onclick={() => store.update(note.id, { pinned: !note.pinned })}
         ><Icon name="pin" size={16} /></button>
-        {#if note.pinned && isTauri()}
+        <!-- Tucking moves a window: only where the sticky window exists. -->
+        {#if note.pinned && isDesktop()}
           <button
             class="pin tuck"
             data-testid="note-tuck"

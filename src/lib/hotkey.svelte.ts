@@ -2,9 +2,9 @@
 // with the main window hidden in the tray, drops a pinned note under the
 // cursor. Registered by the main window only — every sticky window runs the
 // same code, and registering from each would fire N notes per press. Off the
-// Tauri shell every call is a no-op.
+// desktop (browser, Android) every call is a no-op.
 
-import { isTauri } from './storage/backend';
+import { isDesktop } from './storage/backend';
 import { logDiag } from './diag';
 import { store } from './store.svelte';
 
@@ -24,7 +24,7 @@ class Hotkey {
 
   /** Register or release the shortcut to match the setting. Safe to repeat. */
   async apply(enabled: boolean): Promise<void> {
-    if (!isTauri()) return;
+    if (!isDesktop()) return;
     if (!enabled) return this.release();
     if (this.status === 'on') return;
     try {

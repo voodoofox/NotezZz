@@ -1,8 +1,8 @@
 <script lang="ts">
-  // First desktop launch: one question, asked once — where should the notes
-  // live? Desktop never gates on sign-in (the app is usable with local files
-  // from the first second), which is why a person could otherwise use it for
-  // months without learning that sync exists.
+  // First launch of the desktop or Android app: one question, asked once —
+  // where should the notes live? Neither gates on sign-in (the app is usable
+  // with local files from the first second), which is why a person could
+  // otherwise use it for months without learning that sync exists.
   import Modal from './Modal.svelte';
   import { signInDesktopAndMigrate, signInSummary } from '$lib/desktopFlow';
 
@@ -32,16 +32,16 @@
     <h2 id="onboard-title">Where should your notes live?</h2>
     <p>
       Sign in and every note is a small file in a <b>NotezZz</b> folder in your own Google Drive:
-      the same notes on your phone and in the web app, and yours to keep if you ever stop using
+      the same notes on every device and in the web app, and yours to keep if you ever stop using
       this app.
     </p>
-    <p>Or keep them on this PC only. Either way, Settings can change it later.</p>
+    <p>Or keep them on this device only. Either way, Settings can change it later.</p>
     <button class="google" data-testid="onboard-google" onclick={google} disabled={busy}>
       {busy ? 'Connecting…' : 'Sign in with Google'}
     </button>
     {#if error}<p class="err">{error}</p>{/if}
     <button class="local" data-testid="onboard-local" onclick={onDone} disabled={busy}>
-      Keep notes on this PC
+      Keep notes on this device
     </button>
   </div>
 </Modal>

@@ -19,7 +19,24 @@ export interface StorageBackend {
   saveSettings(settings: Settings): Promise<void>;
 }
 
-/** True when running inside the Tauri desktop shell. */
+// Three platforms, two questions. isTauri() answers "is Rust on the other
+// side?" — fs backend, Rust-managed Google auth, no web sign-in gate, no
+// service worker. isDesktop() answers "is this a PC?" — sticky windows, tray,
+// global hotkey, self-updater, autostart, sync-folder picker. The Android app
+// is Tauri but not desktop; before isMobile() existed every isTauri() check
+// meant both, and the phone build would have tried to open WebviewWindows.
+
+/** True inside any Tauri shell: the Windows desktop app or the Android app. */
 export function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+/** Tauri on a phone or tablet: one fullscreen window, no desktop to pin to. */
+export function isMobile(): boolean {
+  return isTauri() && /Android|iPhone|iPad/i.test(navigator.userAgent);
+}
+
+/** Tauri on a PC — the only place window, tray and updater APIs exist. */
+export function isDesktop(): boolean {
+  return isTauri() && !isMobile();
 }

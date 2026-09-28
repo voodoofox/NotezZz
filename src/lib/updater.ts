@@ -1,8 +1,9 @@
 // Desktop self-update. The check and install run in Rust (src-tauri/src/
 // updates.rs) so the manifest URL can be cache-busted past the site's front
-// proxy; this file is the thin client. No-op off the desktop.
+// proxy; this file is the thin client. No-op off the desktop — Android
+// updates through its store, and has no check_update/install_update commands.
 
-import { isTauri } from './storage/backend';
+import { isDesktop } from './storage/backend';
 
 export type UpdateState =
   | { kind: 'idle' }
@@ -17,7 +18,7 @@ type Info = { version: string; body?: string | null } | null;
 
 /** Ask the site whether a newer build exists. */
 export async function checkForUpdate(): Promise<UpdateState> {
-  if (!isTauri()) return { kind: 'idle' };
+  if (!isDesktop()) return { kind: 'idle' };
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     const info = await invoke<Info>('check_update');
@@ -34,7 +35,7 @@ export async function checkForUpdate(): Promise<UpdateState> {
  * resolved promise here means the install was declined or failed to start.
  */
 export async function installUpdate(onProgress: (percent: number) => void): Promise<UpdateState> {
-  if (!isTauri()) return { kind: 'idle' };
+  if (!isDesktop()) return { kind: 'idle' };
   const { invoke } = await import('@tauri-apps/api/core');
   const { listen } = await import('@tauri-apps/api/event');
   const stop = await listen<{ done: number; total: number | null }>('update-progress', (e) => {
@@ -53,7 +54,7 @@ export async function installUpdate(onProgress: (percent: number) => void): Prom
 }
 
 export async function relaunch(): Promise<void> {
-  if (!isTauri()) return;
+  if (!isDesktop()) return;
   const { relaunch } = await import('@tauri-apps/plugin-process');
   await relaunch();
 }
