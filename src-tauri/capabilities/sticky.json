@@ -2,7 +2,14 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "sticky",
   "description": "Sticky note windows: only what src/routes/sticky/+page.svelte and src/lib/desktop.ts use there — the change-event bus, own-window geometry (scaleFactor/outerPosition/innerSize/outerSize/currentMonitor + moved/resized events, setPosition for the tuck-away slide), drag region, close-on-unpin, always-on-top. No window creation, no dialog/opener/autostart: a sticky renders note content, so it gets the smallest surface.",
-  "windows": ["sticky-*"],
+  "platforms": [
+    "windows",
+    "macOS",
+    "linux"
+  ],
+  "windows": [
+    "sticky-*"
+  ],
   "permissions": [
     "core:default",
     "core:webview:allow-create-webview-window",

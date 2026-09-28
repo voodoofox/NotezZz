@@ -8,13 +8,35 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 mod backup;
+#[cfg(desktop)]
 mod fullscreen;
 mod gauth;
 #[cfg(test)]
 mod tests;
+#[cfg(desktop)]
 mod updates;
+/// Android/iOS: the updater is a store's job, so these commands say so
+/// rather than vanish (the frontend calls them only on desktop anyway).
+#[cfg(mobile)]
+mod updates {
+    #[derive(serde::Serialize, Clone)]
+    pub struct UpdateInfo {
+        pub version: String,
+        pub body: Option<String>,
+    }
+    #[tauri::command]
+    pub async fn check_update(_app: tauri::AppHandle) -> Result<Option<UpdateInfo>, String> {
+        Ok(None)
+    }
+    #[tauri::command]
+    pub async fn install_update(_app: tauri::AppHandle) -> Result<(), String> {
+        Err("Updates come through the store on this device".into())
+    }
+}
 
+#[cfg(desktop)]
 use tauri::menu::{Menu, MenuItem};
+#[cfg(desktop)]
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager};
 
@@ -336,6 +358,7 @@ fn google_sign_out(app: tauri::AppHandle) -> Result<(), String> {
 /// Move the calling window to (x, y) over `ms` with an ease-in-out quart
 /// curve. Done here rather than per-frame from JS: each JS frame was an IPC
 /// round-trip, which throttled the motion until it read as linear.
+#[cfg(desktop)]
 #[tauri::command]
 async fn slide_window(window: tauri::Window, x: i32, y: i32, ms: u32) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -368,6 +391,42 @@ async fn slide_window(window: tauri::Window, x: i32, y: i32, ms: u32) -> Result<
 /// accident) kept serving that build's shell to the main window through every
 /// update. Runs on each start: cheap, and no desktop build should ever have a
 /// worker again. The path mirrors Tauri's app-local-data dir for this identifier.
+#[cfg(mobile)]
+#[tauri::command]
+async fn slide_window(_window: tauri::Window, _x: i32, _y: i32, _ms: u32) -> Result<(), String> {
+    Err("no sticky windows on this device".into())
+}
+
+/// Android: text shared into the app. MainActivity (gen/android) writes the
+/// share sheet's text to `pending-share.txt` in the app's files dir because
+/// the intent arrives in Kotlin, not in the webview; the frontend takes it
+/// from here on launch and on every return to the foreground.
+#[tauri::command]
+fn take_pending_share(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let path = local_dir(&app)?.join("pending-share.txt");
+    match fs::read_to_string(&path) {
+        Ok(text) => {
+            let _ = fs::remove_file(&path);
+            let text = text.trim().to_string();
+            Ok(if text.is_empty() { None } else { Some(text) })
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("pending share: {e}")),
+    }
+}
+
+/// Android home-screen widget data: the frontend writes a small JSON array
+/// of the notes the widget shows (pinned ones, else the latest). The widget
+/// runs in the launcher's process with no access to the webview, so a file
+/// in the app's files dir is the hand-off; the widget re-reads it whenever
+/// the app leaves the foreground (see MainActivity) and on its own schedule.
+#[tauri::command]
+fn write_widget_snapshot(app: tauri::AppHandle, json: String) -> Result<(), String> {
+    let path = local_dir(&app)?.join("widget.json");
+    write_atomic(&path, &json)
+}
+
+#[cfg(desktop)]
 fn remove_stale_service_worker() {
     let Some(local) = std::env::var_os("LOCALAPPDATA") else { return };
     let dir = PathBuf::from(local)
@@ -383,6 +442,7 @@ fn remove_stale_service_worker() {
     }
 }
 
+#[cfg(desktop)]
 fn show_main(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -391,6 +451,7 @@ fn show_main(app: &tauri::AppHandle) {
     }
 }
 
+#[cfg(desktop)]
 fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Open NotezZz", true, None::<&str>)?;
     let new = MenuItem::with_id(app, "new", "New note", true, None::<&str>)?;
@@ -429,33 +490,37 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(desktop)]
     remove_stale_service_worker();
 
+    #[allow(unused_mut)]
     let mut builder = tauri::Builder::default();
 
-    // single-instance MUST be registered first (desktop only).
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    // Desktop-only plugins. single-instance MUST be registered first.
+    #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            show_main(app);
-        }));
+        builder = builder
+            .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+                show_main(app);
+            }))
+            // Registered here, but no shortcut is bound in Rust: the frontend
+            // registers the combo through the JS API (it also owns the "place
+            // the new sticky at the cursor" part).
+            .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+            // Self-update: the app checks latest.json on GitHub Releases
+            // (signed with the key in updater.env) so users stop
+            // re-downloading installers.
+            .plugin(tauri_plugin_updater::Builder::new().build())
+            .plugin(tauri_plugin_process::init())
+            .plugin(tauri_plugin_autostart::init(
+                tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+                None,
+            ));
     }
 
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        // Registered here, but no shortcut is bound in Rust: the frontend
-        // registers CommandOrControl+Shift+N through the JS API (it also owns
-        // the "place the new sticky at the cursor" part).
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        // Self-update: the app checks latest.json on the site (signed with the
-        // key in updater.env) so users stop re-downloading installers.
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            None,
-        ))
         .invoke_handler(tauri::generate_handler![
             list_notes,
             save_note,
@@ -472,16 +537,31 @@ pub fn run() {
             updates::install_update,
             backup::backups_dir,
             slide_window,
+            take_pending_share,
+            write_widget_snapshot,
         ])
         .setup(|app| {
-            build_tray(app.handle())?;
-            // Stickies step aside for fullscreen video/games (see fullscreen.rs).
-            fullscreen::watch(app.handle().clone());
             // Daily copy of the notes folder into the local app dir (see backup.rs).
             backup::start(app.handle().clone());
+            #[cfg(desktop)]
+            desktop_setup(app)?;
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
 
-            // Closing the main window hides it to the tray instead of quitting.
-            if let Some(main) = app.get_webview_window("main") {
+/// Tray, fullscreen watcher, and the main window's cache-busting + hide-to-
+/// tray behaviour. None of it applies to a phone, where the one webview is
+/// the whole app.
+#[cfg(desktop)]
+fn desktop_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    build_tray(app.handle())?;
+    // Stickies step aside for fullscreen video/games (see fullscreen.rs).
+    fullscreen::watch(app.handle().clone());
+
+    // Closing the main window hides it to the tray instead of quitting.
+    if let Some(main) = app.get_webview_window("main") {
                 // WebView2 keeps the app's own pages in its HTTP cache across
                 // updates. After an update the main window kept loading the
                 // PREVIOUS build's index.html and chunks from cache while sticky
@@ -504,9 +584,6 @@ pub fn run() {
                         let _ = main_clone.hide();
                     }
                 });
-            }
-            Ok(())
-        })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    }
+    Ok(())
 }

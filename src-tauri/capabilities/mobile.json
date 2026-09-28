@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "Android/iOS: one webview, no stickies, no tray, no updater, no hotkey. The plugins that back those are not even compiled for mobile, and a capability naming their permissions fails the build; main.json is desktop-only for that reason.",
+  "platforms": [
+    "android",
+    "iOS"
+  ],
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "opener:default",
+    "dialog:default"
+  ]
+}
