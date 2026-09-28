@@ -4,6 +4,7 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.webkit.JavascriptInterface
@@ -95,12 +96,31 @@ class MainActivity : TauriActivity() {
   private fun stashShare(intent: Intent?) {
     if (intent?.action != Intent.ACTION_SEND) return
     val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT)?.trim().orEmpty()
-    val text = intent.getStringExtra(Intent.EXTRA_TEXT)?.trim().orEmpty()
+    val text = (intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString() ?: readSharedStream(intent))
+      ?.trim().orEmpty()
     val joined = listOf(subject, text).filter { it.isNotEmpty() }.joinToString("\n")
     if (joined.isEmpty()) return
     runCatching { File(WidgetData.dir(this), "pending-share.txt").writeText(joined) }
     // Consume it: a rotation or relaunch must not share the same text twice.
     intent.action = null
+  }
+
+  /** A shared text FILE (EXTRA_STREAM), read up to 256 KB; null if none. */
+  private fun readSharedStream(intent: Intent): String? {
+    @Suppress("DEPRECATION")
+    val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) ?: return null
+    return runCatching {
+      contentResolver.openInputStream(uri)?.use { input ->
+        val buf = ByteArray(256 * 1024)
+        var n = 0
+        while (n < buf.size) {
+          val r = input.read(buf, n, buf.size - n)
+          if (r < 0) break
+          n += r
+        }
+        String(buf, 0, n, Charsets.UTF_8)
+      }
+    }.getOrNull()
   }
 
   /**

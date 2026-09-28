@@ -37,11 +37,13 @@
                 <data android:scheme="notezzz" android:host="auth" />
             </intent-filter>
             <!-- "Share to NotezZz" from any app. MainActivity stashes the text
-                 for the webview (see stashShare). -->
+                 for the webview (see stashShare). Any text type, not only
+                 text/plain: some apps share links as text/html or
+                 text/uri-list, and text files arrive as a stream. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
+                <data android:mimeType="text/*" />
             </intent-filter>
         </activity>
 
