@@ -412,7 +412,7 @@
     }
     .actions {
       order: 3;
-      padding-bottom: calc(12px + env(safe-area-inset-bottom));
+      padding-bottom: calc(12px + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)));
     }
     .bar::-webkit-scrollbar {
       display: none;

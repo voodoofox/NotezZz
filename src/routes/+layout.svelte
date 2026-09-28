@@ -59,15 +59,22 @@
     void navigator.serviceWorker.register(`${base}/service-worker.js?v=${encodeURIComponent(__BUILD_TIME__)}`);
   });
 
-  // Android app: the webview draws under the status bar (Android 15 forces
-  // edge-to-edge), so the page pads its top by the bar's height and paints
-  // its own colours behind it. Insets can arrive after first paint and change
-  // on rotation, so read on mount, shortly after, and on every resize.
+  // Android app: the webview draws under the status bar and the navigation
+  // bar (Android 15 forces edge-to-edge), so the page pads its top and its
+  // bottom toolbars by the bars' heights and paints its own colours behind
+  // them. Insets can arrive after first paint and change on rotation and with
+  // the keyboard (which resizes the view), so read on mount, shortly after,
+  // and on every resize.
   onMount(() => {
-    const bridge = (window as unknown as { NotezzzAndroid?: { safeTop(): number } }).NotezzzAndroid;
+    const bridge = (
+      window as unknown as { NotezzzAndroid?: { safeTop(): number; safeBottom?(): number } }
+    ).NotezzzAndroid;
     if (!bridge) return;
-    const apply = () =>
-      document.documentElement.style.setProperty('--safe-top', `${bridge.safeTop()}px`);
+    const apply = () => {
+      const root = document.documentElement.style;
+      root.setProperty('--safe-top', `${bridge.safeTop()}px`);
+      root.setProperty('--safe-bottom', `${bridge.safeBottom?.() ?? 0}px`);
+    };
     apply();
     const t = setTimeout(apply, 400);
     window.addEventListener('resize', apply);

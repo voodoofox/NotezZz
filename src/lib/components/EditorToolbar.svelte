@@ -287,7 +287,7 @@
       border-bottom: none;
       border-top: 1px solid color-mix(in srgb, var(--note-fg) 10%, transparent);
       gap: 0;
-      padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+      padding: 4px 4px calc(4px + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)));
     }
     .toolbar button {
       flex: 1 1 0;
