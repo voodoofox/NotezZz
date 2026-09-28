@@ -3,7 +3,7 @@
   import { page } from '$app/state';
   import { store } from '$lib/store.svelte';
   import { logDiag } from '$lib/diag';
-  import { isTauri } from '$lib/storage/backend';
+  import { isDesktop } from '$lib/storage/backend';
   import { getPalette } from '$lib/palettes';
   import ColorPicker from './ColorPicker.svelte';
   import { tuckState, requestTuck } from '$lib/tuck.svelte';
@@ -14,7 +14,9 @@
 
   let note = $derived(store.active);
   let pal = $derived(getPalette(note?.paletteId ?? ''));
-  const desktop = isTauri();
+  // Sticker opacity and tuck act on a sticky window; the pin itself is
+  // cross-device (pin on the phone, it appears on the PC) and stays everywhere.
+  const desktop = isDesktop();
   // Fullscreen is history state (see +page.svelte); read it from there rather
   // than store.mobileOpen so this pane never disagrees with the page.
   let fullscreen = $derived((page.state as { fs?: boolean }).fs === true);

@@ -12,7 +12,7 @@ import { DEFAULT_SETTINGS, newNote, rollTilt, type Note, type Settings } from '.
 import { welcomeNotes } from './welcome';
 import { Outbox, type OutboxOp } from './outbox';
 import type { StorageBackend } from './storage/backend';
-import { isTauri } from './storage/backend';
+import { isTauri, isDesktop } from './storage/backend';
 import { LocalBackend } from './storage/localBackend';
 import { openSticky, closeSticky, hideSticky, broadcastChange, onRemoteChange } from './desktop';
 
@@ -468,7 +468,8 @@ class AppStore {
     if (patch.pinned && !this.notes[idx].pinned) patch = { ...patch, tilt: rollTilt() };
     const updated = { ...this.notes[idx], ...patch, updatedAt: Date.now() };
     this.notes[idx] = updated;
-    // Pin/unpin spawns or closes the desktop sticky window (no-op on web).
+    // Pin/unpin spawns or closes the desktop sticky window (no-op on web and
+    // Android: the window calls in desktop.ts return early off the desktop).
     if (!('pinned' in patch)) return this.#persistNote(updated);
     void (patch.pinned ? this.#pin(updated) : this.#unpin(updated));
   }
@@ -607,11 +608,12 @@ class AppStore {
   startAutoSync(intervalMs: number) {
     if (this.#autoTimer) clearInterval(this.#autoTimer);
     this.#autoTimer = setInterval(() => {
-      // A background browser tab has no business polling Drive. A desktop
-      // sticky is the opposite case: it sits on the user's screen showing a
-      // note, and it is never the focused window, so gating it on visibility
-      // is how it ends up displaying stale content indefinitely.
-      if (!isTauri() && document.visibilityState !== 'visible') return;
+      // A background browser tab — or the Android app behind another app —
+      // has no business polling Drive. A desktop sticky is the opposite case:
+      // it sits on the user's screen showing a note, and it is never the
+      // focused window, so gating it on visibility is how it ends up
+      // displaying stale content indefinitely.
+      if (!isDesktop() && document.visibilityState !== 'visible') return;
       // Failed writes get their retry here, on the app's heartbeat.
       this.#outbox.retryDue();
       // Never refresh over work that hasn't landed yet: debounced edits or
@@ -712,8 +714,9 @@ class AppStore {
         if (prevStamp.get(n.id) !== n.updatedAt) void broadcastChange({ note: $state.snapshot(n) });
       }
       // Desktop: honor pin changes that arrived from other devices — a note
-      // pinned on the phone becomes a sticky here on the next refresh.
-      if (isTauri()) {
+      // pinned on the phone becomes a sticky here on the next refresh. (The
+      // phone itself has no windows; its pins are for the PC to pick up.)
+      if (isDesktop()) {
         const liveIds = new Set(this.notes.map((n) => n.id));
         for (const n of this.notes) {
           if (n.pinned && !prevPinned.has(n.id)) void openSticky(n);

@@ -5,7 +5,7 @@
   import UpdateCheck from './UpdateCheck.svelte';
   import { onMount } from 'svelte';
   import { store } from '$lib/store.svelte';
-  import { isTauri } from '$lib/storage/backend';
+  import { isTauri, isDesktop, isMobile } from '$lib/storage/backend';
   import { getDiag } from '$lib/diag';
   import Icon from './Icon.svelte';
   import { chooseSyncFolder, getSyncFolder } from '$lib/desktop';
@@ -71,7 +71,13 @@
     }
   }
 
-  const desktop = isTauri();
+  // Three builds share this panel. `tauri`: Rust owns storage and Google
+  // auth (desktop AND Android). `desktop`: there is a PC around it — sticky
+  // windows, a folder to pick, autostart, a self-updater. `mobile`: a phone,
+  // always stacked, with no keyboard shortcut to offer.
+  const tauri = isTauri();
+  const desktop = isDesktop();
+  const mobile = isMobile();
 
   onMount(async () => {
     try {
@@ -79,10 +85,11 @@
     } catch {
       /* private mode */
     }
-    if (!desktop) return;
+    if (!tauri) return;
     const { desktopAuthConfigured, desktopAccount } = await import('$lib/drive/desktopAuth');
     gAuthAvailable = desktopAuthConfigured();
     if (gAuthAvailable) gAccount = await desktopAccount();
+    if (!desktop) return; // no folder picker or autostart plugin on Android
     syncFolder = await getSyncFolder();
     try {
       const { isEnabled } = await import('@tauri-apps/plugin-autostart');
@@ -173,30 +180,35 @@
         </select>
       </label>
 
-      <label class="row">
-        <span>Note list</span>
-        <select
-          data-testid="set-layout"
-          value={store.settings.layout ?? 'side'}
-          onchange={(e) => store.saveSettings({ layout: (e.currentTarget as HTMLSelectElement).value as 'side' | 'top' })}
-        >
-          <option value="side">Beside the note</option>
-          <option value="top">Above the note (like the phone)</option>
-        </select>
-      </label>
-      {#if (store.settings.layout ?? 'side') === 'top'}
+      <!-- A phone is always stacked (the layout is a wide-screen choice), and
+           the setting syncs: showing it there would offer a switch that does
+           nothing here and rearranges the PC. -->
+      {#if !mobile}
         <label class="row">
-          <span>List columns</span>
+          <span>Note list</span>
           <select
-            data-testid="set-columns"
-            value={String(store.settings.listColumns ?? 1)}
-            onchange={(e) => store.saveSettings({ listColumns: +(e.currentTarget as HTMLSelectElement).value as 1 | 2 | 3 })}
+            data-testid="set-layout"
+            value={store.settings.layout ?? 'side'}
+            onchange={(e) => store.saveSettings({ layout: (e.currentTarget as HTMLSelectElement).value as 'side' | 'top' })}
           >
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
+            <option value="side">Beside the note</option>
+            <option value="top">Above the note (like the phone)</option>
           </select>
         </label>
+        {#if (store.settings.layout ?? 'side') === 'top'}
+          <label class="row">
+            <span>List columns</span>
+            <select
+              data-testid="set-columns"
+              value={String(store.settings.listColumns ?? 1)}
+              onchange={(e) => store.saveSettings({ listColumns: +(e.currentTarget as HTMLSelectElement).value as 1 | 2 | 3 })}
+            >
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+            </select>
+          </label>
+        {/if}
       {/if}
 
       <label class="row">
@@ -212,13 +224,18 @@
 
     {#if desktop}
       <UpdateCheck />
+    {/if}
+
+    {#if tauri}
       <section>
         <h3>Sync</h3>
+        <!-- Same Rust OAuth flow on desktop and Android (the system browser
+             comes back to a loopback port the app listens on). -->
         {#if gAuthAvailable}
           <p class="hint">
             {gAccount
               ? `Signed in as ${gAccount} — notes sync straight to Google Drive, visible on every device.`
-              : 'Sign in to sync notes with your phone and the web app directly through Google Drive.'}
+              : 'Sign in to sync notes with your other devices and the web app directly through Google Drive.'}
           </p>
           <div class="folder">
             <code>{gAccount ?? 'Not signed in'}</code>
@@ -227,17 +244,23 @@
             </button>
           </div>
         {/if}
-        <p class="hint">
-          {gAccount
-            ? 'Local folder (offline copy / used when signed out):'
-            : 'Notes are stored as files here. Point this at your Google Drive folder to sync across devices.'}
-        </p>
-        <div class="folder">
-          <code>{syncFolder ?? '(app default location)'}</code>
-          <button onclick={pickFolder} disabled={busy}>Choose…</button>
-        </div>
+        {#if desktop}
+          <p class="hint">
+            {gAccount
+              ? 'Local folder (offline copy / used when signed out):'
+              : 'Notes are stored as files here. Point this at your Google Drive folder to sync across devices.'}
+          </p>
+          <div class="folder">
+            <code>{syncFolder ?? '(app default location)'}</code>
+            <button onclick={pickFolder} disabled={busy}>Choose…</button>
+          </div>
+        {:else if !gAccount}
+          <p class="hint">Notes are stored on this device only until you sign in.</p>
+        {/if}
       </section>
+    {/if}
 
+    {#if desktop}
       <section>
         <h3>Sticky notes</h3>
         <label class="row">
@@ -260,7 +283,9 @@
           <input type="checkbox" checked={autostartOn} onchange={toggleAutostart} />
         </label>
       </section>
-    {:else}
+    {/if}
+
+    {#if !tauri}
       <section>
         <h3>Sync</h3>
         {#if store.isCloud}
@@ -286,31 +311,34 @@
       </section>
     {/if}
 
-    <!-- Shown on every build, not just desktop: settings travel with the
-         account, so the switch flipped here on a phone is the switch the PC
-         reads. Only the wording differs. -->
-    <section>
-      <h3>Shortcuts</h3>
-      <label class="row">
-        <span><kbd>{NEW_NOTE_SHORTCUT_LABEL}</kbd> — new sticky note under the cursor</span>
-        <input
-          type="checkbox"
-          data-testid="hotkey-newnote"
-          checked={store.settings.hotkeyNewNote ?? false}
-          onchange={(e) =>
-            store.saveSettings({ hotkeyNewNote: (e.currentTarget as HTMLInputElement).checked })}
-        />
-      </label>
-      {#if hotkey.status === 'unavailable'}
-        <p class="hint warn" data-testid="hotkey-unavailable">unavailable — in use by another app</p>
-      {:else}
-        <p class="hint">
-          {desktop
-            ? 'Works from any app, even while this window sits in the tray.'
-            : 'Used by the desktop app.'}
-        </p>
-      {/if}
-    </section>
+    <!-- Shown on the desktop and the web (a PC browser), not just the desktop
+         app: settings travel with the account, so the switch flipped in the
+         browser is the switch the PC app reads. Only the wording differs. A
+         phone has no keyboard to offer a combo on, so it gets no section. -->
+    {#if !mobile}
+      <section>
+        <h3>Shortcuts</h3>
+        <label class="row">
+          <span><kbd>{NEW_NOTE_SHORTCUT_LABEL}</kbd> — new sticky note under the cursor</span>
+          <input
+            type="checkbox"
+            data-testid="hotkey-newnote"
+            checked={store.settings.hotkeyNewNote ?? false}
+            onchange={(e) =>
+              store.saveSettings({ hotkeyNewNote: (e.currentTarget as HTMLInputElement).checked })}
+          />
+        </label>
+        {#if hotkey.status === 'unavailable'}
+          <p class="hint warn" data-testid="hotkey-unavailable">unavailable — in use by another app</p>
+        {:else}
+          <p class="hint">
+            {desktop
+              ? 'Works from any app, even while this window sits in the tray.'
+              : 'Used by the desktop app.'}
+          </p>
+        {/if}
+      </section>
+    {/if}
 
     <section>
       <h3>Your files</h3>
