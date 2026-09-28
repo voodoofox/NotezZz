@@ -22,6 +22,16 @@
                 <!-- AndroidTV support -->
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
+            <!-- notezzz://auth: the sign-in page's "Return to NotezZz" link. A
+                 browser may only open activities that declare BROWSABLE; the
+                 launcher filter above doesn't, so Chrome fell back to looking
+                 the app up on the Play Store ("Item not found"). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="notezzz" android:host="auth" />
+            </intent-filter>
             <!-- "Share to NotezZz" from any app. MainActivity stashes the text
                  for the webview (see stashShare). -->
             <intent-filter>

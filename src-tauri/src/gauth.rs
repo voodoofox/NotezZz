@@ -232,8 +232,11 @@ fn html_response(status: u16, body: &str) -> tiny_http::Response<std::io::Cursor
 #[cfg(target_os = "android")]
 const CONNECTED_PAGE: &str = concat!(
     "<h2>NotezZz is connected.</h2>",
-    "<p><a id=\"back\" href=\"intent:#Intent;action=android.intent.action.MAIN;",
-    "category=android.intent.category.LAUNCHER;package=com.administrator.notezzz;end\" ",
+    // Resolves to the notezzz://auth filter in AndroidManifest.xml. The
+    // fallback URL keeps Chrome on this page instead of opening the Play Store
+    // if the app somehow can't be found.
+    "<p><a id=\"back\" href=\"intent://auth#Intent;scheme=notezzz;package=com.administrator.notezzz;",
+    "S.browser_fallback_url=about%3Ablank;end\" ",
     "style=\"display:inline-block;padding:14px 22px;background:#1f2328;color:#fff;",
     "border-radius:6px;text-decoration:none;font-size:18px\">Return to NotezZz</a></p>",
     "<script>setTimeout(function(){location.href=document.getElementById('back').href},300)</script>"
