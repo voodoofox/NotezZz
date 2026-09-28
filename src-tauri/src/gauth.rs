@@ -224,6 +224,41 @@ fn html_response(status: u16, body: &str) -> tiny_http::Response<std::io::Cursor
 /// the tokens are STILL stored (the sign-in itself worked) and the error
 /// says so — the frontend re-checks `google_account` before calling it a
 /// failed sign-in.
+/// The page the browser shows after Google redirects back. On Android the
+/// app must come back to the foreground before the token exchange below can
+/// reach the network (the phone blocks network for backgrounded apps, which
+/// surfaced as a DNS failure), so the page offers a one-tap way back and
+/// tries it on its own. `intent:` URLs are Chrome's way to open an app.
+#[cfg(target_os = "android")]
+const CONNECTED_PAGE: &str = concat!(
+    "<h2>NotezZz is connected.</h2>",
+    "<p><a id=\"back\" href=\"intent:#Intent;action=android.intent.action.MAIN;",
+    "category=android.intent.category.LAUNCHER;package=com.administrator.notezzz;end\" ",
+    "style=\"display:inline-block;padding:14px 22px;background:#1f2328;color:#fff;",
+    "border-radius:6px;text-decoration:none;font-size:18px\">Return to NotezZz</a></p>",
+    "<script>setTimeout(function(){location.href=document.getElementById('back').href},300)</script>"
+);
+#[cfg(not(target_os = "android"))]
+const CONNECTED_PAGE: &str = "<h2>NotezZz is connected.</h2><p>You can close this tab.</p>";
+
+/// Trade the authorization code for tokens, retrying network failures for a
+/// while. On a phone the first attempt runs while the browser is in front and
+/// the app is in the background, where the network may be blocked; it works
+/// the moment the user is back in the app. A code is single-use and short-
+/// lived (minutes), so this waits at most 90 s and never retries a rejection.
+fn exchange_code(params: Vec<(&str, &str)>) -> Result<TokenResponse, String> {
+    let deadline = std::time::Instant::now() + Duration::from_secs(90);
+    loop {
+        match exchange(params.clone()) {
+            Ok(tr) => return Ok(tr),
+            Err(e) if e.code == "network" && std::time::Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_secs(2));
+            }
+            Err(e) => return Err(e.message),
+        }
+    }
+}
+
 pub fn sign_in(app: &tauri::AppHandle, client_id: &str, client_secret: &str) -> Result<Tokens, String> {
     let (verifier, challenge) = pkce_pair();
     // `state` ties the callback to THIS attempt. Without it the listener
@@ -264,10 +299,7 @@ pub fn sign_in(app: &tauri::AppHandle, client_id: &str, client_secret: &str) -> 
                 continue;
             }
             let (body, result) = match query_param(&target, "code") {
-                Some(c) if !c.is_empty() => (
-                    "<h2>NotezZz is connected.</h2><p>You can close this tab.</p>",
-                    Ok(c),
-                ),
+                Some(c) if !c.is_empty() => (CONNECTED_PAGE, Ok(c)),
                 _ => (
                     "<h2>Sign-in was cancelled.</h2><p>You can close this tab.</p>",
                     Err(match query_param(&target, "error") {
@@ -301,15 +333,14 @@ pub fn sign_in(app: &tauri::AppHandle, client_id: &str, client_secret: &str) -> 
         mpsc::RecvTimeoutError::Disconnected => "sign-in cancelled".to_string(),
     })??;
 
-    let tr = exchange(vec![
+    let tr = exchange_code(vec![
         ("code", &code),
         ("client_id", client_id),
         ("client_secret", client_secret),
         ("redirect_uri", &redirect),
         ("grant_type", "authorization_code"),
         ("code_verifier", &verifier),
-    ])
-    .map_err(|e| e.message)?;
+    ])?;
 
     let email = fetch_email(&tr.access_token);
     let tokens = Tokens {
