@@ -80,6 +80,8 @@ path for the UI. Implemented in `src-tauri/src/backup.rs`.
 
 ## Deploy
 
+Connecting to the FTP host, with every quirk explained: [docs/FTP-HANDOFF.md](docs/FTP-HANDOFF.md).
+
 Both deploy scripts read FTP credentials from `deploy.env` in the project root
 (gitignored, never committed). It is plain `KEY=VALUE` lines:
 
