@@ -37,6 +37,9 @@ header .wrap { display: flex; align-items: center; justify-content: space-betwee
 .brand { font-family: 'Sofia', sans-serif; font-weight: 700; font-size: 25px; letter-spacing: -0.02em;
          text-decoration: none; display: flex; align-items: center; gap: 9px; }
 .brand img { width: 28px; height: 28px; }
+.brand .wm { height: 21px; width: auto; display: block; }
+.brand .zzz { fill: #E0439A; }
+@media (prefers-color-scheme: dark) { .brand .zzz { fill: #FF6AD5; } }
 header nav a { font-family: 'Plex', monospace; font-size: 12px; letter-spacing: .1em;
                text-transform: uppercase; color: var(--muted); text-decoration: none; margin-left: 22px; }
 header nav a:hover { color: var(--ink); }
