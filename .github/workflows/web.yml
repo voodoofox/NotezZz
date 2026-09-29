@@ -1,5 +1,5 @@
 # The web app (https://flatvoxel.com/NotezZz/) deployed from GitHub on every
-# release, the same way deploy-web.ps1 does it from a PC: build with
+# version tag, the same way deploy-web.ps1 does it from a PC: build with
 # BASE_PATH=/NotezZz, upload every file over explicit FTPS (assets first,
 # then the entry files, so a visitor mid-upload never gets an index that
 # points at chunks not there yet), then check every live asset answers 200.
@@ -8,9 +8,12 @@
 # values as the local deploy.env). Without them the job skips itself.
 name: Web
 
+# On the version tag rather than "release published": the release is created
+# by release.yml with the workflow token, and GitHub doesn't start other
+# workflows from events that token causes.
 on:
-  release:
-    types: [published]
+  push:
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
