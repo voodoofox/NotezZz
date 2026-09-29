@@ -13,6 +13,7 @@ import { welcomeNotes } from './welcome';
 import { Outbox, type OutboxOp } from './outbox';
 import type { StorageBackend } from './storage/backend';
 import { isTauri, isDesktop } from './storage/backend';
+import { noteLabel } from './text';
 import { LocalBackend } from './storage/localBackend';
 import { openSticky, closeSticky, hideSticky, broadcastChange, onRemoteChange } from './desktop';
 
@@ -473,6 +474,8 @@ class AppStore {
     // Each pin gets its own lean, so putting a note back up looks like
     // putting a note back up.
     if (patch.pinned && !this.notes[idx].pinned) patch = { ...patch, tilt: rollTilt() };
+    // Unpinned is untucked: pinning it again brings the sticky up in full.
+    if ('pinned' in patch && !patch.pinned && this.notes[idx].tucked) patch = { ...patch, tucked: false };
     const updated = { ...this.notes[idx], ...patch, updatedAt: Date.now() };
     this.notes[idx] = updated;
     // Pin/unpin spawns or closes the desktop sticky window (no-op on web and
@@ -578,11 +581,25 @@ class AppStore {
     if (!note) return;
     const patch: Partial<Note> = { archived: on };
     if (on && note.pinned) patch.pinned = false;
+    // What Undo puts back: visible again, and on the desktop if it was.
+    this.undoArchive = on ? { id, label: noteLabel(note), pinned: !!note.pinned } : null;
     this.update(id, patch);
     if (on && this.activeId === id) {
       this.activeId = this.notes.find((n) => !n.archived && n.id !== id)?.id ?? null;
       this.mobileOpen = false;
     }
+  }
+
+  /** The note just archived, while its Undo is on offer (UndoToast). */
+  undoArchive = $state<{ id: string; label: string; pinned: boolean } | null>(null);
+
+  /** Undo the last archive: back in the list, selected, re-pinned if it was. */
+  restoreArchived() {
+    const offer = this.undoArchive;
+    this.undoArchive = null;
+    if (!offer || !this.notes.some((n) => n.id === offer.id)) return;
+    this.update(offer.id, offer.pinned ? { archived: false, pinned: true } : { archived: false });
+    this.activeId = offer.id;
   }
 
   async remove(id: string) {

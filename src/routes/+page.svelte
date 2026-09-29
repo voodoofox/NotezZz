@@ -14,11 +14,11 @@
   import ShareIntake from '$lib/components/ShareIntake.svelte';
   import Onboarding from '$lib/components/Onboarding.svelte';
   import QuickSwitcher from '$lib/components/QuickSwitcher.svelte';
+  import UndoToast from '$lib/components/UndoToast.svelte';
   import { page } from '$app/state';
   import { hasPriorAuth, isDriveAuthed, signIn, tokenExpiringSoon } from '$lib/drive/auth';
   import { scheduleUpdateChecks } from '$lib/update.svelte';
   import { hotkey } from '$lib/hotkey.svelte';
-  import { watchTuckState } from '$lib/tuck.svelte';
 
   /** Text arriving via the Android share sheet (see routes/share, pullMobileShare). */
   let sharedText = $state<string | null>(null);
@@ -128,8 +128,6 @@
       window.addEventListener('focus', () => void store.reload());
       // "Updates itself" has to mean it looks without being asked.
       scheduleUpdateChecks();
-      // Mirror of each sticky's tucked state, for the tuck buttons here.
-      void watchTuckState();
       // Reminders pin their note when due (store.fireDueReminders). Checked
       // now, for any that came due while the PC was off, then every 20s.
       store.fireDueReminders();
@@ -320,6 +318,7 @@
   {#if sharedText}
     <ShareIntake text={sharedText} onDone={shareDone} />
   {/if}
+  <UndoToast />
   {#if showSwitcher}
     <QuickSwitcher onClose={() => (showSwitcher = false)} />
   {/if}

@@ -140,14 +140,31 @@
       }
       document.addEventListener('pointerenter', onPointerEnter);
       document.addEventListener('pointerleave', onPointerLeave);
-      // The main window's tuck buttons talk to us over the bus.
-      const { listen } = await import('@tauri-apps/api/event');
-      await listen<{ id: string; tucked: boolean }>('notezzz:tuck', (e) => {
-        if (e.payload.id !== noteId) return;
-        void (e.payload.tucked ? tuck() : untuck());
-      });
-      reportTuck();
+      // From here on the note's tucked flag steers this window (see below).
+      tuckReady = true;
     })();
+  });
+
+  // The note's `tucked` flag is the truth, wherever it was set: this bar's
+  // button, the main window's, or the phone's (arriving through sync and the
+  // main window's bus). Notes from before the flag existed adopt this
+  // window's own state instead of being yanked back out.
+  let tuckReady = $state(false);
+  function reconcileTuck() {
+    if (!tuckReady || !note || !noteId) return;
+    if (note.tucked === undefined) {
+      if (tucked) store.update(noteId, { tucked: true });
+      return;
+    }
+    if (!!note.tucked === tucked) return;
+    // Mid-slide (a hover peek, say): look again once it has landed.
+    if (sliding) return void setTimeout(reconcileTuck, 400);
+    void (note.tucked ? tuck() : untuck());
+  }
+  $effect(() => {
+    void note?.tucked;
+    void tuckReady;
+    reconcileTuck();
   });
 
   // ---- tuck away -----------------------------------------------------------
@@ -210,15 +227,10 @@
     return edgeSpot(Math.max(await sliverPx(), Math.round(size.width * PEEK_FRACTION)));
   }
 
-  /** Tell the main window, so its tuck buttons show the right state. */
-  function reportTuck() {
-    if (!noteId) return;
-    void import('@tauri-apps/api/event').then(({ emit }) => emit('notezzz:tucked', { id: noteId, tucked }));
-  }
-
+  /** Remember where to come back to (this PC only), and flag the note (everywhere). */
   function persistTuck() {
-    reportTuck();
     if (!noteId) return;
+    if (note && !!note.tucked !== tucked) store.update(noteId, { tucked });
     try {
       const key = `notezzz:win:${noteId}`;
       const prev = JSON.parse(localStorage.getItem(key) ?? '{}');

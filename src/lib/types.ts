@@ -29,6 +29,12 @@ export interface Note {
   /** Put away: kept and searchable, but out of the list, widgets and share targets. */
   archived?: boolean;
   /**
+   * The pinned note's sticky is tucked against the PC's screen edge. Synced,
+   * so the phone can tuck or bring back a sticky on the PC; where it sits
+   * when brought back stays on the PC (device-local, like window position).
+   */
+  tucked?: boolean;
+  /**
    * Reminder time (epoch ms). When it comes, the PC app pins the note as a
    * sticky and clears this; the Android app shows a notification.
    */

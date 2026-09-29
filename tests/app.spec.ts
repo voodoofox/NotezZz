@@ -1115,3 +1115,18 @@ test('reminders: a due reminder pins its note once and clears itself', async ({ 
   await expect(page.getByTestId('note-pin')).toHaveClass(/(^|\s)on(\s|$)/);
   await expect(page.getByTestId('note-remind')).not.toHaveClass(/(^|\s)on(\s|$)/);
 });
+
+test('archive: Undo on the floating button brings the note straight back', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Keep');
+  await page.getByTestId('new-note').click();
+  await page.getByTestId('title-input').fill('Oops');
+  await page.getByTestId('note-archive').click();
+  await expect(page.getByTestId('undo-toast')).toContainText('Oops');
+  await expect(page.getByTestId('note-item')).toHaveCount(1);
+  await page.getByTestId('undo-archive').click();
+  await expect(page.getByTestId('undo-toast')).toHaveCount(0);
+  await expect(page.getByTestId('note-item')).toHaveCount(2);
+  await expect(page.getByTestId('title-input')).toHaveValue('Oops');
+  await expect(page.getByTestId('archive-toggle')).toHaveCount(0);
+});

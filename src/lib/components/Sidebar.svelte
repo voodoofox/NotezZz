@@ -7,7 +7,6 @@
   import Icon from './Icon.svelte';
   import { updates } from '$lib/update.svelte';
   import { installUpdate } from '$lib/updater';
-  import { tuckState, requestTuck } from '$lib/tuck.svelte';
   import { isDesktop } from '$lib/storage/backend';
 
   let showSettings = $state(false);
@@ -46,6 +45,12 @@
   // live let a background poll (which replaces the list) reorder the rows
   // under the pointer mid-drag.
   let dragOrder = $state<Note[] | null>(null);
+
+  /** The tuck button acts on the PC's sticky from anywhere; say so off the PC. */
+  const tuckTitle = (on: boolean | undefined) =>
+    isDesktop()
+      ? on ? 'Bring the sticky back' : 'Tuck the sticky to the screen edge'
+      : on ? 'Bring the sticky back on your PC' : 'Tuck the sticky away on your PC';
 
   function startDrag(e: PointerEvent, id: string) {
     if (searching) return; // order is meaningless while filtered
@@ -244,17 +249,18 @@
           aria-label="Pin note"
           onclick={() => store.update(note.id, { pinned: !note.pinned })}
         ><Icon name="pin" size={16} /></button>
-        <!-- Tucking moves a window: only where the sticky window exists. -->
-        {#if note.pinned && isDesktop()}
+        <!-- The sticky lives on the PC, but the flag is on the note: tucking
+             from the phone slides the PC's sticky away (or brings it back). -->
+        {#if note.pinned}
           <button
             class="pin tuck"
             data-testid="note-tuck"
-            class:on={tuckState.byId[note.id]}
-            aria-pressed={!!tuckState.byId[note.id]}
-            title={tuckState.byId[note.id] ? 'Bring the sticky back' : 'Tuck the sticky to the screen edge'}
-            aria-label="Tuck sticky away"
-            onclick={() => void requestTuck(note.id, !tuckState.byId[note.id])}
-          ><Icon name={tuckState.byId[note.id] ? 'untuck' : 'tuck'} size={16} /></button>
+            class:on={!!note.tucked}
+            aria-pressed={!!note.tucked}
+            title={tuckTitle(note.tucked)}
+            aria-label={tuckTitle(note.tucked)}
+            onclick={() => store.update(note.id, { tucked: !note.tucked })}
+          ><Icon name={note.tucked ? 'untuck' : 'tuck'} size={16} /></button>
         {/if}
       </div>
     {/each}

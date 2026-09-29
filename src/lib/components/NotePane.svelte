@@ -6,7 +6,6 @@
   import { isDesktop } from '$lib/storage/backend';
   import { getPalette } from '$lib/palettes';
   import ColorPicker from './ColorPicker.svelte';
-  import { tuckState, requestTuck } from '$lib/tuck.svelte';
   import Editor from './Editor.svelte';
   import Icon from './Icon.svelte';
 
@@ -20,6 +19,12 @@
   // Fullscreen is history state (see +page.svelte); read it from there rather
   // than store.mobileOpen so this pane never disagrees with the page.
   let fullscreen = $derived((page.state as { fs?: boolean }).fs === true);
+
+  /** The tuck button acts on the PC's sticky from anywhere; say so off the PC. */
+  const tuckTitle = (on: boolean | undefined) =>
+    desktop
+      ? on ? 'Bring the sticky back' : 'Tuck the sticky to the screen edge'
+      : on ? 'Bring the sticky back on your PC' : 'Tuck the sticky away on your PC';
 
   // Toolbar popovers (note color / base text size), fixed-positioned so the
   // toolbar's overflow can't clip them; any outside tap closes them.
@@ -283,16 +288,16 @@
         aria-label="Pin note"
         onclick={() => store.update(note!.id, { pinned: !note!.pinned })}
       ><Icon name="pin" /></button>
-      {#if note.pinned && desktop}
+      {#if note.pinned}
         <button
           class="icon"
           data-testid="pane-tuck"
-          class:on={tuckState.byId[note.id]}
-          aria-pressed={!!tuckState.byId[note.id]}
-          title={tuckState.byId[note.id] ? 'Bring the sticky back' : 'Tuck the sticky to the screen edge'}
-          aria-label="Tuck sticky away"
-          onclick={() => void requestTuck(note!.id, !tuckState.byId[note!.id])}
-        ><Icon name={tuckState.byId[note.id] ? 'untuck' : 'tuck'} /></button>
+          class:on={!!note.tucked}
+          aria-pressed={!!note.tucked}
+          title={tuckTitle(note.tucked)}
+          aria-label={tuckTitle(note.tucked)}
+          onclick={() => store.update(note!.id, { tucked: !note!.tucked })}
+        ><Icon name={note.tucked ? 'untuck' : 'tuck'} /></button>
       {/if}
       <button
         class="icon"

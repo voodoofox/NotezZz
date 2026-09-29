@@ -60,9 +60,17 @@ test('a phone-sized window stays stacked and pins without touching window APIs',
 
   await page.getByTestId('pane-pin').click();
   await expect(page.getByTestId('note-pin')).toHaveClass(/on/);
-  // Tucking moves a sticky window: it has no button where there is no window.
-  await expect(page.getByTestId('note-tuck')).toHaveCount(0);
+  // The tuck button is here too: it flags the note, and the PC's sticky
+  // follows. Off the PC it says so.
+  await expect(page.getByTestId('pane-tuck')).toHaveAttribute('title', 'Tuck the sticky away on your PC');
+  await page.getByTestId('pane-tuck').click();
+  await expect(page.getByTestId('note-tuck')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('pane-tuck')).toHaveAttribute('title', 'Bring the sticky back on your PC');
+  // Unpinning also untucks, so a later pin brings the sticky up in full.
+  await page.getByTestId('pane-pin').click();
   await expect(page.getByTestId('pane-tuck')).toHaveCount(0);
+  await page.getByTestId('pane-pin').click();
+  await expect(page.getByTestId('pane-tuck')).toHaveAttribute('aria-pressed', 'false');
   await page.getByTestId('pane-pin').click();
   await expect(page.getByTestId('note-pin')).not.toHaveClass(/on/);
 
