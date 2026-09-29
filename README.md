@@ -194,7 +194,7 @@ only rewrites the policy for bundled HTML, so the two behave differently).
 | `img-src` | `'self' data: blob:` | Pasted/dropped images are stored as base64 `data:` URLs inside the note; the editor previews with `blob:`. |
 | `media-src` | `'self' data: blob:` | Audio clips, same storage model. |
 | `font-src` | `'self' data:` | Sofia Sans Condensed is bundled; `data:` covers Vite inlining small assets. |
-| `connect-src` | `'self' ipc: http://ipc.localhost …` | `ipc:` / `http://ipc.localhost` are Tauri's own command channel (the Windows one is the `http://` form) — without them every `invoke()` is blocked. The four Google hosts are Drive (`www.googleapis.com`), token refresh (`oauth2.googleapis.com`), userinfo (`openidconnect.googleapis.com`) and the GIS sign-in script's XHR (`accounts.google.com`). `ws://localhost:1420` is Vite HMR in `tauri dev`; loopback-only, harmless in release. |
+| `connect-src` | `'self' ipc: http://ipc.localhost …` | `ipc:` / `http://ipc.localhost` are Tauri's own command channel (the Windows one is the `http://` form) — without them every `invoke()` is blocked. The four Google hosts are Drive (`www.googleapis.com`), token refresh (`oauth2.googleapis.com`), userinfo (`openidconnect.googleapis.com`) and the GIS sign-in script's XHR (`accounts.google.com`). `api.github.com` is the Android app's update check (latest release, see `src/lib/updater.ts`); the APK itself is downloaded by Kotlin, outside the webview. `ws://localhost:1420` is Vite HMR in `tauri dev`; loopback-only, harmless in release. |
 | `object-src` | `'none'` | No plugins, ever. |
 | `base-uri` | `'self'` | Blocks a `<base>` injection from redirecting relative asset URLs off-bundle. |
 
