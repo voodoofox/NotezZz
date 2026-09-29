@@ -5,6 +5,7 @@
   import type { Note } from '$lib/types';
   import Settings from './Settings.svelte';
   import Icon from './Icon.svelte';
+  import AppMark from './AppMark.svelte';
   import { updates } from '$lib/update.svelte';
   import { installUpdate } from '$lib/updater';
   import { isDesktop } from '$lib/storage/backend';
@@ -171,7 +172,7 @@
 
 <aside class="sidebar">
   <div class="head">
-    <span class="brand">NotezZz</span>
+    <span class="brand"><AppMark size={22} />NotezZz</span>
     <div class="head-actions">
       <button
         class="ico"
@@ -327,9 +328,16 @@
     border-bottom: 1px solid var(--app-border);
   }
   .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     font-weight: 700;
     font-size: 20px;
     letter-spacing: 0.3px;
+  }
+  .brand :global(svg) {
+    flex: none;
+    border-radius: 5px;
   }
   .head-actions {
     display: flex;

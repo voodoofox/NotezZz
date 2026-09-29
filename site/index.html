@@ -9,10 +9,12 @@
       content="Sticky notes for Windows and your phone. Write, sketch or speak a thought and pin it to your desktop — stored as plain files in your own Google Drive."
     />
     <meta name="theme-color" content="#FBFAF6" />
-    <link rel="icon" href="icon.png" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="icon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <meta property="og:title" content="NotezZz" />
     <meta property="og:description" content="Sticky notes for Windows and your phone, stored in your own Google Drive." />
-    <meta property="og:image" content="https://flatvoxel.com/notezzz/shots/app-dark.png" />
+    <meta property="og:image" content="https://voodoofox.github.io/NotezZz/shots/app-dark.png" />
     <style>
       /* Self-hosted — this page makes no third-party requests. */
       @font-face { font-family: 'Sofia'; src: url('fonts/SofiaSansCondensed.ttf') format('truetype');
@@ -85,7 +87,9 @@
       .top .sheet { display: flex; align-items: center; justify-content: space-between; height: 62px; }
       .wordmark { font-family: 'Sofia', sans-serif; font-weight: 700; font-size: 25px;
                   letter-spacing: -0.02em; text-decoration: none; display: flex; align-items: center; gap: 9px; }
-      .wordmark img { width: 26px; height: 26px; border-radius: 4px; }
+      .wordmark img { width: 28px; height: 28px; }
+      .wordmark .zzz { color: #E0439A; }
+      @media (prefers-color-scheme: dark) { .wordmark .zzz { color: #FF6AD5; } }
       .top nav { font-family: 'Plex', monospace; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
       .top nav a { color: var(--muted); text-decoration: none; margin-left: 24px; }
       .top nav a:hover { color: var(--ink); }
@@ -201,7 +205,7 @@
 
     <div class="top">
       <div class="sheet">
-        <a class="wordmark" href="#top"><img src="icon.png" alt="" />NotezZz</a>
+        <a class="wordmark" href="#top"><img src="icon.svg" alt="" /><span>Note<span class="zzz">zZz</span></span></a>
         <nav>
           <a class="hide-s" href="#writing">Writing</a>
           <a class="hide-s" href="#throw">Phone → PC</a>
@@ -311,7 +315,23 @@
             </div>
             <div class="cap-row">
               <h4>Share into a note</h4>
-              <p>Send text or a link from any Android app — as a new note, or added to the end of one you pick.</p>
+              <p>Send text, a link or photos from any Android app — as a new note, or added to the end of one you pick.</p>
+            </div>
+            <div class="cap-row">
+              <h4>Checklists</h4>
+              <p>Tick things off as you go. Done items fade and strike through; the widgets show the boxes too.</p>
+            </div>
+            <div class="cap-row">
+              <h4>Reminders</h4>
+              <p>Pick a time and the note comes to you: pinned on your PC screen, and a notification on your phone.</p>
+            </div>
+            <div class="cap-row">
+              <h4>Archive</h4>
+              <p>Put a note away without deleting it. Still searchable, one tap to bring back, with Undo if you slip.</p>
+            </div>
+            <div class="cap-row">
+              <h4>Jump to any note</h4>
+              <p>Ctrl+K and a few letters of it. No scrolling through the list.</p>
             </div>
           </div>
         </div>
@@ -357,6 +377,7 @@
                 </p>
                 <ul class="notes-list">
                   <li>Always on top, with its own transparency</li>
+                  <li>Tuck it against the screen edge, from the PC or from your phone</li>
                   <li>Optional hand-placed tilt</li>
                   <li>Stays where you put it on screen</li>
                 </ul>
@@ -475,7 +496,7 @@
 
     <footer>
       <div class="sheet">
-        <span>NotezZz — Tauri &amp; SvelteKit</span>
+        <span>NotezZz — free, and yours</span>
         <span>
           <a href="privacy.html">Privacy</a><a href="terms.html">Terms</a>
           <a href="mailto:voodoofox@gmail.com">Contact</a>
