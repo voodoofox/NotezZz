@@ -73,3 +73,18 @@ test('a phone-sized window stays stacked and pins without touching window APIs',
   await expect(page.getByTestId('note-pin')).toHaveClass(/on/);
   expect(errors).toEqual([]);
 });
+
+test('on a phone, a fullscreen note fills the whole screen', async ({ page }) => {
+  await page.setViewportSize({ width: 400, height: 800 });
+  await page.goto('/?local');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.getByTestId('new-note').click();
+  await page.getByTestId('note-fullscreen').click();
+  await expect(page.getByTestId('exit-fullscreen')).toBeVisible();
+  const [app, pane] = await Promise.all([
+    page.locator('main.app').boundingBox(),
+    page.getByTestId('note-pane').boundingBox(),
+  ]);
+  expect(Math.abs(pane!.height - app!.height)).toBeLessThan(2);
+});

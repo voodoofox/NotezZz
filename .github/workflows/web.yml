@@ -1,0 +1,104 @@
+# The web app (https://flatvoxel.com/NotezZz/) deployed from GitHub on every
+# release, the same way deploy-web.ps1 does it from a PC: build with
+# BASE_PATH=/NotezZz, upload every file over explicit FTPS (assets first,
+# then the entry files, so a visitor mid-upload never gets an index that
+# points at chunks not there yet), then check every live asset answers 200.
+#
+# Needs three repository secrets: FTP_HOST, FTP_USER, FTP_PASS (the same
+# values as the local deploy.env). Without them the job skips itself.
+name: Web
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      FTP_HOST: ${{ secrets.FTP_HOST }}
+      FTP_USER: ${{ secrets.FTP_USER }}
+      FTP_PASS: ${{ secrets.FTP_PASS }}
+      REMOTE: domains/flatvoxel.com/htdocs/www/NotezZz
+    steps:
+      - name: Skip without FTP secrets
+        if: env.FTP_HOST == ''
+        run: echo "FTP_HOST/FTP_USER/FTP_PASS not set; nothing to deploy."
+
+      - uses: actions/checkout@v5
+        if: env.FTP_HOST != ''
+      - uses: actions/setup-node@v5
+        if: env.FTP_HOST != ''
+        with:
+          node-version: 22
+          cache: npm
+      - name: Build
+        if: env.FTP_HOST != ''
+        env:
+          BASE_PATH: /NotezZz
+        run: |
+          npm ci
+          npm run build
+
+      - name: Upload over FTPS
+        if: env.FTP_HOST != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Credentials go in a private netrc, never on the command line.
+          netrc=$(mktemp)
+          chmod 600 "$netrc"
+          printf 'machine %s login "%s" password "%s"\n' "$FTP_HOST" "$FTP_USER" "$FTP_PASS" > "$netrc"
+          trap 'rm -f "$netrc"' EXIT
+
+          cd build
+          entries=(.htaccess manifest.webmanifest index.html version.json)
+          mapfile -t all < <(find . -type f | sed 's|^\./||' | sort)
+          order=()
+          for f in "${all[@]}"; do
+            skip=0
+            for e in "${entries[@]}"; do [ "$f" = "$e" ] && skip=1; done
+            [ $skip -eq 0 ] && order+=("$f")
+          done
+          for e in "${entries[@]}"; do [ -f "$e" ] && order+=("$e"); done
+
+          fail=0
+          for f in "${order[@]}"; do
+            ok=0
+            for attempt in 1 2 3; do
+              # The host's certificate isn't publicly trusted (see deploy-lib.ps1),
+              # hence -k; 56 is a TLS-teardown quirk after a complete upload.
+              set +e
+              curl -s --ftp-ssl-control -k --connect-timeout 25 --ftp-create-dirs \
+                --netrc-file "$netrc" -T "$f" "ftp://$FTP_HOST/$REMOTE/$f"
+              rc=$?
+              set -e
+              if [ $rc -eq 0 ] || [ $rc -eq 56 ]; then ok=1; break; fi
+              sleep 3
+            done
+            [ $ok -eq 1 ] || { echo "FAILED $f"; fail=$((fail+1)); }
+          done
+          [ $fail -eq 0 ] || { echo "$fail file(s) failed"; exit 1; }
+          echo "uploaded ${#order[@]} files"
+
+      - name: Check the live site
+        if: env.FTP_HOST != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          idx=$(curl -s "https://flatvoxel.com/NotezZz/?v=$(date +%s)")
+          bad=0
+          for a in $(echo "$idx" | grep -oE '/NotezZz/[^"'"'"']+\.(js|css)' | sort -u); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://flatvoxel.com$a")
+            [ "$code" = "200" ] || { echo "BAD $code $a"; bad=$((bad+1)); }
+          done
+          [ $bad -eq 0 ] || exit 1
+          echo "all live assets resolve"

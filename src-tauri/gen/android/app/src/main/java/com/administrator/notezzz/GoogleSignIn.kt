@@ -11,6 +11,8 @@ import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.AuthorizationResult
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.Scope
+import com.google.android.gms.tasks.Tasks
+import java.util.concurrent.TimeUnit
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -137,6 +139,20 @@ class GoogleSignIn(
   }.getOrNull()
 
   companion object {
+    /**
+     * A token without any UI, for background work (NotesRefreshWorker).
+     * Null when signed out here or when Google wants consent again. Blocks:
+     * call off the main thread.
+     */
+    fun silentToken(context: Context): String? = runCatching {
+      val prefs = context.getSharedPreferences("notezzz_google", Context.MODE_PRIVATE)
+      if (!prefs.getBoolean("signedIn", false)) return null
+      val b = AuthorizationRequest.builder().setRequestedScopes(SCOPES)
+      prefs.getString("email", "")?.takeIf { it.isNotEmpty() }?.let { b.setAccount(Account(it, "com.google")) }
+      val r = Tasks.await(Identity.getAuthorizationClient(context).authorize(b.build()), 30, TimeUnit.SECONDS)
+      if (r.hasResolution()) null else r.accessToken
+    }.getOrNull()
+
     private const val USERINFO = "https://openidconnect.googleapis.com/v1/userinfo"
     private val SCOPES = listOf(
       Scope("https://www.googleapis.com/auth/drive.file"),

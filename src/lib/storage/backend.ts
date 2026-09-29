@@ -17,6 +17,8 @@ export interface StorageBackend {
   deleteNote(id: string): Promise<void>;
   loadSettings(): Promise<Settings | null>;
   saveSettings(settings: Settings): Promise<void>;
+  /** Drive only: where the notes live, for the Android background refresh. */
+  driveIds?(): { notesFolderId: string | null; settingsId: string | null };
 }
 
 // Three platforms, two questions. isTauri() answers "is Rust on the other

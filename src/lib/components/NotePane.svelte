@@ -23,22 +23,67 @@
 
   // Toolbar popovers (note color / base text size), fixed-positioned so the
   // toolbar's overflow can't clip them; any outside tap closes them.
-  let openPop = $state<'pal' | 'size' | null>(null);
+  let openPop = $state<'pal' | 'size' | 'remind' | null>(null);
   let popStyle = $state('');
   let palWrap = $state<HTMLElement | null>(null);
   let sizeWrapEl = $state<HTMLElement | null>(null);
+  let remindWrap = $state<HTMLElement | null>(null);
 
-  function togglePop(which: 'pal' | 'size') {
+  function togglePop(which: 'pal' | 'size' | 'remind') {
     if (openPop === which) return void (openPop = null);
-    const anchor = which === 'pal' ? palWrap : sizeWrapEl;
-    if (anchor) popStyle = popoverStyle(anchor, which === 'pal' ? 226 : 270);
+    const anchor = which === 'pal' ? palWrap : which === 'size' ? sizeWrapEl : remindWrap;
+    if (anchor) popStyle = popoverStyle(anchor, which === 'pal' ? 226 : which === 'size' ? 270 : 250);
     openPop = which;
+  }
+
+  // ---- reminders --------------------------------------------------------
+  const HOUR = 3_600_000;
+
+  function at(day: Date, h: number): number {
+    const d = new Date(day);
+    d.setHours(h, 0, 0, 0);
+    return d.getTime();
+  }
+
+  /** One-tap times, only the ones still ahead of us. */
+  function quickTimes(): { label: string; at: number }[] {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(now.getDate() + 1);
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + (((8 - now.getDay()) % 7) || 7));
+    const out = [{ label: 'In 1 hour', at: now.getTime() + HOUR }];
+    if (now.getHours() < 17) out.push({ label: 'This evening', at: at(now, 18) });
+    out.push({ label: 'Tomorrow 9:00', at: at(tomorrow, 9) });
+    out.push({ label: 'Monday 9:00', at: at(monday, 9) });
+    return out;
+  }
+
+  function fmtWhen(t: number): string {
+    const d = new Date(t);
+    const today = new Date();
+    const sameDay = d.toDateString() === today.toDateString();
+    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return sameDay ? `Today ${time}` : `${d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} ${time}`;
+  }
+
+  /** epoch ms -> the value a datetime-local input wants (local time, no zone). */
+  function toLocalInput(t?: number): string {
+    if (!t) return '';
+    const d = new Date(t - new Date(t).getTimezoneOffset() * 60_000);
+    return d.toISOString().slice(0, 16);
+  }
+
+  function setRemind(t: number | null) {
+    if (!note) return;
+    store.setReminder(note.id, t);
+    openPop = null;
   }
 
   function closePopsOutside(e: PointerEvent) {
     if (!openPop) return;
     const t = e.target as Node;
-    if (!palWrap?.contains(t) && !sizeWrapEl?.contains(t)) openPop = null;
+    if (!palWrap?.contains(t) && !sizeWrapEl?.contains(t) && !remindWrap?.contains(t)) openPop = null;
   }
 
   // Evidence for Diagnostics: a pattern that fails to paint on some machine
@@ -184,6 +229,47 @@
                 />
               </div>
             {/if}
+          </div>
+        {/if}
+      </span>
+
+      <span class="twrap" bind:this={remindWrap}>
+        <button
+          class="icon"
+          class:on={openPop === 'remind' || !!note.remindAt}
+          data-testid="note-remind"
+          title={note.remindAt ? `Reminder: ${fmtWhen(note.remindAt)}` : 'Remind me'}
+          aria-label="Reminder"
+          onclick={() => togglePop('remind')}
+        ><Icon name="alarm" /></button>
+        {#if openPop === 'remind'}
+          <div class="pop panel remind" style={popStyle} data-testid="remind-pop">
+            <div class="crowhead">
+              <span>Remind me</span>
+              {#if note.remindAt}
+                <span class="val" data-testid="remind-when">
+                  {note.remindAt < Date.now() ? 'Was due ' : ''}{fmtWhen(note.remindAt)}
+                </span>
+              {/if}
+            </div>
+            <div class="quick">
+              {#each quickTimes() as q (q.label)}
+                <button data-testid="remind-quick" onclick={() => setRemind(q.at)}>{q.label}</button>
+              {/each}
+            </div>
+            <input
+              type="datetime-local"
+              data-testid="remind-at"
+              value={toLocalInput(note.remindAt)}
+              onchange={(e) => {
+                const v = (e.currentTarget as HTMLInputElement).value;
+                if (v) setRemind(new Date(v).getTime());
+              }}
+            />
+            {#if note.remindAt}
+              <button class="clear" data-testid="remind-clear" onclick={() => setRemind(null)}>Clear reminder</button>
+            {/if}
+            <p class="rhint">When it's time, your PC pins the note as a sticky and your phone shows a notification.</p>
           </div>
         {/if}
       </span>
@@ -347,7 +433,10 @@
       flex: none;
       width: 100%;
     }
-    :global(.note-open) > .pane {
+    /* .app.note-open, not just .note-open: the stacked rule above is as
+       specific as .app.stacked, and on a phone both classes are set, so a
+       weaker selector left the fullscreen note at 70% (0.22.0). */
+    :global(.app.note-open) > .pane {
       height: 100%;
     }
   }
@@ -362,6 +451,47 @@
     border: 1px solid var(--app-border);
     border-radius: var(--radius-lg);
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+  }
+  .remind {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 14px 14px;
+    width: 250px;
+  }
+  .remind .quick {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .remind button {
+    font: inherit;
+    font-size: 13px;
+    padding: 7px 8px;
+    border: 1px solid var(--app-border);
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--app-fg);
+    cursor: pointer;
+  }
+  .remind button:hover {
+    border-color: var(--app-fg);
+  }
+  .remind input[type='datetime-local'] {
+    font: inherit;
+    font-size: 14px;
+    padding: 6px 8px;
+    border: 1px solid var(--app-border);
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--app-fg);
+    color-scheme: light dark;
+  }
+  .remind .rhint {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--app-muted);
   }
   .palmenu {
     display: flex;

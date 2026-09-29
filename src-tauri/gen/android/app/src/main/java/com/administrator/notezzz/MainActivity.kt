@@ -1,6 +1,9 @@
 package com.administrator.notezzz
 
+import android.Manifest
 import android.appwidget.AppWidgetManager
+import android.content.pm.PackageManager
+import android.os.Build
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -51,11 +54,27 @@ class MainActivity : TauriActivity() {
     google.launcher = consentLauncher
   }
 
+  // Reminders need notifications; asked once, the first time one is set.
+  private val notifyPermission =
+    registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+  private fun askForNotificationsIfNeeded(notes: List<WidgetNote>) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+    if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
+    if (!Reminders.anyUpcoming(notes)) return
+    val prefs = getSharedPreferences("notezzz_reminders", MODE_PRIVATE)
+    if (prefs.getBoolean("askedNotify", false)) return
+    prefs.edit().putBoolean("askedNotify", true).apply()
+    runOnUiThread { notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS) }
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
     stashShare(intent)
     stashAction(intent)
+    // Widgets and reminder alarms stay current with the app closed.
+    NotesRefreshWorker.ensureScheduled(this)
 
     // Android 15 draws every app edge to edge: the webview sits under the
     // status bar, the navigation bar and the keyboard. The page paints its own
@@ -85,9 +104,15 @@ class MainActivity : TauriActivity() {
 
   /** What the page needs from Android: system bars and widgets. Local page only. */
   inner class Bridge {
-    /** Called after the page rewrites widget.json, so widgets follow at once. */
+    /** Called after the page rewrites widget.json: widgets and reminder alarms follow at once. */
     @JavascriptInterface
-    fun refreshWidgets() = MainActivity.refreshWidgets(this@MainActivity)
+    fun refreshWidgets() {
+      val ctx = this@MainActivity
+      MainActivity.refreshWidgets(ctx)
+      val notes = WidgetData.read(ctx)
+      Reminders.schedule(ctx, notes)
+      askForNotificationsIfNeeded(notes)
+    }
 
     @JavascriptInterface
     fun safeTop(): Float = safeTopCss
@@ -205,12 +230,21 @@ class MainActivity : TauriActivity() {
 
   // Widgets render from widget.json, which the app rewrites as notes change.
   // Leaving the app is the moment to tell the launcher to re-read it.
+  override fun onResume() {
+    super.onResume()
+    inForeground = true
+  }
+
   override fun onPause() {
     super.onPause()
+    inForeground = false
     refreshWidgets(this)
   }
 
   companion object {
+    /** The app is on screen; the background refresh stays out of its way. */
+    @Volatile var inForeground = false
+
     const val EXTRA_ACTION = "notezzz_action"
     const val EXTRA_NOTE = "notezzz_note"
 

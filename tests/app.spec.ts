@@ -1083,3 +1083,35 @@ test('share intake: a shared photo lands in the new note', async ({ page }) => {
   await expect(page.locator('.ProseMirror')).toContainText('from the gallery');
   await expect(page.locator('.ProseMirror img')).toHaveCount(1);
 });
+
+test('reminders: set one from the note, see when, clear it', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('note-remind').click();
+  await expect(page.getByTestId('remind-pop')).toBeVisible();
+  await page.getByTestId('remind-quick').filter({ hasText: 'Tomorrow 9:00' }).click();
+  await expect(page.getByTestId('remind-pop')).toHaveCount(0);
+  await expect(page.getByTestId('note-remind')).toHaveClass(/(^|\s)on(\s|$)/);
+
+  await page.getByTestId('note-remind').click();
+  await expect(page.getByTestId('remind-when')).toContainText(/9:00|09:00/);
+  await page.getByTestId('remind-clear').click();
+  await expect(page.getByTestId('note-remind')).not.toHaveClass(/(^|\s)on(\s|$)/);
+});
+
+test('reminders: a due reminder pins its note once and clears itself', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Call the dentist');
+  await page.waitForTimeout(600); // save debounce
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!;
+    const note = JSON.parse(localStorage.getItem(key)!);
+    note.remindAt = Date.now() - 1000;
+    note.updatedAt = Date.now() + 60_000;
+    localStorage.setItem(key, JSON.stringify(note));
+  });
+  await syncAndSettle(page);
+  await expect(page.getByTestId('note-remind')).toHaveClass(/(^|\s)on(\s|$)/);
+  await page.evaluate(() => (window as unknown as { __nzFireReminders: () => void }).__nzFireReminders());
+  await expect(page.getByTestId('note-pin')).toHaveClass(/(^|\s)on(\s|$)/);
+  await expect(page.getByTestId('note-remind')).not.toHaveClass(/(^|\s)on(\s|$)/);
+});

@@ -127,6 +127,10 @@ export class DriveBackend implements StorageBackend {
    * for its sync folder, so Google Drive for Desktop can mirror one tree that
    * both sides read/write. (settings.json stays at the NotezZz root.)
    */
+  driveIds() {
+    return { notesFolderId: this.#notesFolderId, settingsId: this.#settingsId };
+  }
+
   async #notesFolder(): Promise<string> {
     if (this.#notesFolderId) return this.#notesFolderId;
     if (!this.#notesFolderPromise) this.#notesFolderPromise = this.#resolveNotesFolder();

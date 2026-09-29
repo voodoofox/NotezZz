@@ -6,7 +6,8 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { isMobile } from './storage/backend';
-import { getPalette } from './palettes';
+import { getPalette, PALETTES, PATTERNS } from './palettes';
+import { customPatternId, PATTERN_SLOTS } from './patterns.svelte';
 import type { Note } from './types';
 
 /** One note as a widget sees it. Colours are resolved here: the widget has no palette table. */
@@ -18,6 +19,20 @@ export interface WidgetNote {
   bg: string;
   fg: string;
   pinned: boolean;
+  /** Epoch ms; the Android app schedules a notification for it. */
+  remindAt?: number;
+}
+
+/**
+ * widget.json. Besides the notes it carries what the Android background
+ * refresh (NotesRefreshWorker.kt) needs to rebuild the notes from Drive with
+ * the app closed: where they live, and each colour id's resolved colours.
+ */
+export interface WidgetSnapshot {
+  v: 2;
+  drive: { notesFolderId: string | null; settingsId: string | null } | null;
+  palettes: Record<string, { bg: string; fg: string }>;
+  notes: WidgetNote[];
 }
 
 const TEXT_CHARS = 600;
@@ -51,8 +66,28 @@ export function widgetNotes(notes: Note[]): WidgetNote[] {
       bg: pal.bg,
       fg: pal.fg,
       pinned: !!n.pinned,
+      ...(n.remindAt ? { remindAt: n.remindAt } : {}),
     };
   });
+}
+
+/** Every named colour, plus the painted pattern slots, as the widgets draw them. */
+function paletteTable(): Record<string, { bg: string; fg: string }> {
+  const table: Record<string, { bg: string; fg: string }> = {};
+  for (const p of [...PALETTES, ...PATTERNS]) table[p.id] = { bg: p.bg, fg: p.fg };
+  for (let i = 0; i < PATTERN_SLOTS; i++) {
+    const id = customPatternId(i);
+    const p = getPalette(id);
+    table[id] = { bg: p.bg, fg: p.fg };
+  }
+  return table;
+}
+
+export function widgetSnapshot(
+  notes: Note[],
+  drive: WidgetSnapshot['drive']
+): WidgetSnapshot {
+  return { v: 2, drive, palettes: paletteTable(), notes: widgetNotes(notes) };
 }
 
 type Bridge = { refreshWidgets?: () => void };
@@ -68,7 +103,10 @@ let lastStamp = '';
  * included); the heavier text extraction waits for the timer. Pass the live
  * store list: the timer reads it when it fires.
  */
-export function scheduleWidgetSnapshot(notes: Note[]): void {
+export function scheduleWidgetSnapshot(
+  notes: Note[],
+  drive: () => WidgetSnapshot['drive'] = () => null
+): void {
   if (!isMobile()) return;
   const stamp = notes.map((n) => `${n.id}:${n.updatedAt}:${n.pinned}`).join('|');
   if (stamp === lastStamp) return; // a reload that changed nothing
@@ -76,7 +114,7 @@ export function scheduleWidgetSnapshot(notes: Note[]): void {
   timer = setTimeout(async () => {
     lastStamp = stamp;
     try {
-      await invoke('write_widget_snapshot', { json: JSON.stringify(widgetNotes(notes)) });
+      await invoke('write_widget_snapshot', { json: JSON.stringify(widgetSnapshot(notes, drive())) });
       (window as unknown as { NotezzzAndroid?: Bridge }).NotezzzAndroid?.refreshWidgets?.();
     } catch (e) {
       console.error('widget snapshot', e);

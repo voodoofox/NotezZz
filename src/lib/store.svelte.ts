@@ -545,6 +545,29 @@ class AppStore {
     await this.saveSettings({ noteOrder: ids });
   }
 
+  /** Drive folder and settings file ids, when syncing through Drive (Android widgets). */
+  driveIds(): { notesFolderId: string | null; settingsId: string | null } | null {
+    return this.#backend?.driveIds?.() ?? null;
+  }
+
+  /** Set or clear (null) a note's reminder. */
+  setReminder(id: string, at: number | null) {
+    this.update(id, { remindAt: at ?? undefined });
+  }
+
+  /**
+   * PC app: reminders that have come due pin their note as a sticky, once.
+   * Clearing remindAt in the same write is what makes it once, on every
+   * device. Only the desktop acts; phones notify but leave the note alone,
+   * so a phone that fires first can't steal the pin from the PC.
+   */
+  fireDueReminders(now = Date.now()) {
+    for (const n of this.notes) {
+      if (!n.remindAt || n.remindAt > now || n.archived) continue;
+      this.update(n.id, n.pinned ? { remindAt: undefined } : { pinned: true, remindAt: undefined });
+    }
+  }
+
   /**
    * Archive or restore a note. An archived note leaves the list, the widgets
    * and the share targets but stays searchable; a pinned one comes down off

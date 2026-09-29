@@ -28,6 +28,11 @@ export interface Note {
   tilt?: number;
   /** Put away: kept and searchable, but out of the list, widgets and share targets. */
   archived?: boolean;
+  /**
+   * Reminder time (epoch ms). When it comes, the PC app pins the note as a
+   * sticky and clears this; the Android app shows a notification.
+   */
+  remindAt?: number;
 }
 
 export interface Settings {

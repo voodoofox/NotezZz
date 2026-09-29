@@ -95,7 +95,7 @@
   // edit or a pin from the PC, a share appended by the chooser. Everything
   // the widget can show comes through store.notes; nothing else does.
   $effect(() => {
-    scheduleWidgetSnapshot(store.notes);
+    scheduleWidgetSnapshot(store.notes, () => store.driveIds());
   });
 
   /**
@@ -130,6 +130,10 @@
       scheduleUpdateChecks();
       // Mirror of each sticky's tucked state, for the tuck buttons here.
       void watchTuckState();
+      // Reminders pin their note when due (store.fireDueReminders). Checked
+      // now, for any that came due while the PC was off, then every 20s.
+      store.fireDueReminders();
+      setInterval(() => store.fireDueReminders(), 20_000);
       // Ctrl+Alt+N from anywhere, when enabled (see hotkey.svelte.ts). Released on the
       // way out so a relaunch never finds the combo held by a dead handler.
       hotkeyArmed = true;
@@ -293,7 +297,10 @@
     if (authed) void boot();
     // The E2E suite's stand-in for the old "Sync now" button (dev server only).
     if (import.meta.env.DEV) {
-      (window as unknown as { __nzSyncNow?: () => Promise<void> }).__nzSyncNow = () => store.syncNow();
+      const w = window as unknown as { __nzSyncNow?: () => Promise<void>; __nzFireReminders?: () => void };
+      w.__nzSyncNow = () => store.syncNow();
+      // The desktop's reminder tick, callable where the desktop loop doesn't run.
+      w.__nzFireReminders = () => store.fireDueReminders();
     }
   });
 
