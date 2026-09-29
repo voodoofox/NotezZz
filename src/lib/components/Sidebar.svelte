@@ -109,16 +109,43 @@
     installing = null;
   }
 
-  let syncing = $state(false);
-  async function syncNow() {
-    syncing = true;
-    try {
-      await store.syncNow();
-    } finally {
-      // Brief minimum spin so a fast sync still reads as "it did something".
-      setTimeout(() => (syncing = false), 400);
-    }
-  }
+  // ---- list columns ----------------------------------------------------
+  // With the list above the note, 'auto' starts at one column and adds one
+  // each time the rows stop fitting the strip, up to three; a column is never
+  // narrower than MIN_COL_PX, so a phone-width list stays single.
+  const MIN_COL_PX = 220;
+  let listH = $state(0);
+  let listW = $state(0);
+  let rowH = $state(0);
+
+  $effect(() => {
+    const el = listEl;
+    if (!el) return;
+    const measure = () => {
+      listH = el.clientHeight;
+      listW = el.clientWidth;
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+
+  // Row height, re-read when rows appear (the observer only sees the list box).
+  $effect(() => {
+    void visibleNotes.length;
+    const row = listEl?.querySelector<HTMLElement>('[data-testid="note-item"]');
+    if (row && row.offsetHeight) rowH = row.offsetHeight;
+  });
+
+  let columns = $derived.by(() => {
+    if ((store.settings.layout ?? 'top') !== 'top') return 1;
+    const set = store.settings.listColumns ?? 'auto';
+    if (set !== 'auto') return set;
+    const fit = Math.max(1, Math.floor((listH - 8) / (rowH || 40)));
+    const byWidth = Math.max(1, Math.floor(listW / MIN_COL_PX));
+    return Math.min(3, byWidth, Math.max(1, Math.ceil(visibleNotes.length / fit)));
+  });
 
   $effect(() => {
     if (searching) searchInput?.focus();
@@ -129,14 +156,6 @@
   <div class="head">
     <span class="brand">NotezZz</span>
     <div class="head-actions">
-      <button
-        class="ico"
-        class:busy={syncing}
-        data-testid="sync-now"
-        onclick={syncNow}
-        title="Sync now"
-        aria-label="Sync now"
-      ><Icon name="sync" size={17} /></button>
       <button
         class="ico"
         class:on={searching}
@@ -168,7 +187,7 @@
   {/if}
 
   <div
-    class="list cols-{(store.settings.layout ?? 'side') === 'top' ? (store.settings.listColumns ?? 1) : 1}"
+    class="list cols-{columns}"
     role="list"
     bind:this={listEl}
     onpointermove={moveDrag}

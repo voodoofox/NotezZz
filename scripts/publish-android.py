@@ -56,15 +56,18 @@ def main() -> None:
     if not release:
         sys.exit(f"release {tag} never appeared")
 
-    name = f"NotezZz-{version}-android-arm64.apk"
-    for a in release.get("assets", []):
-        if a["name"] == name:
-            api("DELETE", f"https://api.github.com/repos/{REPO}/releases/assets/{a['id']}", tok)
-    upload = release["upload_url"].split("{")[0] + "?name=" + urllib.parse.quote(name)
     data = open(apk, "rb").read()
-    asset = api("POST", upload, tok, data, "application/vnd.android.package-archive")
-    print("uploaded", asset["name"], asset["size"], "bytes")
-    print(asset["browser_download_url"])
+    # The versioned name is what the release page shows; the fixed name is
+    # what the website links to (releases/latest/download/NotezZz-Android.apk),
+    # like NotezZz-Setup.exe for Windows.
+    for name in (f"NotezZz-{version}-android-arm64.apk", "NotezZz-Android.apk"):
+        for a in release.get("assets", []):
+            if a["name"] == name:
+                api("DELETE", f"https://api.github.com/repos/{REPO}/releases/assets/{a['id']}", tok)
+        upload = release["upload_url"].split("{")[0] + "?name=" + urllib.parse.quote(name)
+        asset = api("POST", upload, tok, data, "application/vnd.android.package-archive")
+        print("uploaded", asset["name"], asset["size"], "bytes")
+        print(asset["browser_download_url"])
 
 
 if __name__ == "__main__":

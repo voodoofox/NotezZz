@@ -49,10 +49,13 @@ export interface Settings {
   customColors?: string[];
   /** Five user-painted pattern slots (see patterns.ts); null = empty. */
   customPatterns?: ({ px: string; tint: string } | null)[];
-  /** Main window: note list beside the note (default) or above it, like the phone. */
+  /** Main window: note list above the note (default, like the phone) or beside it. */
   layout?: 'side' | 'top';
-  /** With the list above the note: how many columns of notes. */
-  listColumns?: 1 | 2 | 3;
+  /** With the list above the note: how many columns of notes. 'auto' adds
+   *  columns (up to 3) as the list fills and stops fitting its strip. */
+  listColumns?: 1 | 2 | 3 | 'auto';
+  /** One-time settings changes already applied to this account (see store.#migrateSettings). */
+  settingsVersion?: number;
   /** Ctrl+Alt+N anywhere on the desktop drops a new sticky under the cursor. Off unless asked for. */
   hotkeyNewNote?: boolean;
 }
@@ -65,8 +68,8 @@ export const DEFAULT_SETTINGS: Settings = {
   syncFolder: null,
   stickyTilt: false,
   hotkeyNewNote: false,
-  layout: 'side',
-  listColumns: 1,
+  layout: 'top',
+  listColumns: 'auto',
 };
 
 /**

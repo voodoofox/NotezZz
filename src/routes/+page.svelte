@@ -281,6 +281,10 @@
 
   onMount(() => {
     if (authed) void boot();
+    // The E2E suite's stand-in for the old "Sync now" button (dev server only).
+    if (import.meta.env.DEV) {
+      (window as unknown as { __nzSyncNow?: () => Promise<void> }).__nzSyncNow = () => store.syncNow();
+    }
   });
 
   function onSignedIn() {

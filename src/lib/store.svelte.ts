@@ -192,6 +192,7 @@ class AppStore {
       );
       const [notes, settings] = await Promise.race([load, watchdog]);
       if (settings) this.settings = settings; // order lives here, so read it first
+      this.#migrateSettings();
       this.notes = this.#merge(notes);
       if (!this.activeId && this.notes.length) this.activeId = this.notes[0].id;
       if (!this.#outbox.busy) this.syncStatus = cloud ? 'synced' : 'local';
@@ -598,6 +599,17 @@ class AppStore {
   }
 
   // ---- reads ----------------------------------------------------------------
+
+  /**
+   * Settings changes that must reach accounts which already saved the old
+   * value, once each. Runs only after a successful load, so an offline start
+   * can never write defaults over the real settings. v1 (0.22): list above
+   * the note with automatic columns, and sticky tilt off.
+   */
+  #migrateSettings() {
+    if ((this.settings.settingsVersion ?? 0) >= 1) return;
+    void this.saveSettings({ layout: 'top', listColumns: 'auto', stickyTilt: false, settingsVersion: 1 });
+  }
 
   /** Manual "sync now" — bypasses the focus throttle and any backoff. */
   async syncNow() {

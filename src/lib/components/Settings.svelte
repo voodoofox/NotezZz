@@ -188,21 +188,25 @@
           <span>Note list</span>
           <select
             data-testid="set-layout"
-            value={store.settings.layout ?? 'side'}
+            value={store.settings.layout ?? 'top'}
             onchange={(e) => store.saveSettings({ layout: (e.currentTarget as HTMLSelectElement).value as 'side' | 'top' })}
           >
-            <option value="side">Beside the note</option>
             <option value="top">Above the note (like the phone)</option>
+            <option value="side">Beside the note</option>
           </select>
         </label>
-        {#if (store.settings.layout ?? 'side') === 'top'}
+        {#if (store.settings.layout ?? 'top') === 'top'}
           <label class="row">
             <span>List columns</span>
             <select
               data-testid="set-columns"
-              value={String(store.settings.listColumns ?? 1)}
-              onchange={(e) => store.saveSettings({ listColumns: +(e.currentTarget as HTMLSelectElement).value as 1 | 2 | 3 })}
+              value={String(store.settings.listColumns ?? 'auto')}
+              onchange={(e) => {
+                const v = (e.currentTarget as HTMLSelectElement).value;
+                store.saveSettings({ listColumns: v === 'auto' ? 'auto' : (+v as 1 | 2 | 3) });
+              }}
             >
+              <option value="auto">Auto (grows to 3 as the list fills)</option>
               <option value="1">1</option>
               <option value="2">2</option>
               <option value="3">3</option>

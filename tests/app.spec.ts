@@ -29,15 +29,12 @@ async function typeInEditor(page: Page, text: string) {
 }
 
 /**
- * Click "Sync now" and wait for the sync to finish. The button carries .busy
- * from the click until the store's sync resolves (plus a short minimum spin),
- * so busy-then-not-busy is a deterministic "the refresh has landed" signal.
+ * Run a sync and wait for it to land. The app has no sync button any more
+ * (it syncs by itself); the dev build exposes store.syncNow for tests, and
+ * awaiting it is a deterministic "the refresh has landed" signal.
  */
 async function syncAndSettle(page: Page) {
-  const btn = page.getByTestId('sync-now');
-  await btn.click();
-  await expect(btn).toHaveClass(/busy/);
-  await expect(btn).not.toHaveClass(/busy/);
+  await page.evaluate(() => (window as unknown as { __nzSyncNow: () => Promise<void> }).__nzSyncNow());
 }
 
 test('starts with an empty state', async ({ page }) => {
@@ -557,7 +554,7 @@ test('an edit made elsewhere lands in an editor that is already open', async ({ 
     localStorage.setItem(key, JSON.stringify(note));
   });
 
-  await page.getByTestId('sync-now').click();
+  await syncAndSettle(page);
   await expect(page.locator('.ProseMirror')).toContainText('added from my phone');
 });
 
@@ -970,4 +967,39 @@ test('a painted pattern lands in a slot, styles the note, and survives a reload'
   await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', 'upat:0');
   await page.getByTestId('note-color').click();
   await expect(page.getByTestId('pattern-empty')).toHaveCount(4);
+});
+
+test('auto list columns: one column while the notes fit, more as the list fills', async ({ page }) => {
+  await page.setViewportSize({ width: 1200, height: 800 });
+  const seed = (count: number) =>
+    page.evaluate((n) => {
+      for (let i = 0; i < n; i++) {
+        const id = `seed${i}`;
+        const now = Date.now() - i * 1000;
+        localStorage.setItem(
+          `notezzz:note:${id}`,
+          JSON.stringify({
+            id, title: `Note ${i}`, contentHtml: '', paletteId: 'paper', fontSize: 18,
+            pinned: false, opacity: 1, win: null, createdAt: now, updatedAt: now,
+          })
+        );
+      }
+    }, count);
+  const cols = () =>
+    page.locator('.list').evaluate((el) => {
+      const t = getComputedStyle(el).gridTemplateColumns;
+      return t === 'none' ? 1 : t.split(' ').length;
+    });
+
+  // Defaults: list above the note, automatic columns.
+  await seed(2);
+  await page.reload();
+  await expect(page.locator('main.app')).toHaveClass(/stacked/);
+  await expect(page.getByTestId('note-item')).toHaveCount(2);
+  expect(await cols()).toBe(1);
+
+  await seed(40);
+  await page.reload();
+  await expect(page.getByTestId('note-item')).toHaveCount(40);
+  await expect.poll(cols).toBe(3);
 });
