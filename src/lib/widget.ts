@@ -7,7 +7,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { isMobile } from './storage/backend';
 import { getPalette } from './palettes';
-import { htmlToText } from './text';
 import type { Note } from './types';
 
 /** One note as a widget sees it. Colours are resolved here: the widget has no palette table. */
@@ -22,17 +21,33 @@ export interface WidgetNote {
 }
 
 const TEXT_CHARS = 600;
+
+const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", nbsp: ' ' };
+
+/** Note HTML as widget text: one line per paragraph or item, checklists as ☐ / ☑. */
+export function widgetText(html: string): string {
+  return html
+    .replace(/<li[^>]*data-checked="(true|false)"[^>]*>/g, (_, c: string) => (c === 'true' ? '\n☑ ' : '\n☐ '))
+    .replace(/<li[^>]*>/g, '\n• ')
+    .replace(/<(br|\/p|\/h\d|\/li|\/div|\/blockquote)[^>]*>/g, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (_, e: string) => ENTITIES[e])
+    .split('\n')
+    .map((l) => l.replace(/\s+/g, ' ').trim())
+    .filter((l) => l && l !== '•' && l !== '☐' && l !== '☑')
+    .join('\n');
+}
 /** Typing restamps the note on every keystroke; the file is written once
  *  the keys go quiet, not on each one. */
 const DEBOUNCE_MS = 1000;
 
 export function widgetNotes(notes: Note[]): WidgetNote[] {
-  return notes.map((n) => {
+  return notes.filter((n) => !n.archived).map((n) => {
     const pal = getPalette(n.paletteId);
     return {
       id: n.id,
       title: n.title,
-      text: htmlToText(n.contentHtml).slice(0, TEXT_CHARS),
+      text: widgetText(n.contentHtml).slice(0, TEXT_CHARS),
       bg: pal.bg,
       fg: pal.fg,
       pinned: !!n.pinned,

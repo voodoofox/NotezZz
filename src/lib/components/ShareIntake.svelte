@@ -1,26 +1,31 @@
 <script lang="ts">
-  // Chooser shown after an Android "share to NotezZz": put the shared text in
-  // a brand-new note, or append it to the end of an existing one.
+  // Chooser shown after an Android "share to NotezZz": put the shared text
+  // (and any photos) in a brand-new note, or append it to an existing one.
   import { store } from '$lib/store.svelte';
   import { filterNotes, noteLabel } from '$lib/text';
   import Icon from './Icon.svelte';
   import Modal from './Modal.svelte';
+  import { parseShare } from '$lib/share';
 
   let { text, onDone }: { text: string; onDone: () => void } = $props();
 
   let query = $state('');
-  let targets = $derived(filterNotes(store.notes, query));
+  let targets = $derived(filterNotes(store.notes.filter((n) => !n.archived), query));
 
   function esc(s: string): string {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  let payload = $derived(parseShare(text));
+
   function asHtml(): string {
-    return text
+    const paras = payload.text
       .split('\n')
       .filter((l) => l.trim())
-      .map((l) => `<p>${esc(l)}</p>`)
-      .join('');
+      .map((l) => `<p>${esc(l)}</p>`);
+    // parseShare only lets through base64 image data URLs: safe in an attribute.
+    const imgs = payload.images.map((src) => `<img src="${src}">`);
+    return [...paras, ...imgs].join('');
   }
 
   /** Send it straight to the desktop as a sticky note. */
@@ -48,12 +53,23 @@
 <Modal labelledby="share-title" onClose={onDone} testid="share-overlay">
   <div class="card">
     <div class="head">
-      <h2 id="share-title">Add shared text</h2>
+      <h2 id="share-title">
+        {payload.images.length ? `Add shared ${payload.images.length > 1 ? 'images' : 'image'}` : 'Add shared text'}
+      </h2>
       <button class="x" data-testid="share-cancel" title="Discard" aria-label="Discard" onclick={onDone}>
         <Icon name="close" size={18} />
       </button>
     </div>
-    <blockquote class="preview">{text.length > 220 ? text.slice(0, 220) + '…' : text}</blockquote>
+    {#if payload.images.length}
+      <div class="thumbs" data-testid="share-images">
+        {#each payload.images as src, i (i)}
+          <img {src} alt="Shared image {i + 1}" />
+        {/each}
+      </div>
+    {/if}
+    {#if payload.text}
+      <blockquote class="preview">{payload.text.length > 220 ? payload.text.slice(0, 220) + '…' : payload.text}</blockquote>
+    {/if}
 
     <label class="pinopt" class:on={pinIt}>
       <input type="checkbox" data-testid="share-pin" bind:checked={pinIt} />
@@ -103,6 +119,20 @@
     border-radius: var(--radius-lg);
     padding: 16px 18px 18px;
     box-shadow: 0 14px 44px rgba(0, 0, 0, 0.32);
+  }
+  .thumbs {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    margin: 12px 0 4px;
+  }
+  .thumbs img {
+    flex: none;
+    height: 84px;
+    max-width: 160px;
+    object-fit: cover;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--app-border);
   }
   .head {
     display: flex;

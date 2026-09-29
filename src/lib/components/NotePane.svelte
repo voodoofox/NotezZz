@@ -67,6 +67,14 @@
     }, 250);
   }
 
+  function toggleArchive() {
+    if (!note) return;
+    const wasFullscreen = fullscreen;
+    const archiving = !note.archived;
+    store.setArchived(note.id, archiving);
+    if (archiving && wasFullscreen) exitFullscreen();
+  }
+
   function deleteNote() {
     if (!note || !confirm('Delete this note?')) return;
     const wasFullscreen = fullscreen;
@@ -200,6 +208,13 @@
           onclick={() => void requestTuck(note!.id, !tuckState.byId[note!.id])}
         ><Icon name={tuckState.byId[note.id] ? 'untuck' : 'tuck'} /></button>
       {/if}
+      <button
+        class="icon"
+        data-testid="note-archive"
+        title={note.archived ? 'Move back to notes' : 'Archive note'}
+        aria-label={note.archived ? 'Move back to notes' : 'Archive note'}
+        onclick={toggleArchive}
+      ><Icon name={note.archived ? 'unarchive' : 'archive'} /></button>
       <button
         class="icon danger"
         data-testid="note-delete"

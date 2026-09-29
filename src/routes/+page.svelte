@@ -13,6 +13,7 @@
   import SignIn from '$lib/components/SignIn.svelte';
   import ShareIntake from '$lib/components/ShareIntake.svelte';
   import Onboarding from '$lib/components/Onboarding.svelte';
+  import QuickSwitcher from '$lib/components/QuickSwitcher.svelte';
   import { page } from '$app/state';
   import { hasPriorAuth, isDriveAuthed, signIn, tokenExpiringSoon } from '$lib/drive/auth';
   import { scheduleUpdateChecks } from '$lib/update.svelte';
@@ -24,6 +25,15 @@
   const SHARE_KEY = 'notezzz:pendingShare';
   /** First desktop/Android launch: the "where do notes live?" question (see maybeOnboard). */
   let showOnboarding = $state(false);
+  /** Ctrl+K: the jump-to-note box (QuickSwitcher). */
+  let showSwitcher = $state(false);
+
+  function onGlobalKey(e: KeyboardEvent) {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
+      e.preventDefault(); // the browser's own Ctrl+K is its search bar
+      if (authed && store.notes.length) showSwitcher = !showSwitcher;
+    }
+  }
   const ONBOARDED_KEY = 'notezzz:onboarded';
   /** Set once the desktop listeners are wired; the hotkey effect waits on it. */
   let hotkeyArmed = $state(false);
@@ -293,13 +303,18 @@
   }
 </script>
 
+<svelte:window onkeydown={onGlobalKey} />
+
 {#if authed}
-  <main class="app" class:note-open={store.mobileOpen} class:stacked={(store.settings.layout ?? 'side') === 'top'}>
+  <main class="app" class:note-open={store.mobileOpen} class:stacked={(store.settings.layout ?? 'top') === 'top'}>
     <Sidebar />
     <NotePane />
   </main>
   {#if sharedText}
     <ShareIntake text={sharedText} onDone={shareDone} />
+  {/if}
+  {#if showSwitcher}
+    <QuickSwitcher onClose={() => (showSwitcher = false)} />
   {/if}
   {#if showOnboarding}
     <Onboarding onDone={onboardingDone} />

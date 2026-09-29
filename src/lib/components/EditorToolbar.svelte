@@ -111,6 +111,14 @@
     aria-label="Numbered list"
     onclick={() => editor?.chain().focus().toggleOrderedList().run()}
   ><Icon name="orderedList" /></button>
+  <button
+    data-testid="fmt-checklist"
+    class:active={isActive('taskList')}
+    aria-pressed={isActive('taskList')}
+    title="Checklist"
+    aria-label="Checklist"
+    onclick={() => editor?.chain().focus().toggleTaskList().run()}
+  ><Icon name="checklist" /></button>
 
   <span class="sep"></span>
 

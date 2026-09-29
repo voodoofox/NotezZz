@@ -545,6 +545,23 @@ class AppStore {
     await this.saveSettings({ noteOrder: ids });
   }
 
+  /**
+   * Archive or restore a note. An archived note leaves the list, the widgets
+   * and the share targets but stays searchable; a pinned one comes down off
+   * the desktop first. The selection moves on to the next note in view.
+   */
+  setArchived(id: string, on: boolean) {
+    const note = this.notes.find((n) => n.id === id);
+    if (!note) return;
+    const patch: Partial<Note> = { archived: on };
+    if (on && note.pinned) patch.pinned = false;
+    this.update(id, patch);
+    if (on && this.activeId === id) {
+      this.activeId = this.notes.find((n) => !n.archived && n.id !== id)?.id ?? null;
+      this.mobileOpen = false;
+    }
+  }
+
   async remove(id: string) {
     this.notes = this.notes.filter((n) => n.id !== id);
     if (this.activeId === id) {

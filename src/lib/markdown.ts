@@ -88,8 +88,12 @@ function list(el: Element, indent: string): string {
   for (const li of Array.from(el.children)) {
     if (li.tagName.toLowerCase() !== 'li') continue;
     n += 1;
-    const marker = ordered ? `${n}. ` : '- ';
-    const inner = blocks(li, indent + '  ');
+    // Checklist items keep their text in a <div> beside the checkbox label.
+    const checked = li.getAttribute('data-checked');
+    const task = checked !== null;
+    const marker = task ? `- [${checked === 'true' ? 'x' : ' '}] ` : ordered ? `${n}. ` : '- ';
+    const body = task ? (li.querySelector(':scope > div') ?? li) : li;
+    const inner = blocks(body, indent + '  ');
     if (!inner.length) {
       lines.push(indent + marker);
       continue;

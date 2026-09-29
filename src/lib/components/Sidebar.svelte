@@ -17,10 +17,19 @@
 
   /** Live-filtered list: title + note text, case-insensitive. While a drag
    *  is in progress the local snapshot is shown instead (see startDrag). */
+  /** The archive view: archived notes only, with a way back. */
+  let showArchive = $state(false);
+  let archivedCount = $derived(store.notes.filter((n) => n.archived).length);
+  // Leaving the archive empty (the last note restored) returns to the list.
+  $effect(() => {
+    if (showArchive && archivedCount === 0) showArchive = false;
+  });
+
   let visibleNotes = $derived.by(() => {
     if (dragOrder) return dragOrder;
-    if (!searching) return store.notes;
-    return filterNotes(store.notes, query);
+    // Search reaches everything, archived notes included.
+    if (searching && query.trim()) return filterNotes(store.notes, query);
+    return store.notes.filter((n) => !!n.archived === showArchive);
   });
 
   function toggleSearch() {
@@ -43,7 +52,7 @@
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     dragId = id;
-    dragOrder = [...store.notes];
+    dragOrder = [...visibleNotes];
   }
 
   function moveDrag(e: PointerEvent) {
@@ -90,12 +99,15 @@
   function keyMove(e: KeyboardEvent, id: string) {
     if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || searching) return;
     e.preventDefault();
-    const ids = store.notes.map((n) => n.id);
-    const i = ids.indexOf(id);
+    // Swap within what is on screen; notes out of view (the other side of
+    // the archive) keep their places ahead of it.
+    const shown = visibleNotes.map((n) => n.id);
+    const i = shown.indexOf(id);
     const j = i + (e.key === 'ArrowDown' ? 1 : -1);
-    if (i === -1 || j < 0 || j >= ids.length) return;
-    [ids[i], ids[j]] = [ids[j], ids[i]];
-    void store.reorder(ids);
+    if (i === -1 || j < 0 || j >= shown.length) return;
+    [shown[i], shown[j]] = [shown[j], shown[i]];
+    const inView = new Set(shown);
+    void store.reorder([...store.notes.filter((n) => !inView.has(n.id)).map((n) => n.id), ...shown]);
   }
 
   let installing = $state<number | null>(null);
@@ -249,6 +261,15 @@
 
     {#if store.loaded && store.notes.length === 0}
       <p class="empty" data-testid="empty-state">No notes yet.<br />Hit + to create one.</p>
+    {:else if store.loaded && !visibleNotes.length && !showArchive && !(searching && query.trim())}
+      <p class="empty" data-testid="empty-state">Everything is archived.<br />Hit + for a fresh note.</p>
+    {/if}
+
+    {#if archivedCount && !(searching && query.trim())}
+      <button class="archive-toggle" data-testid="archive-toggle" onclick={() => (showArchive = !showArchive)}>
+        <Icon name={showArchive ? 'back' : 'archive'} size={16} />
+        {showArchive ? 'Back to notes' : `Archive (${archivedCount})`}
+      </button>
     {/if}
   </div>
 
@@ -469,6 +490,27 @@
     to {
       transform: rotate(360deg);
     }
+  }
+  /* Quiet by design: the archive is somewhere you go, not something shown. */
+  .archive-toggle {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 14px;
+    margin-top: 6px;
+    border: none;
+    border-top: 1px solid var(--app-border);
+    background: none;
+    color: var(--app-muted);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .archive-toggle:hover {
+    color: var(--app-fg);
   }
   .empty {
     color: var(--app-muted);

@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
@@ -137,16 +138,39 @@ class MainActivity : TauriActivity() {
    * foreground.
    */
   private fun stashShare(intent: Intent?) {
-    if (intent?.action != Intent.ACTION_SEND) return
+    val action = intent?.action
+    if (action != Intent.ACTION_SEND && action != Intent.ACTION_SEND_MULTIPLE) return
+    val type = intent.type.orEmpty()
     val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT)?.trim().orEmpty()
-    val text = (intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString() ?: readSharedStream(intent))
-      ?.trim().orEmpty()
+    val streamText = if (type.startsWith("text/")) readSharedStream(intent) else null
+    val text = (intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString() ?: streamText)?.trim().orEmpty()
     val joined = listOf(subject, text).filter { it.isNotEmpty() }.joinToString("\n")
-    if (joined.isEmpty()) return
-    runCatching { File(WidgetData.dir(this), "pending-share.txt").writeText(joined) }
-    // Consume it: a rotation or relaunch must not share the same text twice.
+
+    // Photos and screenshots: one (SEND) or several (SEND_MULTIPLE).
+    val images = if (type.startsWith("image/")) {
+      sharedUris(intent).take(SharedImages.MAX_IMAGES).mapNotNull { SharedImages.dataUrl(this, it) }
+    } else emptyList()
+
+    if (joined.isEmpty() && images.isEmpty()) return
+    // Plain text stays plain (what older builds wrote); with images the page
+    // gets JSON it recognises by its first key (parseShare in ShareIntake).
+    val payload = if (images.isEmpty()) joined else JSONObject()
+      .put("nzShare", 1)
+      .put("text", joined)
+      .put("images", JSONArray(images))
+      .toString()
+    runCatching { File(WidgetData.dir(this), "pending-share.txt").writeText(payload) }
+    // Consume it: a rotation or relaunch must not share the same thing twice.
     intent.action = null
   }
+
+  @Suppress("DEPRECATION")
+  private fun sharedUris(intent: Intent): List<Uri> =
+    if (intent.action == Intent.ACTION_SEND_MULTIPLE) {
+      intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty()
+    } else {
+      listOfNotNull(intent.getParcelableExtra(Intent.EXTRA_STREAM))
+    }
 
   /** A shared text FILE (EXTRA_STREAM), read up to 256 KB; null if none. */
   private fun readSharedStream(intent: Intent): String? {

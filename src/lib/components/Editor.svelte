@@ -7,6 +7,7 @@
   import StarterKit from '@tiptap/starter-kit';
   import { TextStyle } from '@tiptap/extension-text-style';
   import { Image } from '@tiptap/extension-image';
+  import { TaskList, TaskItem } from '@tiptap/extension-list';
   import { FontSize } from '../editor/fontSize';
   import { AudioNote } from '../editor/audio';
   import { VoiceRecorder } from '../editor/recorder.svelte';
@@ -129,7 +130,15 @@
     syncedHtml = html;
     editor = new Editor({
       element,
-      extensions: [StarterKit, TextStyle, FontSize, AudioNote, Image.configure({ allowBase64: true })],
+      extensions: [
+        StarterKit,
+        TextStyle,
+        FontSize,
+        AudioNote,
+        Image.configure({ allowBase64: true }),
+        TaskList,
+        TaskItem.configure({ nested: true }),
+      ],
       content: html || '<p></p>',
       onTransaction: () => {
         tick += 1;
@@ -226,6 +235,59 @@
   .content :global(.ProseMirror ol) {
     margin: 0 0 0.5em;
     padding-left: 1.4em;
+  }
+  /* Checklists: a box in the note's ink instead of a bullet; ticked items
+     fade and strike through, so what's left stands out. */
+  .content :global(.ProseMirror ul[data-type='taskList']) {
+    list-style: none;
+    padding-left: 0.2em;
+  }
+  .content :global(ul[data-type='taskList'] > li) {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5em;
+  }
+  .content :global(ul[data-type='taskList'] > li > label) {
+    flex: none;
+    display: flex;
+    align-items: center;
+    height: 1.45em;
+    user-select: none;
+  }
+  .content :global(ul[data-type='taskList'] > li > div) {
+    flex: 1;
+    min-width: 0;
+  }
+  .content :global(ul[data-type='taskList'] > li input[type='checkbox']) {
+    appearance: none;
+    width: 1em;
+    height: 1em;
+    margin: 0;
+    border: 1.5px solid var(--note-fg);
+    border-radius: 3px;
+    cursor: pointer;
+    display: grid;
+    place-content: center;
+    opacity: 0.8;
+  }
+  .content :global(ul[data-type='taskList'] > li input[type='checkbox']::after) {
+    content: '';
+    width: 0.55em;
+    height: 0.3em;
+    border-left: 2px solid var(--note-bg, #fff);
+    border-bottom: 2px solid var(--note-bg, #fff);
+    transform: translateY(-0.06em) rotate(-45deg);
+    visibility: hidden;
+  }
+  .content :global(ul[data-type='taskList'] > li input[type='checkbox']:checked) {
+    background: var(--note-fg);
+  }
+  .content :global(ul[data-type='taskList'] > li input[type='checkbox']:checked::after) {
+    visibility: visible;
+  }
+  .content :global(ul[data-type='taskList'] > li[data-checked='true'] > div) {
+    text-decoration: line-through;
+    opacity: 0.55;
   }
   /* Voice memo player — no panel, no chrome: a line of controls in the
      note's own ink, so it reads as part of the note rather than a widget

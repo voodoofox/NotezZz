@@ -1003,3 +1003,83 @@ test('auto list columns: one column while the notes fit, more as the list fills'
   await expect(page.getByTestId('note-item')).toHaveCount(40);
   await expect.poll(cols).toBe(3);
 });
+
+test('checklists: toggle from the toolbar, tick an item, and it survives a reload', async ({ page }) => {
+  await createNote(page);
+  await page.locator('.ProseMirror').click();
+  await page.getByTestId('fmt-checklist').click();
+  await page.keyboard.type('milk');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('bread');
+  const items = page.locator('.ProseMirror ul[data-type="taskList"] > li');
+  await expect(items).toHaveCount(2);
+  await items.first().locator('input[type="checkbox"]').check();
+  await expect(items.first()).toHaveAttribute('data-checked', 'true');
+  await page.waitForTimeout(600); // the note's save debounce (400ms) has no observable hook
+  await page.reload();
+  await page.getByTestId('note-pick').first().click();
+  await expect(page.locator('.ProseMirror ul[data-type="taskList"] > li').first()).toHaveAttribute('data-checked', 'true');
+  await expect(page.locator('.ProseMirror ul[data-type="taskList"] > li').nth(1)).toHaveAttribute('data-checked', 'false');
+});
+
+test('archive: a note leaves the list, waits in the archive, and comes back', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Keep');
+  await page.getByTestId('new-note').click();
+  await page.getByTestId('title-input').fill('Old idea');
+  await page.getByTestId('note-archive').click();
+
+  await expect(page.getByTestId('note-item')).toHaveCount(1);
+  await expect(page.getByTestId('note-title')).toHaveText('Keep');
+  await expect(page.getByTestId('archive-toggle')).toHaveText(/Archive \(1\)/);
+
+  // Search still finds it.
+  await page.getByTestId('search-toggle').click();
+  await page.getByTestId('search-input').fill('old');
+  await expect(page.getByTestId('note-title')).toHaveText('Old idea');
+  await page.getByTestId('search-toggle').click();
+
+  await page.getByTestId('archive-toggle').click();
+  await expect(page.getByTestId('note-title')).toHaveText('Old idea');
+  await page.getByTestId('note-pick').click();
+  await page.getByTestId('note-archive').click();
+
+  // Last one restored: back in the list, the archive entry gone.
+  await expect(page.getByTestId('note-item')).toHaveCount(2);
+  await expect(page.getByTestId('archive-toggle')).toHaveCount(0);
+});
+
+test('Ctrl+K jumps to a note by typing part of it', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Groceries');
+  await page.getByTestId('new-note').click();
+  await page.getByTestId('title-input').fill('Work plan');
+  await page.keyboard.press('Control+k');
+  await expect(page.getByTestId('switcher-input')).toBeFocused();
+  await page.keyboard.type('groc');
+  await expect(page.getByTestId('switcher-item')).toHaveCount(1);
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('switcher')).toHaveCount(0);
+  await expect(page.getByTestId('title-input')).toHaveValue('Groceries');
+});
+
+test('share intake: a shared photo lands in the new note', async ({ page }) => {
+  // 1x1 PNG, as the Android app would hand it over after downscaling.
+  const png =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  await page.evaluate(
+    (src) =>
+      localStorage.setItem(
+        'notezzz:pendingShare',
+        JSON.stringify({ nzShare: 1, text: 'from the gallery', images: [src] })
+      ),
+    png
+  );
+  await page.reload();
+  await expect(page.getByTestId('share-overlay')).toBeVisible();
+  await expect(page.locator('#share-title')).toHaveText('Add shared image');
+  await expect(page.getByTestId('share-images').locator('img')).toHaveCount(1);
+  await page.getByTestId('share-new').click();
+  await expect(page.locator('.ProseMirror')).toContainText('from the gallery');
+  await expect(page.locator('.ProseMirror img')).toHaveCount(1);
+});

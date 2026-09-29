@@ -26,6 +26,8 @@ export interface Note {
   deleted?: boolean;
   /** Sticky tilt in degrees, rolled fresh each time the note is pinned. */
   tilt?: number;
+  /** Put away: kept and searchable, but out of the list, widgets and share targets. */
+  archived?: boolean;
 }
 
 export interface Settings {
