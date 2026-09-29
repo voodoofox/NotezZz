@@ -8,7 +8,7 @@ import type { StorageBackend } from '../storage/backend';
 import { FOLDER_ID_KEY, FOLDER_NAME } from '../googleConfig';
 import { getValidToken, markTokenStale, signIn } from './auth';
 import { isTauri } from '../storage/backend';
-import { desktopToken } from './desktopAuth';
+import { desktopToken, desktopTokenFresh } from './desktopAuth';
 
 /** Token source: Rust-managed on desktop, GIS in the browser. */
 async function token(): Promise<string> {
@@ -35,7 +35,7 @@ async function authFetch(url: string, opts: RequestInit = {}): Promise<Response>
     // user gesture, the browser blocks the popup, and everything hangs.
     // If silent fails we throw; the UI offers a Reconnect button instead.
     if (isTauri()) {
-      res = await fetch(url, withAuth(await desktopToken()));
+      res = await fetch(url, withAuth(await desktopTokenFresh()));
     } else {
       markTokenStale();
       const t2 = await signIn(false);

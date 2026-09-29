@@ -1,5 +1,8 @@
 {
   "version": "../package.json",
+  "build": {
+    "beforeBuildCommand": "npm run build:android"
+  },
   "app": {
     "windows": [
       {

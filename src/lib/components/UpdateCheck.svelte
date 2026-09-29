@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Settings → Updates (desktop only). One button; the state below it says
+  // Settings → Updates (desktop and Android apps). One button; the state below it says
   // what happened. Kept self-contained so Settings.svelte doesn't grow
   // another block of async state.
   import { checkForUpdate, installUpdate, relaunch, type UpdateState } from '$lib/updater';
@@ -21,7 +21,7 @@
   <h3>Updates</h3>
   <p class="hint">
     {#if state.kind === 'idle'}
-      NotezZz v{__APP_VERSION__}. Updates are downloaded from flatvoxel.com and verified before they install.
+      NotezZz v{__APP_VERSION__}. Updates come from the NotezZz releases on GitHub and are verified before they install.
     {:else if state.kind === 'checking'}
       Checking…
     {:else if state.kind === 'none'}
@@ -32,6 +32,8 @@
       Installing… {state.percent}%
     {:else if state.kind === 'restart'}
       Installing… NotezZz will restart itself.
+    {:else if state.kind === 'handoff'}
+      Android's installer is open. Tap Update there to finish.
     {:else if state.kind === 'error'}
       Couldn't check for updates: {state.message}
     {/if}

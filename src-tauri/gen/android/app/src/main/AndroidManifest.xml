@@ -5,6 +5,9 @@
          which Android refuses outright unless the manifest declares it. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Self-update from GitHub Releases: hands the downloaded APK to the
+         installer (ApkUpdater.kt). Android still asks the user once. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />

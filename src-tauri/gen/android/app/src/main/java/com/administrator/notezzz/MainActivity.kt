@@ -10,6 +10,7 @@ import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -21,6 +22,33 @@ class MainActivity : TauriActivity() {
   @Volatile private var safeTopCss = 0f
   /** Navigation bar height in CSS px (0 while the keyboard is up). */
   @Volatile private var safeBottomCss = 0f
+
+  private var webView: WebView? = null
+
+  /**
+   * Answer an async bridge call. The page registered the promise under `id`
+   * (src/lib/android.ts) and window.__nzReply settles it.
+   */
+  private fun reply(id: Int, ok: Boolean, value: String) {
+    val js = "window.__nzReply && window.__nzReply($id, $ok, ${JSONObject.quote(value)})"
+    webView?.post { webView?.evaluateJavascript(js, null) }
+  }
+
+  private fun progress(id: Int, percent: Int) {
+    val js = "window.__nzProgress && window.__nzProgress($id, $percent)"
+    webView?.post { webView?.evaluateJavascript(js, null) }
+  }
+
+  private val google = GoogleSignIn(this, ::reply)
+  private val updater = ApkUpdater(this, ::reply, ::progress)
+
+  // Registered at construction, as the Activity Result API requires.
+  private val consentLauncher =
+    registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { google.onConsentResult(it) }
+
+  init {
+    google.launcher = consentLauncher
+  }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
@@ -50,6 +78,7 @@ class MainActivity : TauriActivity() {
 
   override fun onWebViewCreate(webView: WebView) {
     super.onWebViewCreate(webView)
+    this.webView = webView
     webView.addJavascriptInterface(Bridge(), "NotezzzAndroid")
   }
 
@@ -64,6 +93,20 @@ class MainActivity : TauriActivity() {
 
     @JavascriptInterface
     fun safeBottom(): Float = safeBottomCss
+
+    // Google sign-in (GoogleSignIn.kt). Async ones answer via reply(id, ...).
+    @JavascriptInterface
+    fun googleAccount(): String = google.accountJson()
+
+    @JavascriptInterface
+    fun googleToken(id: Int, interactive: Boolean, invalidate: String) = google.token(id, interactive, invalidate)
+
+    @JavascriptInterface
+    fun googleSignOut(id: Int, token: String) = google.signOut(id, token)
+
+    /** Download a release APK and open Android's installer (ApkUpdater.kt). */
+    @JavascriptInterface
+    fun installApk(id: Int, url: String) = updater.install(id, url)
 
     /** Status-bar icons: light on a dark app theme, dark on a light one. */
     @JavascriptInterface

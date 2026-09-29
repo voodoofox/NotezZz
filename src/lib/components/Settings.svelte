@@ -230,15 +230,16 @@
       </label>
     </section>
 
-    {#if desktop}
+    {#if tauri}
       <UpdateCheck />
     {/if}
 
     {#if tauri}
       <section>
         <h3>Sync</h3>
-        <!-- Same Rust OAuth flow on desktop and Android (the system browser
-             comes back to a loopback port the app listens on). -->
+        <!-- Desktop: the system browser comes back to a loopback port the app
+             listens on (gauth.rs). Android: the phone's own Google account
+             sheet (GoogleSignIn.kt). Same buttons either way. -->
         {#if gAuthAvailable}
           <p class="hint">
             {gAccount

@@ -24,7 +24,8 @@ export default defineConfig(async ({ command, mode }) => ({
     __BUILD_TIME__: JSON.stringify(buildStamp),
     // Desktop-only OAuth secret. Injected for the dev server and the
     // `desktop` build mode ONLY — the public web bundle (plain `vite build`)
-    // always gets an empty string, so the secret never reaches flatvoxel.com.
+    // and the Android app (`--mode android`, which signs in natively) always
+    // get an empty string, so the secret never ships outside the PC app.
     // Value comes from .env.local (git-ignored), never from source.
     __GOOGLE_CLIENT_SECRET__: JSON.stringify(
       command === "serve" || mode === "desktop"

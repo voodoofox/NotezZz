@@ -6,7 +6,7 @@
 
 import { checkForUpdate } from './updater';
 import { logDiag } from './diag';
-import { isDesktop } from './storage/backend';
+import { isTauri } from './storage/backend';
 
 export const updates = $state<{ available: { version: string } | null; dismissed: boolean }>({
   available: null,
@@ -29,7 +29,7 @@ export async function pollForUpdates(): Promise<void> {
 
 let scheduled = false;
 export function scheduleUpdateChecks(): void {
-  if (scheduled || !isDesktop()) return;
+  if (scheduled || !isTauri()) return;
   scheduled = true;
   setTimeout(() => void pollForUpdates(), 20_000);
   setInterval(() => void pollForUpdates(), 6 * 60 * 60 * 1000);

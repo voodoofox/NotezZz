@@ -133,6 +133,8 @@
         void pullMobileShare();
         void pullWidgetAction();
       });
+      // Updates come from GitHub Releases here too (updater.ts).
+      scheduleUpdateChecks();
     } else if (!localMode) {
       // Renew the Google token when the user RETURNS to the app if it's close
       // to expiry — the silent-refresh popup blink happens at open, not while
