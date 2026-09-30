@@ -9,12 +9,16 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { androidBridge, androidCall } from '../android';
+import { DRIVE_NOT_GRANTED, DriveAccessError } from './driveAccess';
 
 /** Play services hands out ~1h tokens; reuse one well inside that. */
 const TOKEN_TTL_MS = 45 * 60 * 1000;
 
 let cached: { token: string; at: number } | null = null;
 let inflight: Promise<string> | null = null;
+/** A token Drive refused for lacking the Drive permission: invalidated in
+ * Play services' cache on the next request. */
+let dropped = '';
 
 /** Is this the Android app with native sign-in? (False on older app builds.) */
 export function androidAuthAvailable(): boolean {
@@ -51,6 +55,7 @@ async function request(interactive: boolean, invalidate: string): Promise<{ toke
       throw new Error('Google access needs to be granted again (access token unavailable). Tap Reconnect.');
     }
     if (msg === 'cancelled') throw new Error('Google sign-in was cancelled.');
+    if (msg === DRIVE_NOT_GRANTED) throw new DriveAccessError();
     throw new Error(`Google sign-in failed: ${msg}`);
   }
 }
@@ -63,7 +68,8 @@ export function androidToken(opts: { fresh?: boolean } = {}): Promise<string> {
   if (!opts.fresh && cached && Date.now() - cached.at < TOKEN_TTL_MS) return Promise.resolve(cached.token);
   // Startup fires several Drive calls at once; they share one request.
   if (inflight && !opts.fresh) return inflight;
-  const stale = opts.fresh ? (cached?.token ?? '') : '';
+  const stale = (opts.fresh ? (cached?.token ?? '') : '') || dropped;
+  dropped = '';
   cached = null;
   const run = (async () => {
     let interactive = false;
@@ -91,6 +97,12 @@ export async function androidSignIn(): Promise<string> {
   cached = { token: r.token, at: Date.now() };
   void invoke('google_sign_out').catch(() => {}); // any old browser-flow tokens
   return r.email;
+}
+
+/** Forget the current token: Drive refused it for lacking the Drive permission. */
+export function androidDropToken(): void {
+  dropped = cached?.token ?? dropped;
+  cached = null;
 }
 
 export async function androidSignOut(): Promise<void> {

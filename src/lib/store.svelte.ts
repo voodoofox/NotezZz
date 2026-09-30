@@ -8,6 +8,7 @@
 // outbox — that debounce is a keystroke coalescer, not part of durability,
 // which is why flush() exists for page-hide.
 
+import { isDriveAccessError } from './drive/driveAccess';
 import { DEFAULT_SETTINGS, newNote, rollTilt, type Note, type Settings } from './types';
 import { welcomeNotes } from './welcome';
 import { Outbox, type OutboxOp } from './outbox';
@@ -303,6 +304,7 @@ class AppStore {
   async reconnect() {
     this.syncStatus = 'loading';
     this.syncError = '';
+    let driveRefused: unknown = null;
     try {
       if (isTauri()) {
         // Desktop tokens are managed by Rust — never the browser popup flow,
@@ -312,7 +314,13 @@ class AppStore {
         // so it may open the system browser for a fresh sign-in. Declining
         // that (or being offline) falls back to local files below.
         await desktopToken().catch(async () => {
-          if (desktopAuthConfigured()) await desktopSignIn().catch(() => {});
+          if (desktopAuthConfigured()) {
+            await desktopSignIn().catch((e) => {
+              // Signed in without Drive: say so after the re-init below,
+              // instead of quietly settling for local files.
+              if (isDriveAccessError(e)) driveRefused = e;
+            });
+          }
         });
       } else if (this.#backend?.kind !== 'local') {
         // Local mode has no account to reconnect; re-init and retry is all
@@ -323,6 +331,10 @@ class AppStore {
       this.#pollFailures = 0;
       this.#pollBackoffUntil = 0;
       await this.init();
+      if (driveRefused) {
+        this.#fail(driveRefused);
+        return;
+      }
       // The user asked, so retry everything that failed without waiting out
       // its backoff.
       this.#outbox.retryAll();

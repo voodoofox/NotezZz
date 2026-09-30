@@ -613,6 +613,97 @@ test('a dead Google session does not flash the sign-in screen over cached notes'
   await expect(page.getByTestId('reconnect')).toBeVisible();
 });
 
+test('a Google sign-in without the Drive permission is refused, then accepted once granted', async ({
+  page,
+}) => {
+  // Google lists permissions as checkboxes when an app asks for several; a
+  // friend left Drive unticked, "signed in", and every Drive call failed with
+  // a raw 403. The app asks for Drive alone now, and still checks the grant.
+  await page.addInitScript(() => {
+    const w = window as unknown as { google: unknown; __grants: string[]; __prompts: string[] };
+    w.__grants = ['openid email', 'https://www.googleapis.com/auth/drive.file'];
+    w.__prompts = [];
+    w.google = {
+      accounts: {
+        oauth2: {
+          initTokenClient: (cfg: { scope: string }) => {
+            const client = {
+              scope: cfg.scope,
+              callback: (_r: unknown) => {},
+              requestAccessToken(opts?: { prompt?: string }) {
+                w.__prompts.push(opts?.prompt ?? '');
+                const scope = w.__grants.shift() ?? '';
+                setTimeout(() => client.callback({ access_token: 'tok-' + scope.length, expires_in: 3600, scope }), 10);
+              },
+            };
+            (window as unknown as { __client: unknown }).__client = client;
+            return client;
+          },
+        },
+      },
+    };
+  });
+  // Drive, once reached, holds an empty account.
+  await page.route('**://www.googleapis.com/**', (r) => {
+    const url = r.request().url();
+    if (url.includes('/about')) return r.fulfill({ json: { user: { emailAddress: 'friend@example.com' } } });
+    if (r.request().method() === 'GET') return r.fulfill({ json: { files: [] } });
+    return r.fulfill({ json: { id: 'f' + Math.random().toString(36).slice(2), modifiedTime: new Date().toISOString() } });
+  });
+  await page.goto('/');
+
+  // The app asks Google for Drive and nothing else.
+  await page.getByRole('button', { name: 'Sign in with Google' }).click();
+  expect(await page.evaluate(() => (window as unknown as { __client: { scope: string } }).__client.scope)).toBe(
+    'https://www.googleapis.com/auth/drive.file'
+  );
+  // First answer: signed in, but without Drive. Refused, in plain words.
+  await expect(page.getByText("Google didn't give NotezZz access to Google Drive")).toBeVisible();
+  await expect(page.getByTestId('open-local')).toBeVisible(); // still at the gate
+  expect(await page.evaluate(() => localStorage.getItem('notezzz:hasAuthed'))).toBeNull();
+
+  // Second answer grants Drive: past the gate. Both attempts showed Google's
+  // consent screen, since the refused one wasn't remembered as a sign-in.
+  await page.getByRole('button', { name: 'Sign in with Google' }).click();
+  await expect(page.getByTestId('open-local')).toBeHidden();
+  expect(await page.evaluate(() => localStorage.getItem('notezzz:hasAuthed'))).toBe('1');
+  expect(await page.evaluate(() => (window as unknown as { __prompts: string[] }).__prompts)).toEqual([
+    'consent',
+    'consent',
+  ]);
+});
+
+test('Drive refusing a token that lacks the Drive permission shows a plain message and Reconnect', async ({
+  page,
+}) => {
+  // A sign-in from before the fix: the token works, but carries no Drive.
+  await page.addInitScript(() => {
+    localStorage.setItem('notezzz:hasAuthed', '1');
+    localStorage.setItem('notezzz:tok', JSON.stringify({ t: 'no-drive', e: Date.now() + 3_600_000 }));
+  });
+  await page.route('**://www.googleapis.com/**', (r) =>
+    r.fulfill({
+      status: 403,
+      body: JSON.stringify({
+        error: {
+          code: 403,
+          message: 'Request had insufficient authentication scopes.',
+          status: 'PERMISSION_DENIED',
+          details: [{ reason: 'ACCESS_TOKEN_SCOPE_INSUFFICIENT' }],
+        },
+      }),
+    })
+  );
+  await page.goto('/');
+
+  await expect(page.getByTestId('sync-error')).toContainText("Google didn't give NotezZz access to Google Drive");
+  await expect(page.getByTestId('sync-error')).not.toContainText('PERMISSION_DENIED');
+  await expect(page.getByTestId('reconnect')).toBeVisible();
+  // The useless grant is forgotten, so Reconnect shows Google's screen again.
+  expect(await page.evaluate(() => localStorage.getItem('notezzz:tok'))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('notezzz:hasAuthed'))).toBeNull();
+});
+
 test('deleting a note right after typing in it does not bring it back', async ({ page }) => {
   // The debounce timer used to outlive the delete: it fired 400ms later,
   // found the note gone, and wrote its captured copy straight back.

@@ -25,7 +25,13 @@ use sha2::{Digest, Sha256};
 const REDIRECT_PORT: u16 = 8419;
 const AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
-const USERINFO_URL: &str = "https://openidconnect.googleapis.com/v1/userinfo";
+/// Drive alone. A second permission (openid + email used to ride along)
+/// makes Google list them as checkboxes, and people left Drive unticked.
+const DRIVE_SCOPE: &str = "https://www.googleapis.com/auth/drive.file";
+/// The account's address comes from Drive, since the email permission is gone.
+const ABOUT_URL: &str = "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)";
+/// Reported to the frontend when Google signed the user in without Drive.
+pub const DRIVE_NOT_GRANTED: &str = "drive_not_granted";
 
 /// The loopback listener of the sign-in currently in progress, if any. A
 /// consent tab closed by the user left the previous listener bound for the
@@ -119,6 +125,16 @@ struct TokenResponse {
     refresh_token: String,
     #[serde(default)]
     expires_in: u64,
+    /// The scopes actually granted, space-separated.
+    #[serde(default)]
+    scope: String,
+}
+
+/// Did Google grant Drive? A response without a scope list is taken on
+/// trust: Drive itself rejects a token that lacks it, and the app handles
+/// that too.
+fn grants_drive(scope: &str) -> bool {
+    scope.trim().is_empty() || scope.split_whitespace().any(|s| s == DRIVE_SCOPE)
 }
 
 /// Google's `error` field from a rejected token request, e.g. "invalid_grant".
@@ -156,17 +172,17 @@ fn exchange(params: Vec<(&str, &str)>) -> Result<TokenResponse, ExchangeError> {
 /// perfectly good sign-in look signed-out.
 fn fetch_email(access_token: &str) -> Result<String, String> {
     let v = http()
-        .get(USERINFO_URL)
+        .get(ABOUT_URL)
         .set("Authorization", &format!("Bearer {access_token}"))
         .call()
-        .map_err(|e| format!("userinfo request failed: {e}"))?
+        .map_err(|e| format!("account lookup failed: {e}"))?
         .into_json::<serde_json::Value>()
-        .map_err(|e| format!("bad userinfo response: {e}"))?;
-    v.get("email")
-        .and_then(|e| e.as_str())
+        .map_err(|e| format!("bad account response: {e}"))?;
+    v["user"]["emailAddress"]
+        .as_str()
         .filter(|e| !e.is_empty())
         .map(String::from)
-        .ok_or_else(|| "userinfo response has no email".to_string())
+        .ok_or_else(|| "account response has no email".to_string())
 }
 
 /// Bind the loopback listener, evicting a listener left behind by an earlier
@@ -269,7 +285,7 @@ pub fn sign_in(app: &tauri::AppHandle, client_id: &str, client_secret: &str) -> 
     // stray browser prefetch could hand it an attacker-chosen code.
     let state = random_token();
     let redirect = format!("http://127.0.0.1:{REDIRECT_PORT}/callback");
-    let scope = "https://www.googleapis.com/auth/drive.file openid email";
+    let scope = DRIVE_SCOPE;
 
     let server = bind_listener()?;
     let server_thread = server.clone();
@@ -344,6 +360,10 @@ pub fn sign_in(app: &tauri::AppHandle, client_id: &str, client_secret: &str) -> 
         ("grant_type", "authorization_code"),
         ("code_verifier", &verifier),
     ])?;
+    // Signed in without Drive: nothing could sync, so keep nothing.
+    if !grants_drive(&tr.scope) {
+        return Err(DRIVE_NOT_GRANTED.into());
+    }
 
     let email = fetch_email(&tr.access_token);
     let tokens = Tokens {
@@ -392,6 +412,12 @@ pub fn valid_access_token(
         }
         Err(e) => return Err(e.message),
     };
+    // A sign-in from before 0.26.1 may hold a grant without Drive. Forget it,
+    // so Reconnect runs a real sign-in instead of refreshing a useless token.
+    if !grants_drive(&tr.scope) {
+        let _ = clear_tokens(app);
+        return Err(DRIVE_NOT_GRANTED.into());
+    }
     tokens.access_token = tr.access_token;
     tokens.expires_at = now() + tr.expires_in.max(60) - 60;
     // The refreshed token is good even if it could not be persisted; the
@@ -400,4 +426,25 @@ pub fn valid_access_token(
         eprintln!("[notezzz] google_token: {e}");
     }
     Ok(tokens.access_token)
+}
+
+#[cfg(test)]
+mod scope_tests {
+    use super::grants_drive;
+
+    #[test]
+    fn drive_grant_is_recognised() {
+        assert!(grants_drive("https://www.googleapis.com/auth/drive.file"));
+        assert!(grants_drive("openid https://www.googleapis.com/auth/drive.file email"));
+        // No list at all: taken on trust (Drive's own 403 is the backstop).
+        assert!(grants_drive(""));
+    }
+
+    #[test]
+    fn grant_without_drive_is_refused() {
+        assert!(!grants_drive("openid email"));
+        assert!(!grants_drive("https://www.googleapis.com/auth/userinfo.email openid"));
+        // Near misses are not Drive.
+        assert!(!grants_drive("https://www.googleapis.com/auth/drive.file.x"));
+    }
 }

@@ -3,11 +3,14 @@
 // client secret, no server. Tokens last ~1h; we re-request on 401.
 
 import { GOOGLE_CLIENT_ID, GOOGLE_SCOPE } from '../googleConfig';
+import { DriveAccessError, driveAccountEmail, grantsDrive } from './driveAccess';
 
 interface TokenResponse {
   access_token?: string;
   error?: string;
   expires_in?: number;
+  /** The scopes actually granted, space-separated. */
+  scope?: string;
 }
 interface TokenClient {
   requestAccessToken: (opts?: { prompt?: '' | 'none' | 'consent'; hint?: string }) => void;
@@ -53,17 +56,16 @@ function accountHint(): string | undefined {
   }
 }
 
-/** Learn which account we got (fire-and-forget; needs the email scope). */
+/** Learn which account we got (fire-and-forget; Drive reports it). */
 function rememberAccount(token: string): void {
   if (accountHint()) return;
-  void fetch('https://openidconnect.googleapis.com/v1/userinfo', {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-    .then((r) => (r.ok ? r.json() : null))
-    .then((info: { email?: string } | null) => {
-      if (info?.email) localStorage.setItem(ACCT_KEY, info.email);
-    })
-    .catch(() => {});
+  void driveAccountEmail(token).then((email) => {
+    try {
+      if (email) localStorage.setItem(ACCT_KEY, email);
+    } catch {
+      /* private mode */
+    }
+  });
 }
 
 let accessToken: string | null = null;
@@ -166,6 +168,13 @@ export function signIn(interactive = true): Promise<string> {
             reject(new Error(resp.error ?? 'No access token'));
             return;
           }
+          // Signed in, but without Drive: nothing could sync on this token.
+          // Forget the grant so the next attempt shows Google's screen again.
+          if (!grantsDrive(resp.scope)) {
+            forgetGrant();
+            reject(new DriveAccessError());
+            return;
+          }
           accessToken = resp.access_token;
           expiresAt = Date.now() + (resp.expires_in ?? 3600) * 1000 - 60_000;
           try {
@@ -191,6 +200,23 @@ export function signIn(interactive = true): Promise<string> {
     pendingReject = null;
   });
   return inflight;
+}
+
+/**
+ * Forget the grant after Google gave one without Drive: the token, and the
+ * "signed in before" flag, so the next interactive sign-in asks for consent
+ * instead of silently re-issuing the same useless grant. The account hint
+ * stays, so Google still preselects the right account.
+ */
+export function forgetGrant(): void {
+  accessToken = null;
+  expiresAt = 0;
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(AUTH_FLAG);
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Drop the cached token (memory + storage) after the server rejects it. */

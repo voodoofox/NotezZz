@@ -6,9 +6,10 @@
 import type { Note, Settings } from '../types';
 import type { StorageBackend } from '../storage/backend';
 import { FOLDER_ID_KEY, FOLDER_NAME } from '../googleConfig';
-import { getValidToken, markTokenStale, signIn } from './auth';
+import { forgetGrant, getValidToken, markTokenStale, signIn } from './auth';
 import { isTauri } from '../storage/backend';
-import { desktopToken, desktopTokenFresh } from './desktopAuth';
+import { desktopDropGrant, desktopToken, desktopTokenFresh } from './desktopAuth';
+import { DriveAccessError, isScopeRejection } from './driveAccess';
 
 /** Token source: Rust-managed on desktop, GIS in the browser. */
 async function token(): Promise<string> {
@@ -44,6 +45,13 @@ async function authFetch(url: string, opts: RequestInit = {}): Promise<Response>
   }
   if (!res.ok) {
     const body = await res.text().catch(() => '');
+    // A sign-in Google granted without Drive. Retrying can't help; drop it,
+    // so Reconnect asks Google again, and say what's wrong in plain words.
+    if (isScopeRejection(res.status, body)) {
+      if (isTauri()) await desktopDropGrant();
+      else forgetGrant();
+      throw new DriveAccessError();
+    }
     // Quota errors get a plain label: the store backs its polling off on any
     // failure, but a human reading the banner should see "rate limited", not
     // a JSON blob.

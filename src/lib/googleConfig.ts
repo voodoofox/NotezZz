@@ -11,9 +11,11 @@
 export const GOOGLE_CLIENT_ID =
   '570390928051-1tmck90tci0fo7jhvrsibrug6bd96elg.apps.googleusercontent.com';
 
-// openid+email lets the app learn WHICH account signed in, so later silent
-// renewals carry a login hint and skip Google's account-chooser screen.
-export const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/drive.file openid email';
+// Drive alone. Asking for anything more (openid + email used to ride along)
+// makes Google list the permissions as checkboxes, and people left Drive
+// unticked: signed in, but nothing could sync. The account's address, used
+// as a login hint for silent renewals, now comes from Drive (driveAccess.ts).
+export const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
 /** Folder the app creates in the user's Drive to hold all note files. */
 export const FOLDER_NAME = 'NotezZz';

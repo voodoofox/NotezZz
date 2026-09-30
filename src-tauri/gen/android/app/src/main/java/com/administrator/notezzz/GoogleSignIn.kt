@@ -110,6 +110,13 @@ class GoogleSignIn(
       ids.forEach { reply(it, false, "Google returned no access token") }
       return
     }
+    // A grant without Drive can't sync a thing. Drop the token and say so;
+    // the phone doesn't count as signed in on it.
+    if (!grantsDrive(r)) {
+      thread { runCatching { GoogleAuthUtil.clearToken(activity, token) } }
+      ids.forEach { reply(it, false, DRIVE_NOT_GRANTED) }
+      return
+    }
     thread {
       var email = prefs.getString("email", "") ?: ""
       if (!prefs.getBoolean("signedIn", false) || email.isEmpty()) {
@@ -130,12 +137,15 @@ class GoogleSignIn(
     }
   }
 
+  /** The account's address, asked of Drive: the app no longer requests Google's email permission. */
   private fun fetchEmail(token: String): String? = runCatching {
-    val conn = URL(USERINFO).openConnection() as HttpURLConnection
+    val conn = URL(ABOUT).openConnection() as HttpURLConnection
     conn.setRequestProperty("Authorization", "Bearer $token")
     conn.connectTimeout = 10_000
     conn.readTimeout = 10_000
-    conn.inputStream.use { JSONObject(it.reader().readText()).optString("email") }.ifEmpty { null }
+    conn.inputStream.use {
+      JSONObject(it.reader().readText()).optJSONObject("user")?.optString("emailAddress").orEmpty()
+    }.ifEmpty { null }
   }.getOrNull()
 
   companion object {
@@ -150,14 +160,23 @@ class GoogleSignIn(
       val b = AuthorizationRequest.builder().setRequestedScopes(SCOPES)
       prefs.getString("email", "")?.takeIf { it.isNotEmpty() }?.let { b.setAccount(Account(it, "com.google")) }
       val r = Tasks.await(Identity.getAuthorizationClient(context).authorize(b.build()), 30, TimeUnit.SECONDS)
-      if (r.hasResolution()) null else r.accessToken
+      if (r.hasResolution() || !grantsDrive(r)) null else r.accessToken
     }.getOrNull()
 
-    private const val USERINFO = "https://openidconnect.googleapis.com/v1/userinfo"
-    private val SCOPES = listOf(
-      Scope("https://www.googleapis.com/auth/drive.file"),
-      Scope("openid"),
-      Scope("email"),
-    )
+    /**
+     * Did Google grant Drive? Its consent screen lists permissions as
+     * checkboxes when an app asks for several; the app now asks for Drive
+     * alone, and still checks. An empty list is taken on trust: Drive itself
+     * rejects a token without the permission, and the app handles that too.
+     */
+    fun grantsDrive(r: AuthorizationResult): Boolean =
+      r.grantedScopes.isEmpty() || r.grantedScopes.contains(DRIVE_FILE)
+
+    const val DRIVE_NOT_GRANTED = "drive_not_granted"
+    private const val DRIVE_FILE = "https://www.googleapis.com/auth/drive.file"
+    private const val ABOUT = "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)"
+    // Drive alone: a second permission makes Google show checkboxes, and
+    // people left Drive unticked.
+    private val SCOPES = listOf(Scope(DRIVE_FILE))
   }
 }

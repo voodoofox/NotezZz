@@ -10,10 +10,18 @@ import { isMobile } from '../storage/backend';
 import {
   androidAccount,
   androidAuthAvailable,
+  androidDropToken,
   androidSignIn,
   androidSignOut,
   androidToken,
 } from './androidAuth';
+import { DRIVE_NOT_GRANTED, DriveAccessError } from './driveAccess';
+
+/** gauth.rs reports a grant without Drive as a bare code; give it words. */
+function explain(e: unknown): never {
+  if (String(e) === DRIVE_NOT_GRANTED) throw new DriveAccessError();
+  throw e;
+}
 
 const creds = () => ({ clientId: GOOGLE_CLIENT_ID, clientSecret: GOOGLE_CLIENT_SECRET });
 
@@ -28,13 +36,23 @@ export function desktopAuthConfigured(): boolean {
 /** Interactive sign-in: the system browser (desktop) or account sheet (Android). Resolves to the account. */
 export async function desktopSignIn(): Promise<string> {
   if (native()) return (await androidSignIn()) || UNKNOWN_ACCOUNT;
-  return invoke<string>('google_sign_in', creds());
+  return invoke<string>('google_sign_in', creds()).catch(explain);
 }
 
 /** Valid access token, refreshed silently when needed. */
 export function desktopToken(): Promise<string> {
   if (native()) return androidToken();
-  return invoke<string>('google_token', creds());
+  return invoke<string>('google_token', creds()).catch(explain);
+}
+
+/**
+ * Drive refused the token for lacking the Drive permission. Drop it: on
+ * Android the next request invalidates it and asks again; on the desktop the
+ * stored tokens go, so Reconnect runs a real sign-in with Google's screen.
+ */
+export async function desktopDropGrant(): Promise<void> {
+  if (native()) return androidDropToken();
+  await invoke('google_sign_out').catch(() => {});
 }
 
 /** A new token after Drive rejected the current one (a 401). */
