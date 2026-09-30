@@ -1,15 +1,16 @@
-# OPTIONAL since 0.18.12: the site lives on GitHub Pages (pages.yml) and
-# installs look for updates on GitHub Releases (release.yml). Run this only
-# to keep the flatvoxel.com copy in step for installs older than 0.18.12.
+# The site is published twice: GitHub Pages (pages.yml, automatic) and
+# https://flatvoxel.com/notezzz/ (this script). Keep both in step with:
 #
-# Publishes the marketing site to https://flatvoxel.com/notezzz/ and refreshes
-# the downloadable installer, stamping the current version into the page so the
-# site can never advertise a build it isn't serving.
+#   powershell -ExecutionPolicy Bypass -File .\deploy-site.ps1 -SiteOnly
 #
-#   powershell -ExecutionPolicy Bypass -File .\deploy-site.ps1
+# which uploads just the pages (no installer, no latest.json). Without
+# -SiteOnly it also refreshes the installer and latest.json on flatvoxel,
+# which only installs older than 0.18.12 still read (newer ones update from
+# GitHub Releases).
 #
 # Uses Git's curl - the Windows System32 build can't reach this FTPS host.
 # FTP credentials come from deploy.env (gitignored; see README, 'Deploy').
+param([switch]$SiteOnly)
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -22,6 +23,57 @@ if (-not (Test-Path $Curl)) { throw "Git curl not found at $Curl" }
 $cfg = Read-DeployEnv (Join-Path $PSScriptRoot 'deploy.env')
 
 $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+
+if ($SiteOnly) {
+  # Stage a copy: the repo's site/index.html keeps its placeholder stamp
+  # (pages.yml stamps its own copy), and the old installer, its signature and
+  # latest.json on the host stay exactly as they are.
+  # Paths are taken relative to the repo's site folder. (A folder under
+  # $env:TEMP came back in 8.3 form, ADMINI~1, while the files listed in it
+  # came back long, so the relative paths were garbage and landed in a stray
+  # remote folder.) Only index.html is rewritten, into a temp file.
+  $skip = @('NotezZz-Setup.exe', 'NotezZz-Setup.exe.sig', 'latest.json', '.htaccess')
+  $siteRoot = (Get-Item site).FullName
+  $stamp = "v$version $([char]0x00B7) $(Get-Date -Format 'd MMM yyyy')"
+  $utf8 = New-Object System.Text.UTF8Encoding($false)
+  $stamped = [System.IO.Path]::GetTempFileName()
+  $html = [System.IO.File]::ReadAllText((Join-Path $siteRoot 'index.html'), $utf8)
+  $html = [regex]::Replace($html, '(<span data-version>)[^<]*(</span>)', "`${1}$stamp`${2}")
+  [System.IO.File]::WriteAllText($stamped, $html, $utf8)
+
+  $Remote = 'domains/flatvoxel.com/htdocs/www/notezzz'
+  # Pages last, so a visitor mid-upload never gets a page whose images are missing.
+  $files = Get-ChildItem -Recurse -File $siteRoot -Force |
+    Where-Object { $skip -notcontains $_.Name } |
+    Sort-Object { $_.Extension -eq '.html' }
+  $fail = 0
+  $netrc = New-CurlNetrc $cfg
+  try {
+    foreach ($f in $files) {
+      if (-not $f.FullName.StartsWith($siteRoot)) { throw "Unexpected path $($f.FullName)" }
+      $rel = $f.FullName.Substring($siteRoot.Length + 1) -replace '\\', '/'
+      $local = if ($rel -eq 'index.html') { $stamped } else { $f.FullName }
+      $ok = Send-FtpFile -Curl $Curl -Netrc $netrc -FtpHost $cfg.FTP_HOST `
+        -LocalPath $local -RemotePath "$Remote/$rel" -ConnectTimeout 60
+      if (-not $ok) { $fail++ }
+    }
+  } finally {
+    Remove-Item $netrc -Force -ErrorAction SilentlyContinue
+    Remove-Item $stamped -Force -ErrorAction SilentlyContinue
+  }
+  if ($fail -gt 0) { throw "$fail file(s) failed to upload" }
+  # The host's front cache can take a few seconds to let the new page through.
+  $shown = $false
+  for ($i = 0; $i -lt 8 -and -not $shown; $i++) {
+    $live = & $Curl -s "https://flatvoxel.com/notezzz/index.html?ts=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
+    $shown = $live -match [regex]::Escape("v$version")
+    if (-not $shown) { Start-Sleep -Seconds 4 }
+  }
+  if (-not $shown) { throw "Live page doesn't show v$version after 30s" }
+  Write-Host "Done -> https://flatvoxel.com/notezzz/  (pages only, $stamp)" -ForegroundColor Green
+  return
+}
+
 $exe = "src-tauri\target\release\bundle\nsis\NotezZz_${version}_x64-setup.exe"
 if (-not (Test-Path $exe)) { throw "No installer for $version - run npm run tauri build" }
 
