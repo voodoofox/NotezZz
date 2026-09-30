@@ -39,10 +39,14 @@ const NOTES = [
     title: 'Sprint planning',
     paletteId: 'sky',
     pinned: true,
+    remindAt: now + 20 * 3600e3,
     contentHtml:
       '<p><span style="font-size: 1.3333em"><strong>Thursday standup</strong></span></p>' +
-      '<ul><li>Ship the export flow</li><li>Fix the avatar upload bug</li>' +
-      '<li><em>Ask Marta about the API limits</em></li><li><s>Rewrite the onboarding copy</s></li></ul>' +
+      '<ul data-type="taskList">' +
+      '<li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked><span></span></label><div><p>Rewrite the onboarding copy</p></div></li>' +
+      '<li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked><span></span></label><div><p>Fix the avatar upload bug</p></div></li>' +
+      '<li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label><div><p>Ship the export flow</p></div></li>' +
+      '<li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label><div><p><em>Ask Marta about the API limits</em></p></div></li></ul>' +
       '<p>Demo build due <strong>Friday 14:00</strong>. Send the invite once staging is green.</p>' +
       '<p><span style="font-size: 0.8889em">Parking lot: pricing page, changelog, the settings redesign nobody asked for.</span></p>' +
       '<ol><li>Cut the release branch</li><li>Smoke-test on the old laptop</li><li>Post notes in #general</li></ol>',
@@ -73,9 +77,9 @@ const NOTES = [
   note(7, { title: 'Book quotes', paletteId: 'teal', contentHtml: '<p>“Simplicity is a great virtue…”</p>' }),
 ];
 
-const seed = (page, theme) =>
+const seed = (page, theme, layout = 'side') =>
   page.evaluate(
-    ([notes, appTheme]) => {
+    ([notes, appTheme, layout]) => {
       localStorage.clear();
       for (const n of notes) localStorage.setItem(`notezzz:note:${n.id}`, JSON.stringify(n));
       localStorage.setItem(
@@ -86,13 +90,22 @@ const seed = (page, theme) =>
           appTheme,
           autostart: false,
           syncFolder: null,
+          layout,
+          listColumns: 'auto',
+          settingsVersion: 1,
         })
       );
     },
-    [NOTES, theme]
+    [NOTES, theme, layout]
   );
 
 const browser = await chromium.launch({ channel: 'chrome' });
+
+// Wait for the app itself, not a guess: a cold dev server compiles for seconds.
+const ready = async (page) => {
+  await page.getByTestId('open-settings').waitFor({ timeout: 60000 });
+  await page.waitForTimeout(600);
+};
 
 // 1 — desktop, dark shell, a formatted note open
 {
@@ -100,7 +113,7 @@ const browser = await chromium.launch({ channel: 'chrome' });
   await page.goto('http://localhost:1420/?local');
   await seed(page, 'dark');
   await page.reload();
-  await page.waitForTimeout(900);
+  await ready(page);
   await page.screenshot({ path: `${OUT}/app-dark.png` });
   await page.close();
 }
@@ -111,7 +124,7 @@ const browser = await chromium.launch({ channel: 'chrome' });
   await page.goto('http://localhost:1420/?local');
   await seed(page, 'light');
   await page.reload();
-  await page.waitForTimeout(700);
+  await ready(page);
   await page.getByTestId('note-pick').filter({ hasText: 'Layout idea' }).click();
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${OUT}/app-drawing.png` });
@@ -122,9 +135,9 @@ const browser = await chromium.launch({ channel: 'chrome' });
 {
   const page = await browser.newPage({ viewport: { width: 400, height: 800 }, deviceScaleFactor: 3 });
   await page.goto('http://localhost:1420/?local');
-  await seed(page, 'dark');
+  await seed(page, 'dark', 'top');
   await page.reload();
-  await page.waitForTimeout(900);
+  await ready(page);
   await page.screenshot({ path: `${OUT}/app-phone.png` });
   await page.close();
 }
@@ -146,7 +159,7 @@ const browser = await chromium.launch({ channel: 'chrome' });
   await page.goto('http://localhost:1420/?local');
   await seed(page, 'dark');
   await page.reload();
-  await page.waitForTimeout(700);
+  await ready(page);
   await page.getByTestId('note-color').click();
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${OUT}/app-colors.png` });
@@ -158,7 +171,7 @@ const browser = await chromium.launch({ channel: 'chrome' });
 {
   const page = await browser.newPage({ viewport: { width: 400, height: 800 }, deviceScaleFactor: 3 });
   await page.goto('http://localhost:1420/?local');
-  await seed(page, 'dark');
+  await seed(page, 'dark', 'top');
   await page.evaluate(() =>
     localStorage.setItem(
       'notezzz:pendingShare',
@@ -166,7 +179,7 @@ const browser = await chromium.launch({ channel: 'chrome' });
     )
   );
   await page.reload();
-  await page.waitForTimeout(900);
+  await ready(page);
   await page.getByTestId('share-pin').check();
   await page.waitForTimeout(250);
   await page.screenshot({ path: `${OUT}/app-share.png` });

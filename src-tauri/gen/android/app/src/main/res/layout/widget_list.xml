@@ -14,14 +14,19 @@
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="8dp">
-        <TextView
+        <!-- The NotezZz logo with the name (brand/lockup.svg, light). -->
+        <FrameLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="NotezZz"
-            android:textColor="#2A2C2E"
-            android:textSize="16sp"
-            android:textStyle="bold" />
+            android:layout_weight="1">
+            <ImageView
+                android:layout_width="wrap_content"
+                android:layout_height="22dp"
+                android:adjustViewBounds="true"
+                android:scaleType="fitStart"
+                android:src="@drawable/widget_logo"
+                android:contentDescription="NotezZz" />
+        </FrameLayout>
         <ImageView
             android:id="@+id/add"
             android:layout_width="34dp"

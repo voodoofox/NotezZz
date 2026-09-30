@@ -36,10 +36,15 @@ header { border-bottom: 1px solid var(--rule); }
 header .wrap { display: flex; align-items: center; justify-content: space-between; height: 62px; }
 .brand { font-family: 'Sofia', sans-serif; font-weight: 700; font-size: 25px; letter-spacing: -0.02em;
          text-decoration: none; display: flex; align-items: center; gap: 9px; }
-.brand img { width: 28px; height: 28px; }
-.brand .wm { height: 21px; width: auto; display: block; }
-.brand .zzz { fill: #E0439A; }
-@media (prefers-color-scheme: dark) { .brand .zzz { fill: #FF6AD5; } }
+/* The logo (brand/lockup*.svg): "Note" follows the text colour, the mark and the
+   striped Z take these, a shade deeper on light pages. */
+.nz-logo { height: 30px; width: auto; display: block; }
+.nz-mc { fill: #5FD0F2; } .nz-mp { fill: #FF5CC8; } .nz-my { fill: #FFE15A; }
+.nz-zb { fill: #1FA3D6; } .nz-zy { fill: #E8A400; } .nz-zm { fill: #E0439A; }
+@media (prefers-color-scheme: dark) {
+.nz-mc { fill: #9BEBFF; } .nz-mp { fill: #FF6AD5; } .nz-my { fill: #FFF6A8; }
+.nz-zb { fill: #9BEBFF; } .nz-zy { fill: #FFC53D; } .nz-zm { fill: #FF6AD5; }
+}
 header nav a { font-family: 'Plex', monospace; font-size: 12px; letter-spacing: .1em;
                text-transform: uppercase; color: var(--muted); text-decoration: none; margin-left: 22px; }
 header nav a:hover { color: var(--ink); }

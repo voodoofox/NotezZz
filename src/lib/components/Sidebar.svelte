@@ -5,7 +5,7 @@
   import type { Note } from '$lib/types';
   import Settings from './Settings.svelte';
   import Icon from './Icon.svelte';
-  import AppMark from './AppMark.svelte';
+  import Lockup from './Lockup.svelte';
   import { updates } from '$lib/update.svelte';
   import { installUpdate } from '$lib/updater';
   import { isDesktop } from '$lib/storage/backend';
@@ -172,7 +172,7 @@
 
 <aside class="sidebar">
   <div class="head">
-    <span class="brand"><AppMark size={22} />NotezZz</span>
+    <span class="brand"><Lockup height={24} /></span>
     <div class="head-actions">
       <button
         class="ico"
@@ -330,14 +330,7 @@
   .brand {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    font-weight: 700;
-    font-size: 20px;
-    letter-spacing: 0.3px;
-  }
-  .brand :global(svg) {
-    flex: none;
-    border-radius: 5px;
+    color: var(--app-fg);
   }
   .head-actions {
     display: flex;
