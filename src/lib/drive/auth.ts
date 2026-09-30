@@ -154,8 +154,11 @@ export function signIn(interactive = true): Promise<string> {
   if (inflight) return inflight;
 
   inflight = new Promise<string>((resolve, reject) => {
-    // Guard: even with error_callback, never hang forever.
-    const timer = setTimeout(() => reject(new Error('Sign-in timed out')), 15_000);
+    // Guard: even with error_callback, never hang forever. A person signing
+    // in picks an account, types a password, maybe confirms on their phone
+    // and reads Google's permission screen: 15 s cut them off mid-way.
+    // Closing Google's window still ends it at once (error_callback).
+    const timer = setTimeout(() => reject(new Error('Sign-in timed out')), interactive ? 300_000 : 15_000);
     pendingReject = (e) => {
       clearTimeout(timer);
       reject(e);

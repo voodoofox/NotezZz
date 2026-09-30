@@ -35,7 +35,7 @@ pub const DRIVE_NOT_GRANTED: &str = "drive_not_granted";
 
 /// The loopback listener of the sign-in currently in progress, if any. A
 /// consent tab closed by the user left the previous listener bound for the
-/// full 180 s, and the next click failed with "cannot listen on 8419"; a new
+/// full wait, and the next click failed with "cannot listen on 8419"; a new
 /// attempt now evicts the old one first.
 static LISTENER: Mutex<Option<Arc<tiny_http::Server>>> = Mutex::new(None);
 
@@ -234,7 +234,7 @@ fn html_response(status: u16, body: &str) -> tiny_http::Response<std::io::Cursor
 }
 
 /// Run the full interactive sign-in. Blocks until the browser round-trip
-/// completes (call from a background thread), max ~3 minutes.
+/// completes (call from a background thread), max ~5 minutes.
 ///
 /// On success the tokens are stored. If only the account-email lookup fails
 /// the tokens are STILL stored (the sign-in itself worked) and the error
@@ -333,10 +333,12 @@ pub fn sign_in(app: &tauri::AppHandle, client_id: &str, client_secret: &str) -> 
         }
         // `tx` drops here: a listener evicted by a newer attempt (or the
         // timeout below) wakes the recv with Disconnected instead of
-        // sitting out the full 180 s.
+        // sitting out the full wait.
     });
 
-    let code = rx.recv_timeout(Duration::from_secs(180));
+    // Long enough to create an account or confirm on a phone; closing the
+    // tab or clicking Sign in again ends it sooner (see LISTENER).
+    let code = rx.recv_timeout(Duration::from_secs(300));
     // Always release port 8419 — a listener left running from an abandoned
     // attempt makes every retry fail to bind ("sign-in loop").
     server.unblock();
