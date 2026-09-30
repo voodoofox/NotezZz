@@ -4,525 +4,667 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>NotezZz</title>
-    <meta
-      name="description"
-      content="Sticky notes for Windows and your phone. Write, sketch or speak a thought and pin it to your desktop — stored as plain files in your own Google Drive."
-    />
-    <meta name="theme-color" content="#FBFAF6" />
+    <meta name="description" content="Free sticky notes for Windows, Android and the web. Pin a note on your phone and it's waiting on your PC desktop. Your notes stay in your own Google Drive." />
+    <meta name="theme-color" content="#eceef4" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#14121b" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <link rel="icon" href="icon.png" type="image/png" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <meta property="og:title" content="NotezZz" />
-    <meta property="og:description" content="Sticky notes for Windows and your phone, stored in your own Google Drive." />
+    <meta property="og:description" content="Free sticky notes for Windows, Android and the web. Pin a note on your phone and it's waiting on your PC." />
     <meta property="og:image" content="https://voodoofox.github.io/NotezZz/shots/app-dark.png" />
     <style>
-      /* Self-hosted — this page makes no third-party requests. */
-      @font-face { font-family: 'Sofia'; src: url('fonts/SofiaSansCondensed.ttf') format('truetype');
-                   font-weight: 1 1000; font-display: swap; }
-      @font-face { font-family: 'Reader'; src: url('fonts/Newsreader.ttf') format('truetype');
-                   font-weight: 200 800; font-display: swap; }
-      @font-face { font-family: 'Plex'; src: url('fonts/IBMPlexMono.ttf') format('truetype');
-                   font-weight: 400; font-display: swap; }
-
+      /* The wall: a pin board with a faint dot grid, and the app's own sticky
+         notes on it. Note colours are the app's palettes and stay the same in
+         both themes, as they do in the app. */
+      @font-face { font-family: 'Display'; src: url('fonts/SofiaSansCondensed.ttf') format('truetype'); font-weight: 1 1000; font-display: swap; }
+      @font-face { font-family: 'Body'; src: url('fonts/SofiaSans.ttf') format('truetype'); font-weight: 1 1000; font-display: swap; }
+      @font-face { font-family: 'Mono'; src: url('fonts/IBMPlexMono.ttf') format('truetype'); font-weight: 400; font-display: swap; }
       :root {
-        /* Ground and ink come from the app's own Paper / Graphite palettes. */
-        --paper: #fbfaf6;
-        --raise: #ffffff;
-        --ink: #23262a;
-        --muted: #6e7480;
-        --rule: #e5e1d7;
-        --shadow: 24px 40px 90px rgba(35, 38, 42, 0.16);
-        /* The app's real note colours — the only chroma on the page. */
-        --sun: #f0e7c2; --sky: #c2d9f0; --mint: #c2f0cd; --rose: #f0c2d9; --lav: #d3c2f0;
-        --measure: 62ch;
+        --board: #eceef4; --dot: #cdd1df; --paper: #ffffff; --paper2: #f5f6fa; --ink: #1e1838; --muted: #56516e; --faint: #858199; --line: #dadce7;
+        --bezel: #221c36; --btn: #2b1b4d; --btn-ink: #ffffff; --focus: #1fa3d6; --hl: #ffe15a; --arrow: #e0439a;
+        --shadow: 0 1px 2px rgb(30 24 56 / 8%), 0 14px 30px -12px rgb(30 24 56 / 30%);
+        --desk-a: #a9cdef; --desk-b: #cdbdf0; --win: rgb(255 255 255 / 72%); --win-line: rgb(30 24 56 / 12%);
+        --nz-mc: #5fd0f2; --nz-mp: #ff5cc8; --nz-my: #ffe15a; --nz-zb: #1fa3d6; --nz-zy: #e8a400; --nz-zm: #e0439a;
+        color-scheme: light;
       }
       @media (prefers-color-scheme: dark) {
-        :root:not([data-theme='light']) {
-          --paper: #1a1d21;
-          --raise: #22262c;
-          --ink: #ecedef;
-          --muted: #98a0ab;
-          --rule: #2c3138;
-          --shadow: 24px 40px 90px rgba(0, 0, 0, 0.55);
+        :root:not([data-theme="light"]) {
+          --board: #14121b; --dot: #2b2839; --paper: #1f1c29; --paper2: #262233; --ink: #eeebf7; --muted: #ada8c3; --faint: #7f7a96; --line: #332f44;
+          --bezel: #3b3552; --btn: #eeebf7; --btn-ink: #14121b; --focus: #9bebff; --hl: #6d2a7e; --arrow: #ff6ad5;
+          --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 16px 32px -12px rgb(0 0 0 / 70%);
+          --desk-a: #26355f; --desk-b: #3b2862; --win: rgb(20 18 30 / 70%); --win-line: rgb(255 255 255 / 10%);
+          --nz-mc: #9bebff; --nz-mp: #ff6ad5; --nz-my: #fff6a8; --nz-zb: #9bebff; --nz-zy: #ffc53d; --nz-zm: #ff6ad5;
+          color-scheme: dark;
         }
       }
+      :root[data-theme="dark"] {
+        --board: #14121b; --dot: #2b2839; --paper: #1f1c29; --paper2: #262233; --ink: #eeebf7; --muted: #ada8c3; --faint: #7f7a96; --line: #332f44;
+        --bezel: #3b3552; --btn: #eeebf7; --btn-ink: #14121b; --focus: #9bebff; --hl: #6d2a7e; --arrow: #ff6ad5;
+        --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 16px 32px -12px rgb(0 0 0 / 70%);
+        --desk-a: #26355f; --desk-b: #3b2862; --win: rgb(20 18 30 / 70%); --win-line: rgb(255 255 255 / 10%);
+        --nz-mc: #9bebff; --nz-mp: #ff6ad5; --nz-my: #fff6a8; --nz-zb: #9bebff; --nz-zy: #ffc53d; --nz-zm: #ff6ad5;
+        color-scheme: dark;
+      }
+      /* The app's note palettes. */
+      .c-sun { --c: #f0e7c2; --h: #e6d9a8; --fg: #453e21; }
+      .c-rose { --c: #f0c2d9; --h: #e6a8c7; --fg: #452133; }
+      .c-teal { --c: #c2f0ec; --h: #a8e6e1; --fg: #214542; }
+      .c-sky { --c: #c2d9f0; --h: #a8c7e6; --fg: #213345; }
+      .c-lav { --c: #d3c2f0; --h: #bfa8e6; --fg: #2e2145; }
+      .c-coral { --c: #f0cdc2; --h: #e6b7a8; --fg: #452a21; }
+      .c-lime { --c: #d9f0c2; --h: #c7e6a8; --fg: #334521; }
+      .c-paper { --c: #fbfaf6; --h: #f1efe8; --fg: #2a2c2e; }
+
       * { box-sizing: border-box; }
       html { scroll-behavior: smooth; }
-      body {
-        margin: 0; background: var(--paper); color: var(--ink);
-        font-family: 'Reader', Georgia, serif; font-size: 19px; line-height: 1.62;
-        -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
-      }
-      /* height:auto matters: the plates carry width/height attributes (good for
-         layout stability) and without it they render at full intrinsic height. */
-      img { display: block; max-width: 100%; height: auto; }
+      body { margin: 0; color: var(--ink); background-color: var(--board);
+             background-image: radial-gradient(circle, var(--dot) 1.1px, transparent 1.6px); background-size: 24px 24px;
+             font-family: 'Body', system-ui, sans-serif; font-size: 18px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
       a { color: inherit; }
-      :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+      img { max-width: 100%; height: auto; display: block; }
+      p { margin: 0; }
+      .wrap { width: min(1200px, calc(100% - 32px)); margin: 0 auto; }
+      h1, h2, h3 { font-family: 'Display', sans-serif; margin: 0; line-height: .98; text-wrap: balance; }
+      h2 { font-size: clamp(38px, 5vw, 62px); font-weight: 800; }
+      h3 { font-size: 24px; font-weight: 700; line-height: 1.1; }
+      .lede { color: var(--muted); font-size: 20px; max-width: 56ch; margin-top: 16px; }
+      section { padding: 84px 0; }
+      :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 6px; }
 
-      /* The page is a ruled page: one column, a margin rule down its left. */
-      .sheet { width: min(1180px, 100% - 40px); margin-inline: auto; }
-      .ruled { display: grid; grid-template-columns: 132px minmax(0, 1fr); }
-      .ruled > .mark {
-        border-right: 1px solid var(--rule); padding: 6px 20px 0 0; text-align: right;
-        font-family: 'Plex', monospace; font-size: 12px; letter-spacing: .13em;
-        text-transform: uppercase; color: var(--muted);
-      }
-      .ruled > .body { padding: 0 0 0 clamp(20px, 4vw, 54px); }
-      @media (max-width: 800px) {
-        .ruled { grid-template-columns: 1fr; }
-        .ruled > .mark { border-right: 0; border-left: 2px solid var(--rule); text-align: left;
-                         padding: 0 0 0 12px; margin-bottom: 18px; }
-        .ruled > .body { padding-left: 0; }
-      }
-
-      h1, h2, h3, .display {
-        font-family: 'Sofia', system-ui, sans-serif; font-weight: 700;
-        line-height: .96; letter-spacing: -0.02em; text-wrap: balance; margin: 0;
-      }
-      p { max-width: var(--measure); }
-
-      /* ---- masthead ---- */
-      .top { border-bottom: 1px solid var(--rule); position: sticky; top: 0; z-index: 30;
-             background: color-mix(in srgb, var(--paper) 90%, transparent); backdrop-filter: blur(10px); }
-      .top .sheet { display: flex; align-items: center; justify-content: space-between; height: 62px; }
-      .wordmark { font-family: 'Sofia', sans-serif; font-weight: 700; font-size: 25px;
-                  letter-spacing: -0.02em; text-decoration: none; display: flex; align-items: center; gap: 9px; }
-      /* The logo (brand/lockup*.svg): "Note" follows the text colour, the mark and the
-         striped Z take these, a shade deeper on light pages. */
       .nz-logo { height: 30px; width: auto; display: block; }
-      .nz-mc { fill: #5FD0F2; } .nz-mp { fill: #FF5CC8; } .nz-my { fill: #FFE15A; }
-      .nz-zb { fill: #1FA3D6; } .nz-zy { fill: #E8A400; } .nz-zm { fill: #E0439A; }
-      @media (prefers-color-scheme: dark) {
-        .nz-mc { fill: #9BEBFF; } .nz-mp { fill: #FF6AD5; } .nz-my { fill: #FFF6A8; }
-        .nz-zb { fill: #9BEBFF; } .nz-zy { fill: #FFC53D; } .nz-zm { fill: #FF6AD5; }
-      }
-      .top nav { font-family: 'Plex', monospace; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
-      .top nav a { color: var(--muted); text-decoration: none; margin-left: 24px; }
+      .nz-mc { fill: var(--nz-mc); } .nz-mp { fill: var(--nz-mp); } .nz-my { fill: var(--nz-my); }
+      .nz-zb { fill: var(--nz-zb); } .nz-zy { fill: var(--nz-zy); } .nz-zm { fill: var(--nz-zm); }
+
+      /* ---------- top ---------- */
+      .top { position: sticky; top: 0; z-index: 30; background: color-mix(in srgb, var(--board) 88%, transparent); backdrop-filter: blur(8px); }
+      .top .wrap { display: flex; align-items: center; justify-content: space-between; height: 66px; }
+      .top nav { display: flex; align-items: center; gap: 24px; font-size: 15px; }
+      .top nav a { text-decoration: none; color: var(--muted); }
       .top nav a:hover { color: var(--ink); }
-      @media (max-width: 600px) { .top nav a.hide-s { display: none; } }
+      .top nav .cta { color: var(--btn-ink); background: var(--btn); padding: 8px 16px; border-radius: 10px; font-weight: 600; }
+      @media (max-width: 760px) { .top nav a:not(.cta) { display: none; } }
 
-      /* ---- hero ---- */
-      .hero { padding: clamp(48px, 8vw, 104px) 0 clamp(30px, 5vw, 54px); }
-      /* No align-items:start — the side column must STRETCH to the row height,
-         otherwise the sticky note has no distance to travel and unsticks
-         immediately. Its run lasts as long as this grid is on screen. */
-      .hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) 232px; gap: clamp(24px, 5vw, 64px); }
-      @media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; } }
-      h1 { font-size: clamp(56px, 11.5vw, 138px); }
-      h1 em { font-style: normal; color: var(--muted); }
-      .stand { font-size: clamp(20px, 2.2vw, 25px); color: var(--ink); margin: 26px 0 0; line-height: 1.5; }
-      .stand b { font-weight: 600; }
-      .acts { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 32px; }
-      .act { font-family: 'Sofia', sans-serif; font-weight: 700; font-size: 19px; letter-spacing: .01em;
-             text-decoration: none; padding: 12px 24px; border: 1.5px solid var(--ink); border-radius: 3px;
-             display: inline-flex; align-items: center; gap: 9px; background: transparent; color: var(--ink); }
-      .act.solid { background: var(--ink); color: var(--paper); }
-      .act:hover { transform: translateY(-1px); }
-      .act svg { width: 17px; height: 17px; fill: currentColor; }
-      .under { font-family: 'Plex', monospace; font-size: 12px; letter-spacing: .07em; color: var(--muted); margin-top: 18px; }
+      .acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
+      .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 13px 20px; border-radius: 12px; font-weight: 600; font-size: 17px;
+             text-decoration: none; background: var(--paper); border: 1px solid var(--line); box-shadow: 0 1px 0 var(--line); transition: transform .15s; }
+      .btn:hover { transform: translateY(-2px); }
+      .btn.solid { background: var(--btn); color: var(--btn-ink); border-color: var(--btn); }
+      .btn svg { width: 20px; height: 20px; fill: currentColor; flex: none; }
+      .under { margin-top: 14px; font-size: 14px; color: var(--faint); }
 
-      /* The one flourish: the sticky note stays put while the page scrolls,
-         then steps aside once you reach the writing section. It lives in a
-         fixed rail aligned to the sheet, in space the hero grid reserves for
-         it, so it never overlaps the text. */
-      .rail {
-        position: fixed; top: 96px; left: 50%; transform: translateX(-50%);
-        width: min(1180px, 100% - 40px); display: flex; justify-content: flex-end;
-        pointer-events: none; z-index: 5; transition: opacity .35s ease, translate .35s ease;
+      /* ---------- the sticky window, as the app draws it ---------- */
+      .sticky { background: var(--c); color: var(--fg); border-radius: .65em; box-shadow: var(--shadow); overflow: hidden;
+                font-family: 'Display', sans-serif; font-size: 16px; line-height: 1.3; }
+      .sticky header { display: flex; align-items: center; justify-content: space-between; gap: .6em; background: var(--h); padding: .5em .8em .45em; font-size: 1.1em; }
+      .sticky header b { font-weight: 700; }
+      .sticky header i { font-style: normal; opacity: .55; }
+      .sticky .body { padding: .65em .95em .95em; font-size: 1.05em; }
+      .sticky ul { margin: 0; padding-left: 1.1em; }
+      .sticky li { margin: .12em 0; }
+      .sticky ul.check { list-style: none; padding: 0; }
+      .sticky ul.check li { display: flex; gap: .5em; align-items: center; }
+      .sticky ul.check li::before { content: ''; width: .85em; height: .85em; border: .12em solid currentColor; border-radius: .18em; flex: none; }
+      .sticky ul.check li.done { text-decoration: line-through; opacity: .55; }
+      .sticky ul.check li.done::before { background: currentColor; }
+
+      /* ---------- hero ---------- */
+      .hero { padding: 56px 0 40px; }
+      .hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: center; }
+      .hero h1 { font-size: clamp(50px, 7vw, 98px); font-weight: 820; letter-spacing: -.01em; }
+      .hl { background: linear-gradient(transparent 60%, var(--hl) 60%, var(--hl) 90%, transparent 90%); padding: 0 .06em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+      @media (max-width: 900px) { .hero .wrap { grid-template-columns: minmax(0, 1fr); gap: 36px; } .hero { padding-top: 32px; } }
+
+      /* The scene: a phone in front of a PC monitor. The stickies live on the
+         monitor's screen and can be dragged around it; sizes follow the
+         scene's width (cqw) so it scales as one picture. */
+      .scene-fig { margin: 0; }
+      .scene { position: relative; aspect-ratio: 16 / 11; container-type: inline-size; }
+      .mon { position: absolute; left: 20%; top: 2%; width: 80%; aspect-ratio: 16 / 10.4; border: 1.4cqw solid var(--bezel); border-radius: 2.4cqw;
+             background: var(--bezel); box-shadow: var(--shadow); }
+      .screen { position: absolute; inset: 0; border-radius: 1cqw; overflow: hidden; background: linear-gradient(150deg, var(--desk-a), var(--desk-b)); }
+      .screen .w { position: absolute; left: 6%; top: 9%; width: 50%; height: 66%; border-radius: 1cqw; background: var(--win); border: 1px solid var(--win-line); }
+      .screen .w i { display: block; height: 1.3cqw; border-radius: .65cqw; background: var(--win-line); margin: 2.2cqw 2.2cqw 0; }
+      .screen .w i:nth-child(2) { width: 55%; } .screen .w i:nth-child(3) { width: 68%; } .screen .w i:nth-child(4) { width: 40%; }
+      .screen .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 7%; background: var(--win); border-top: 1px solid var(--win-line); }
+      .mon-stand { position: absolute; left: 54%; top: calc(2% + 80% * 10.4 / 11); width: 12%; height: 8%; background: var(--bezel);
+                   clip-path: polygon(24% 0, 76% 0, 100% 100%, 0 100%); }
+      .screen .sticky { position: absolute; left: var(--x); top: var(--y); width: var(--w); transform: rotate(var(--r)); font-size: 1.8cqw; }
+      .screen .sticky header { cursor: grab; touch-action: none; user-select: none; }
+      .screen .sticky.lift { box-shadow: 0 2px 4px rgb(0 0 0 / 12%), 0 22px 36px -12px rgb(0 0 0 / 45%); }
+      .screen .sticky.lift header { cursor: grabbing; }
+      @media (prefers-reduced-motion: no-preference) {
+        .screen .sticky { transition: transform .2s, box-shadow .2s; }
+        .screen .sticky.lift { transform: rotate(0deg) scale(1.03); }
       }
-      .rail .pinned { width: 232px; margin: 0; pointer-events: auto; }
-      .rail[data-off='1'] { opacity: 0; translate: 0 -14px; }
-      .pinned img { filter: drop-shadow(10px 16px 26px rgba(35,38,42,.22)); transform: rotate(-2.2deg); }
-      .pinned figcaption { font-family: 'Plex', monospace; font-size: 12px; letter-spacing: .08em;
-                           text-transform: uppercase; color: var(--muted); margin-top: 14px; line-height: 1.5; }
-      .hero-inline { display: none; }
-      /* Too narrow to keep a rail beside the text — show it inline instead. */
-      @media (max-width: 1000px) {
-        .rail { display: none; }
-        .hero-inline { display: block; max-width: 210px; margin: 34px 0 0; }
-        .hero-grid { grid-template-columns: 1fr; }
+      .s-dentist { --x: 36%; --y: 8%; --w: 27%; --r: -3deg; }
+      .s-groc { --x: 70%; --y: 26%; --w: 25%; --r: 3deg; }
+      .s-today { --x: 52%; --y: 57%; --w: 28%; --r: -1.5deg; }
+
+      /* The phone the note came from. */
+      .h-phone { position: absolute; left: 0; bottom: 0; width: 27%; aspect-ratio: 9 / 18.5; font-size: 2cqw; border: .45em solid var(--bezel); border-radius: 1.8em;
+                 background: var(--paper); padding: .7em .55em; display: flex; flex-direction: column; gap: .6em; box-shadow: var(--shadow); }
+      .h-phone .nz-logo { height: 1.15em; margin: .15em .25em 0; }
+      .h-list { display: flex; flex-direction: column; gap: .3em; }
+      .h-row { display: flex; align-items: center; gap: .4em; padding: .3em .5em .3em .55em; border-radius: .35em; background: var(--paper2); border-left: .4em solid var(--c);
+               font-family: 'Display', sans-serif; font-size: .95em; color: var(--ink); }
+      .h-row span { flex: 1; }
+      .h-row svg { width: .9em; height: .9em; fill: currentColor; opacity: .7; }
+      .h-row.on { background: color-mix(in srgb, var(--c) 45%, var(--paper)); }
+      .h-note { flex: 1; border-radius: .7em; background: var(--c); color: var(--fg); overflow: hidden; font-family: 'Display', sans-serif; display: flex; flex-direction: column; }
+      .h-head { display: flex; align-items: center; gap: .3em; background: var(--h); padding: .35em .35em .35em .7em; font-size: 1.05em; }
+      .h-head b { flex: 1; }
+      .h-pin { position: relative; width: 1.9em; height: 1.9em; border-radius: .5em; background: var(--fg); color: var(--c); display: grid; place-items: center; }
+      .h-pin svg { width: 1.1em; height: 1.1em; fill: currentColor; }
+      /* A ring on the pressed pin marks where the arrow starts. */
+      .h-pin::after { content: ''; position: absolute; inset: -.3em; border-radius: .7em; border: .14em solid var(--arrow); opacity: .75; }
+      @media (prefers-reduced-motion: no-preference) { .h-pin::after { animation: ring 2.4s ease-out infinite; } }
+      @keyframes ring { 0% { opacity: .9; transform: scale(1); } 70%, 100% { opacity: 0; transform: scale(1.45); } }
+      .h-body { padding: .6em .7em; line-height: 1.3; }
+
+      /* The curly arrow, drawn over everything but letting clicks through. */
+      .curl { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+      .curl-line { fill: none; stroke: var(--arrow); stroke-width: .55; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1.4 1.4; }
+      .curl marker path { fill: none; stroke: var(--arrow); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+      .curl-dot { fill: var(--arrow); }
+      @media (prefers-reduced-motion: no-preference) { .curl-line { animation: curlmarch 1.2s linear infinite; } }
+      @keyframes curlmarch { to { stroke-dashoffset: -5.6; } }
+
+      .scene-cap { display: flex; justify-content: space-between; gap: 16px; margin-top: 16px; font-family: 'Mono', monospace; font-size: 12px;
+                   letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+      .scene-cap span:last-child { text-align: right; }
+      @media (max-width: 700px) {
+        .screen .sticky { font-size: 2.3cqw; }
+        .h-phone { font-size: 2.3cqw; }
+        .s-dentist { --x: 39%; --w: 30%; }
+        .s-groc { --x: 67%; --y: 30%; --w: 31%; }
+        .s-today { --x: 47%; --y: 58%; --w: 33%; }
+        .scene-cap { font-size: 11px; letter-spacing: .04em; }
       }
-      @media (prefers-reduced-motion: reduce) { .rail { transition: none; } .act:hover { transform: none; } }
 
-      /* ---- screenshot bands ---- */
-      .band { padding: clamp(26px, 4vw, 44px) 0; }
-      .plate { border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; background: var(--raise);
-               box-shadow: var(--shadow); }
-      .cap { font-family: 'Plex', monospace; font-size: 12px; letter-spacing: .08em; color: var(--muted);
-             margin-top: 14px; text-transform: uppercase; }
+      /* ---------- one note, three places ---------- */
+      .places { display: grid; grid-template-columns: minmax(0, 1fr) 56px minmax(0, 1fr) 56px minmax(0, 1fr); align-items: start; margin-top: 44px; }
+      .place { margin: 0; }
+      .stage { height: 320px; border-radius: 20px; background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); position: relative; overflow: hidden; }
+      .place figcaption { margin-top: 16px; color: var(--muted); font-size: 16px; }
+      .place figcaption b { display: block; color: var(--ink); font-family: 'Display', sans-serif; font-size: 24px; line-height: 1.1; margin-bottom: 4px; }
+      .link { height: 2px; background: repeating-linear-gradient(90deg, var(--faint) 0 6px, transparent 6px 12px); background-size: 12px 2px; align-self: start; margin-top: 160px; }
+      @media (prefers-reduced-motion: no-preference) { .link { animation: march 1s linear infinite; } }
+      @keyframes march { to { background-position: 12px 0; } }
+      @media (max-width: 900px) {
+        .places { grid-template-columns: minmax(0, 1fr); }
+        .link { width: 2px; height: 40px; margin: 18px auto; background: repeating-linear-gradient(180deg, var(--faint) 0 6px, transparent 6px 12px); background-size: 2px 12px; }
+        @keyframes march { to { background-position: 0 12px; } }
+      }
+      /* phone with a home-screen widget */
+      .hs { position: absolute; left: 50%; top: 26px; width: 210px; margin-left: -105px; height: 340px; border-radius: 30px; border: 7px solid var(--bezel);
+            background: linear-gradient(160deg, var(--desk-a), var(--desk-b)); padding: 30px 14px 0; }
+      .hs .time { position: absolute; left: 18px; top: 8px; font-size: 11px; font-weight: 600; color: #1e1838; }
+      .hs .widget { border-radius: 16px; overflow: hidden; font-size: 13px; }
+      .hs .widget header { padding: .55em .9em .45em; }
+      .hs .widget .body { padding: .5em .9em .8em; }
+      .hs .icons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+      .hs .icons i { display: block; width: 100%; aspect-ratio: 1; border-radius: 11px; background: rgb(255 255 255 / 55%); }
+      .hs .icons img { width: 100%; height: auto; aspect-ratio: 1; border-radius: 11px; }
+      /* the file in Drive */
+      .file { position: absolute; inset: 22px; display: flex; flex-direction: column; gap: 10px; }
+      .crumbs { font-size: 14px; color: var(--muted); }
+      .fname { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; background: var(--paper2); border: 1px solid var(--line); font-family: 'Mono', monospace; font-size: 13px; }
+      .fname i { width: 14px; height: 17px; border-radius: 2px; background: #f0e7c2; border: 1px solid #d6c98f; flex: none; }
+      .file pre { margin: 0; font-family: 'Mono', monospace; font-size: 12.5px; line-height: 1.6; color: var(--muted); white-space: pre; overflow: hidden; }
+      .file pre b { color: var(--ink); font-weight: 400; }
+      /* the PC desktop */
+      .desk { position: absolute; inset: 0; background: linear-gradient(150deg, var(--desk-a), var(--desk-b)); }
+      .desk .w { position: absolute; left: 7%; top: 10%; width: 62%; height: 64%; border-radius: 8px; background: var(--win); border: 1px solid var(--win-line); }
+      .desk .w i { display: block; height: 9px; border-radius: 4px; background: var(--win-line); margin: 16px 16px 0; }
+      .desk .w i:nth-child(2) { width: 58%; } .desk .w i:nth-child(3) { width: 70%; } .desk .w i:nth-child(4) { width: 40%; }
+      .desk img { position: absolute; right: 6%; top: 8%; width: 60%; border-radius: 10px; transform: rotate(2.5deg); box-shadow: 0 16px 30px -10px rgb(0 0 0 / 45%); }
+      .desk .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 34px; background: var(--win); border-top: 1px solid var(--win-line); }
 
-      /* ---- sections ---- */
-      section { padding: clamp(56px, 8vw, 104px) 0; border-top: 1px solid var(--rule); }
-      h2 { font-size: clamp(34px, 5.4vw, 66px); }
-      .lede { font-size: clamp(19px, 1.6vw, 22px); color: var(--muted); margin-top: 18px; }
+      /* ---------- try it ---------- */
+      .try .wrap { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 56px; align-items: center; }
+      @media (max-width: 900px) { .try .wrap { grid-template-columns: minmax(0, 1fr); gap: 32px; } }
+      .status { margin-top: 26px; padding: 12px 16px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); font-size: 16px; display: flex; gap: 10px; align-items: center; }
+      .status::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: #3ccf8e; flex: none; }
+      .demo { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 24px; align-items: end; }
+      @media (max-width: 560px) { .demo { grid-template-columns: minmax(0, 1fr); } }
+      .d-phone { border-radius: 28px; border: 7px solid var(--bezel); background: var(--paper); height: 340px; padding: 12px 10px; display: flex; flex-direction: column; gap: 10px; box-shadow: var(--shadow); }
+      @media (max-width: 560px) { .d-phone { width: 220px; margin: 0 auto; } }
+      .d-phone .nz-logo { height: 18px; margin: 4px 4px 2px; }
+      .d-note { flex: 1; border-radius: 12px; background: var(--c); color: var(--fg); overflow: hidden; font-family: 'Display', sans-serif; display: flex; flex-direction: column; }
+      .d-head { display: flex; align-items: center; gap: 4px; background: var(--h); padding: 6px 6px 6px 12px; font-size: 17px; }
+      .d-head b { flex: 1; }
+      .d-btn { width: 40px; height: 40px; border-radius: 10px; border: 0; background: transparent; color: var(--fg); display: grid; place-items: center; cursor: pointer; }
+      .d-btn svg { width: 22px; height: 22px; fill: currentColor; }
+      .d-btn[aria-pressed="true"] { background: var(--fg); color: var(--c); }
+      .d-btn:disabled { opacity: .35; cursor: default; }
+      .d-body { padding: 12px; font-size: 16px; line-height: 1.35; }
+      .d-tap { font-family: 'Mono', monospace; font-size: 11px; color: var(--faint); text-align: center; }
+      .d-pc { display: flex; flex-direction: column; align-items: center; }
+      .d-screen { position: relative; width: 100%; aspect-ratio: 16 / 10; border-radius: 14px; border: 9px solid var(--bezel); overflow: hidden;
+                  background: linear-gradient(150deg, var(--desk-a), var(--desk-b)); box-shadow: var(--shadow); }
+      .d-screen .w { position: absolute; left: 6%; top: 9%; width: 56%; height: 70%; border-radius: 8px; background: var(--win); border: 1px solid var(--win-line); }
+      .d-screen .w i { display: block; height: 8px; border-radius: 4px; background: var(--win-line); margin: 14px 14px 0; }
+      .d-screen .w i:nth-child(2) { width: 50%; } .d-screen .w i:nth-child(3) { width: 66%; }
+      .d-screen .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 8%; background: var(--win); border-top: 1px solid var(--win-line); }
+      .d-sticky { position: absolute; top: 14%; right: 7%; width: 36%; font-size: clamp(11px, 1.6vw, 15px); --r: -2deg; transform: translateX(var(--tx, 0)) rotate(var(--r)); }
+      .d-stand { width: 16%; height: 22px; background: var(--bezel); clip-path: polygon(22% 0, 78% 0, 100% 100%, 0 100%); }
+      .demo[data-pinned="false"] .d-sticky { opacity: 0; --tx: 0; transform: translateY(-14px) scale(.94) rotate(var(--r)); }
+      .demo[data-tucked="true"] .d-sticky { --r: 0deg; --tx: calc(100% + 7% * 100 / 36 - 14px); }
+      @media (prefers-reduced-motion: no-preference) { .d-sticky { transition: transform .45s cubic-bezier(.3, .1, .2, 1), opacity .3s; } }
+      .demo.syncing .d-screen::after { content: 'syncing'; position: absolute; left: 12px; bottom: calc(8% + 8px); font-family: 'Mono', monospace; font-size: 11px; color: var(--ink);
+                                      padding: 3px 8px; border-radius: 99px; background: var(--paper); }
 
-      .rows { display: grid; gap: clamp(44px, 7vw, 92px); margin-top: clamp(38px, 5vw, 66px); }
-      .row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: clamp(24px, 4vw, 56px); align-items: center; }
-      .row.flip > .txt { order: 2; }
-      @media (max-width: 860px) { .row { grid-template-columns: 1fr; } .row.flip > .txt { order: 0; } }
-      h3 { font-size: clamp(25px, 3vw, 36px); }
-      .row p { margin: 14px 0 0; color: var(--muted); }
-      .notes-list { list-style: none; padding: 0; margin: 20px 0 0; font-size: 17.5px; }
-      .notes-list li { padding-left: 20px; position: relative; margin-bottom: 7px; color: var(--muted); }
-      .notes-list li::before { content: ''; position: absolute; left: 0; top: .72em; width: 9px; height: 1.5px; background: var(--ink); opacity: .5; }
+      /* ---------- features ---------- */
+      .feats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 22px; margin-top: 44px; }
+      @media (max-width: 1000px) { .feats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+      @media (max-width: 640px) { .feats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; } }
+      .fnote { background: var(--c); color: var(--fg); border-radius: 6px; padding: 18px 18px 22px; box-shadow: var(--shadow); transform: rotate(var(--r, 0deg)); }
+      .fnote:nth-child(3n + 1) { --r: -1.6deg; } .fnote:nth-child(3n + 2) { --r: 1.2deg; } .fnote:nth-child(4n) { --r: -.6deg; }
+      @media (prefers-reduced-motion: no-preference) { .fnote { transition: transform .2s; } .fnote:hover { transform: rotate(0deg) translateY(-4px); } }
+      .fnote svg { width: 28px; height: 28px; fill: currentColor; opacity: .85; }
+      .fnote h3 { margin-top: 12px; font-size: 22px; }
+      .fnote p { margin-top: 6px; font-size: 15px; line-height: 1.45; }
 
-      /* colour chips — the app's real palette, shown flat */
-      .chips { display: flex; gap: 7px; margin-top: 26px; flex-wrap: wrap; }
-      .chips i { width: 40px; height: 40px; border-radius: 3px; border: 1px solid rgba(35,38,42,.10); display: block; }
+      .frame { margin-top: 56px; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); background: #1e2027; }
+      .frame .tb { height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 14px; background: #2a2d35; }
+      .frame .tb i { width: 11px; height: 11px; border-radius: 50%; background: #4a4e59; }
+      .frame .tb span { margin-left: 8px; font-size: 13px; color: #a7abb8; }
+      .frame-cap { margin-top: 14px; color: var(--muted); font-size: 16px; }
 
-      /* ---- capability list, set as a table rather than cards ---- */
-      .caps { margin-top: clamp(34px, 5vw, 54px); border-top: 1px solid var(--rule); }
-      .cap-row { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: clamp(16px, 3vw, 40px);
-                 padding: 22px 0; border-bottom: 1px solid var(--rule); align-items: baseline; }
-      .cap-row h4 { font-family: 'Sofia', sans-serif; font-weight: 700; font-size: 22px; margin: 0; letter-spacing: -0.01em; }
-      .cap-row p { margin: 0; color: var(--muted); font-size: 17.5px; }
-      @media (max-width: 700px) { .cap-row { grid-template-columns: 1fr; gap: 6px; } }
+      /* ---------- your files ---------- */
+      .files .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: start; }
+      @media (max-width: 900px) { .files .wrap { grid-template-columns: minmax(0, 1fr); gap: 32px; } }
+      .spec { background: var(--paper); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 8px 22px; }
+      .spec div { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); font-size: 16px; }
+      .spec div:last-child { border-bottom: 0; }
+      .spec dt { color: var(--faint); font-family: 'Mono', monospace; font-size: 13px; padding-top: 2px; }
+      .spec dd { margin: 0; }
+      .spec code { font-family: 'Mono', monospace; font-size: 14px; }
+      @media (max-width: 520px) { .spec div { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
+      .files .more { margin-top: 18px; font-size: 16px; color: var(--muted); }
 
-      /* ---- the receipt: your notes are plain files ---- */
-      .receipt { font-family: 'Plex', monospace; font-size: 14px; line-height: 1.85; background: var(--raise);
-                 border: 1px solid var(--rule); border-radius: 4px; padding: 22px 24px; margin-top: 34px;
-                 overflow-x: auto; color: var(--ink); max-width: 620px; }
-      .receipt .k { color: var(--muted); }
-      .receipt .no { text-decoration: line-through; color: var(--muted); }
+      /* ---------- get it ---------- */
+      .get { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; margin-top: 48px; }
+      @media (max-width: 900px) { .get { grid-template-columns: minmax(0, 1fr); } }
+      .card { position: relative; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 34px 26px 26px; display: flex; flex-direction: column; gap: 10px; }
+      .card::before { content: ''; position: absolute; top: -12px; left: 50%; width: 96px; height: 26px; margin-left: -48px; background: var(--tape); opacity: .85; transform: rotate(-2deg); border-radius: 2px; }
+      .card:nth-child(1) { --tape: #a8e6e1; } .card:nth-child(2) { --tape: #e6a8c7; } .card:nth-child(3) { --tape: #e6d9a8; }
+      .card .plat { font-family: 'Mono', monospace; font-size: 13px; color: var(--faint); }
+      .card p { color: var(--muted); font-size: 16px; }
+      .card .btn { margin-top: auto; }
+      .caveats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px; margin-top: 26px; font-size: 14px; color: var(--faint); }
+      @media (max-width: 900px) { .caveats { grid-template-columns: minmax(0, 1fr); gap: 12px; } }
 
-      /* ---- get it ---- */
-      .get { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 2px;
-             margin-top: clamp(34px, 5vw, 54px); border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
-      .get > div { background: var(--raise); padding: 30px 28px; }
-      .get h4 { font-family: 'Sofia', sans-serif; font-size: 26px; font-weight: 700; margin: 0 0 8px; }
-      .get p { color: var(--muted); font-size: 17px; margin: 0 0 20px; }
-      .caveat { color: var(--muted); font-size: 16.5px; margin-top: 30px; padding-left: 16px; border-left: 2px solid var(--rule); }
-
-      footer { border-top: 1px solid var(--rule); padding: 30px 0 60px; }
-      footer .sheet { display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap;
-                      font-family: 'Plex', monospace; font-size: 12px; letter-spacing: .07em;
-                      text-transform: uppercase; color: var(--muted); }
-      footer a { color: var(--muted); text-decoration: none; margin-left: 18px; }
+      footer { padding: 30px 0 48px; font-size: 14px; color: var(--faint); }
+      footer .wrap { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; border-top: 1px solid var(--line); padding-top: 28px; }
+      footer nav { display: flex; gap: 22px; }
+      footer a { text-decoration: none; }
       footer a:hover { color: var(--ink); }
     </style>
   </head>
   <body>
-    <div class="rail" id="rail" aria-hidden="true">
-      <figure class="pinned">
-        <img src="shots/sticky.png" alt="" />
-        <figcaption>↑ a real sticky note<br />it stays while you scroll</figcaption>
-      </figure>
-    </div>
-
-    <div class="top">
-      <div class="sheet">
-        <a class="wordmark" href="#top"><svg class="nz-logo" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="NotezZz" viewBox="0 0 625.4 180.0"><defs><clipPath id="wov"><path d="M129.59 120.61 L250.40 103.63 A54 54 0 0 1 311.39 149.59 L328.37 270.40 A54 54 0 0 1 282.41 331.39 L161.60 348.37 A54 54 0 0 1 100.61 302.41 L83.63 181.60 A54 54 0 0 1 129.59 120.61 Z"/></clipPath></defs><g transform="translate(-14.7 -14.7) scale(0.40909)"><g transform="translate(256 256) scale(1.25000) translate(-256 -258)"><path d="M129.59 120.61 L250.40 103.63 A54 54 0 0 1 311.39 149.59 L328.37 270.40 A54 54 0 0 1 282.41 331.39 L161.60 348.37 A54 54 0 0 1 100.61 302.41 L83.63 181.60 A54 54 0 0 1 129.59 120.61 Z" class="nz-mc"/><path d="M261.60 167.63 L382.41 184.61 A54 54 0 0 1 428.37 245.60 L411.39 366.41 A54 54 0 0 1 350.40 412.37 L229.59 395.39 A54 54 0 0 1 183.63 334.40 L200.61 213.59 A54 54 0 0 1 261.60 167.63 Z" class="nz-mp"/><g clip-path="url(#wov)"><path d="M261.60 167.63 L382.41 184.61 A54 54 0 0 1 428.37 245.60 L411.39 366.41 A54 54 0 0 1 350.40 412.37 L229.59 395.39 A54 54 0 0 1 183.63 334.40 L200.61 213.59 A54 54 0 0 1 261.60 167.63 Z" class="nz-my"/></g></g></g><g transform="translate(196.0 152.2)"><path d="M10.3 -6.5 L10.5 -5.3 L10.8 -4.1 L11.9 -2.3 L12.8 -1.4 L13.9 -0.7 L15.1 -0.2 L16.1 -0.0 L24.2 0.0 L26.1 -0.2 L27.4 -0.8 L28.8 -1.8 L29.7 -2.9 L30.3 -4.1 L30.7 -5.3 L30.8 -6.5 L30.8 -57.8 L30.7 -68.6 L31.1 -70.1 L32.0 -71.3 L33.3 -72.0 L34.8 -72.2 L35.9 -72.0 L36.9 -71.4 L37.7 -70.6 L38.1 -69.9 L62.0 -4.3 L63.1 -2.4 L64.0 -1.5 L64.9 -0.8 L66.1 -0.3 L67.4 -0.0 L84.5 -0.0 L86.3 -0.2 L87.7 -0.8 L89.1 -1.8 L90.0 -2.9 L90.8 -4.7 L91.0 -6.5 L91.0 -117.9 L90.8 -119.7 L90.2 -121.1 L89.2 -122.4 L88.1 -123.4 L86.5 -124.1 L85.1 -124.4 L77.1 -124.4 L75.7 -124.3 L73.9 -123.6 L72.5 -122.6 L71.4 -121.1 L70.8 -119.7 L70.6 -117.9 L70.7 -56.0 L70.3 -54.5 L69.4 -53.3 L68.1 -52.5 L66.9 -52.3 L65.8 -52.5 L64.8 -52.9 L63.9 -53.6 L63.1 -54.9 L39.6 -120.1 L38.5 -121.9 L37.6 -122.9 L36.5 -123.6 L35.3 -124.1 L34.2 -124.4 L16.9 -124.4 L15.1 -124.1 L13.7 -123.6 L12.3 -122.6 L11.4 -121.4 L10.6 -119.7 L10.3 -117.9 Z" fill="currentColor" fill-rule="evenodd"/><path d="M145.0 1.4 L149.6 1.1 L153.8 0.3 L158.9 -1.2 L162.3 -2.8 L165.5 -5.0 L168.2 -7.3 L170.2 -9.6 L171.3 -11.1 L173.1 -14.3 L174.5 -17.8 L175.2 -20.1 L176.1 -24.0 L176.6 -28.4 L176.8 -33.1 L176.7 -62.9 L176.4 -67.2 L176.0 -69.7 L175.2 -73.4 L174.0 -77.1 L172.4 -80.4 L171.2 -82.4 L169.1 -85.2 L166.9 -87.4 L164.1 -89.5 L162.2 -90.7 L158.9 -92.3 L155.6 -93.4 L153.4 -94.0 L149.3 -94.7 L145.0 -95.0 L140.3 -95.0 L135.9 -94.6 L131.8 -93.9 L126.7 -92.3 L123.3 -90.7 L120.0 -88.5 L117.3 -86.1 L115.3 -83.8 L114.3 -82.4 L112.4 -79.1 L111.0 -75.7 L110.3 -73.4 L109.4 -69.4 L108.9 -65.0 L108.7 -60.4 L108.7 -30.5 L109.1 -26.2 L109.4 -23.7 L110.3 -20.0 L111.5 -16.3 L113.1 -13.0 L114.3 -11.1 L116.5 -8.3 L118.7 -6.1 L121.5 -4.0 L123.4 -2.8 L126.7 -1.2 L130.0 -0.1 L132.2 0.4 L136.3 1.1 L140.6 1.4 Z M141.9 -16.8 L139.9 -17.0 L137.6 -17.5 L136.0 -18.2 L134.4 -19.2 L133.3 -20.3 L132.2 -21.6 L131.3 -23.5 L130.6 -25.3 L129.9 -29.1 L129.6 -32.7 L129.6 -60.7 L129.9 -64.3 L130.6 -68.1 L131.6 -70.8 L133.2 -73.1 L135.0 -74.7 L137.5 -75.9 L140.1 -76.4 L143.6 -76.6 L145.7 -76.4 L148.0 -75.9 L149.6 -75.2 L151.2 -74.2 L152.3 -73.2 L153.3 -71.8 L154.3 -70.0 L154.9 -68.1 L155.6 -64.3 L155.9 -60.7 L155.9 -32.7 L155.6 -29.1 L154.9 -25.3 L153.9 -22.7 L152.4 -20.4 L150.6 -18.8 L148.1 -17.6 L145.4 -17.0 Z" fill="currentColor" fill-rule="evenodd"/><path d="M187.0 -81.8 L187.2 -80.4 L187.8 -78.8 L188.6 -77.6 L189.5 -76.7 L191.0 -75.8 L192.2 -75.4 L196.1 -75.3 L197.2 -75.0 L197.9 -74.6 L198.7 -73.9 L199.3 -72.9 L199.5 -72.1 L199.6 -29.1 L199.9 -22.6 L200.4 -18.4 L201.5 -13.5 L202.7 -10.1 L204.4 -6.8 L206.5 -4.3 L208.0 -3.0 L209.6 -1.9 L211.6 -0.9 L213.4 -0.2 L218.0 0.9 L223.3 1.4 L227.1 1.4 L230.3 1.2 L233.5 0.9 L236.8 0.2 L238.7 -0.2 L240.0 -0.9 L241.1 -1.7 L242.1 -3.1 L242.7 -4.3 L243.0 -5.8 L242.9 -12.2 L242.2 -14.0 L241.4 -15.2 L240.5 -16.1 L239.6 -16.7 L237.6 -17.4 L235.8 -17.4 L232.8 -16.9 L230.1 -16.8 L227.9 -16.9 L226.0 -17.4 L224.4 -18.2 L223.1 -19.3 L222.1 -20.9 L221.4 -22.8 L220.8 -25.7 L220.5 -29.3 L220.5 -71.4 L220.8 -72.9 L221.4 -73.9 L222.2 -74.6 L223.3 -75.1 L224.4 -75.3 L237.0 -75.3 L238.9 -75.8 L240.5 -76.8 L241.4 -77.7 L242.1 -78.8 L242.5 -80.0 L242.8 -81.2 L242.7 -87.7 L242.3 -89.4 L241.7 -90.5 L240.8 -91.6 L239.8 -92.4 L238.7 -93.0 L237.5 -93.4 L224.0 -93.5 L222.9 -93.8 L221.9 -94.3 L221.0 -95.5 L220.5 -97.0 L220.4 -112.2 L220.1 -113.6 L219.4 -115.2 L218.6 -116.2 L217.6 -117.0 L216.5 -117.6 L215.3 -118.0 L213.9 -118.1 L207.3 -118.0 L205.9 -117.6 L204.3 -116.6 L203.1 -115.3 L202.3 -113.6 L202.0 -112.2 L200.5 -97.0 L200.0 -95.5 L199.1 -94.3 L198.1 -93.8 L197.0 -93.5 L192.2 -93.3 L190.4 -92.6 L188.9 -91.5 L187.8 -89.9 L187.1 -88.1 Z" fill="currentColor" fill-rule="evenodd"/><path d="M274.0 -37.8 L274.3 -39.3 L274.9 -40.3 L275.8 -41.0 L277.2 -41.6 L314.0 -41.7 L315.4 -42.0 L317.0 -42.7 L318.1 -43.7 L318.9 -44.7 L319.7 -46.2 L319.9 -47.7 L320.0 -60.5 L319.6 -67.3 L319.2 -69.8 L318.5 -73.5 L317.8 -75.8 L316.6 -79.0 L315.6 -81.0 L314.0 -83.5 L312.6 -85.3 L310.6 -87.4 L307.4 -89.8 L304.4 -91.6 L301.4 -92.8 L299.1 -93.5 L295.6 -94.3 L293.2 -94.7 L289.0 -95.0 L284.4 -95.0 L281.9 -94.9 L278.1 -94.4 L275.8 -93.9 L272.4 -92.9 L270.3 -92.1 L267.4 -90.7 L264.6 -88.8 L262.8 -87.4 L260.7 -85.2 L258.4 -82.0 L256.9 -79.2 L256.1 -77.5 L254.8 -73.4 L253.7 -67.5 L253.3 -60.3 L253.3 -32.6 L253.5 -27.7 L254.0 -23.2 L255.3 -17.6 L256.9 -13.8 L257.7 -12.2 L259.3 -9.7 L261.6 -7.0 L264.5 -4.5 L267.0 -2.9 L268.6 -2.0 L272.5 -0.5 L275.9 0.4 L278.2 0.8 L284.6 1.4 L291.3 1.3 L297.5 0.6 L302.8 -0.8 L305.5 -1.9 L307.3 -2.8 L309.5 -4.3 L311.0 -5.5 L312.8 -7.3 L314.0 -8.8 L315.6 -11.3 L316.8 -14.1 L317.8 -17.1 L318.4 -20.6 L318.3 -22.5 L317.9 -23.9 L317.0 -25.4 L315.6 -26.7 L314.3 -27.4 L312.4 -27.8 L304.6 -27.8 L302.6 -27.5 L300.9 -26.6 L299.5 -25.3 L298.6 -23.8 L297.8 -21.1 L297.1 -19.6 L296.0 -18.2 L294.4 -17.0 L292.1 -16.1 L289.4 -15.6 L286.1 -15.5 L282.6 -16.0 L280.3 -16.9 L278.2 -18.3 L276.7 -20.0 L275.6 -22.2 L274.8 -24.8 L274.3 -27.8 L274.0 -31.2 Z M274.0 -59.5 L274.2 -65.2 L274.4 -67.4 L275.0 -69.9 L275.9 -72.1 L276.8 -73.6 L278.1 -75.1 L279.4 -76.1 L281.1 -77.0 L283.4 -77.7 L286.1 -77.9 L289.4 -77.8 L291.8 -77.3 L293.8 -76.4 L295.5 -75.1 L296.8 -73.5 L297.8 -71.5 L298.6 -69.1 L299.0 -66.4 L299.3 -63.1 L299.3 -59.5 L299.1 -58.8 L298.6 -57.7 L297.9 -56.9 L296.9 -56.3 L295.4 -56.0 L277.2 -56.1 L275.8 -56.7 L274.9 -57.4 L274.5 -58.1 Z" fill="currentColor" fill-rule="evenodd"/><path d="M354.7 -9.3 L354.1 -7.6 L354.0 -6.2 L354.3 -4.5 L354.9 -3.2 L355.9 -1.9 L357.0 -1.0 L358.5 -0.3 L360.0 -0.0 L421.2 -0.0 L422.9 -0.2 L424.3 -0.8 L425.7 -1.8 L426.6 -2.9 L427.3 -4.5 L427.6 -5.9 L427.5 -13.9 L427.1 -15.3 L426.2 -16.7 L425.2 -17.8 L423.7 -18.7 L422.5 -19.0 L421.1 -19.2 L387.5 -19.1 L386.1 -19.5 L385.1 -20.2 L384.3 -21.5 L383.9 -23.0 L384.1 -24.1 L384.4 -24.8 L391.3 -38.2 L428.9 -115.6 L429.2 -116.8 L429.3 -118.0 L429.0 -120.0 L428.4 -121.2 L427.8 -122.0 L426.3 -123.4 L424.6 -124.2 L422.8 -124.4 L363.0 -124.4 L361.2 -124.1 L359.9 -123.6 L358.5 -122.6 L357.6 -121.4 L356.8 -119.9 L356.6 -118.4 L356.6 -110.5 L357.0 -109.3 L357.7 -108.0 L358.8 -106.7 L360.0 -105.9 L361.7 -105.3 L363.1 -105.2 L395.3 -105.2 L396.7 -104.8 L397.9 -103.9 L398.7 -102.5 L398.9 -101.4 L398.8 -100.6 L398.4 -99.6 L393.9 -90.4 Z" class="nz-zm" fill-rule="evenodd"/><path d="M343.3 -9.3 L342.7 -7.6 L342.6 -6.2 L342.9 -4.5 L343.5 -3.2 L344.5 -1.9 L345.7 -1.0 L347.2 -0.3 L348.6 -0.0 L409.8 -0.0 L411.6 -0.2 L412.9 -0.8 L414.3 -1.8 L415.2 -2.9 L416.0 -4.5 L416.2 -5.9 L416.2 -13.9 L415.7 -15.3 L414.8 -16.7 L413.8 -17.8 L412.3 -18.7 L411.1 -19.0 L409.7 -19.2 L376.2 -19.1 L374.7 -19.5 L373.8 -20.2 L372.9 -21.5 L372.6 -23.0 L372.7 -24.1 L373.0 -24.8 L379.9 -38.2 L417.5 -115.6 L417.9 -117.6 L417.9 -118.8 L417.7 -119.8 L417.2 -121.0 L416.5 -122.0 L414.9 -123.4 L413.2 -124.2 L411.4 -124.4 L351.6 -124.4 L349.9 -124.1 L348.5 -123.6 L347.1 -122.6 L346.2 -121.4 L345.5 -119.9 L345.2 -118.4 L345.3 -110.5 L345.7 -109.1 L346.6 -107.6 L347.5 -106.7 L348.7 -105.9 L350.3 -105.3 L351.7 -105.2 L383.9 -105.2 L385.4 -104.8 L386.6 -103.9 L387.2 -102.9 L387.5 -101.4 L387.4 -100.6 L387.1 -99.6 L382.5 -90.4 Z" class="nz-zy" fill-rule="evenodd"/><path d="M331.9 -9.3 L331.4 -7.6 L331.3 -6.2 L331.6 -4.5 L332.1 -3.2 L333.2 -1.9 L334.3 -1.0 L335.8 -0.3 L337.2 -0.0 L398.4 -0.0 L400.2 -0.2 L401.5 -0.8 L402.9 -1.8 L403.9 -2.9 L404.6 -4.5 L404.9 -5.9 L404.8 -13.9 L404.4 -15.3 L403.5 -16.7 L402.4 -17.8 L401.0 -18.7 L399.8 -19.0 L398.4 -19.2 L364.8 -19.1 L363.3 -19.5 L362.4 -20.2 L361.5 -21.5 L361.2 -23.0 L361.4 -24.1 L361.7 -24.8 L368.6 -38.2 L406.1 -115.6 L406.5 -116.8 L406.6 -118.0 L406.2 -120.0 L405.7 -121.2 L405.1 -122.0 L403.6 -123.4 L401.9 -124.2 L400.0 -124.4 L340.2 -124.4 L338.5 -124.1 L337.1 -123.6 L335.8 -122.6 L334.8 -121.4 L334.1 -119.9 L333.8 -118.4 L333.9 -110.5 L334.3 -109.3 L334.9 -108.0 L336.1 -106.7 L337.3 -105.9 L338.9 -105.3 L340.3 -105.2 L372.5 -105.2 L374.0 -104.8 L375.2 -103.9 L375.9 -102.5 L376.1 -101.4 L376.1 -100.6 L375.7 -99.6 L371.1 -90.4 Z" class="nz-zb" fill-rule="evenodd"/></g></svg></a>
+    <header class="top">
+      <div class="wrap">
+        <a href="#top" aria-label="NotezZz home"><svg class="nz-logo" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="NotezZz" viewBox="0 0 625.4 180.0"><defs><clipPath id="wovh"><path d="M129.59 120.61 L250.40 103.63 A54 54 0 0 1 311.39 149.59 L328.37 270.40 A54 54 0 0 1 282.41 331.39 L161.60 348.37 A54 54 0 0 1 100.61 302.41 L83.63 181.60 A54 54 0 0 1 129.59 120.61 Z"/></clipPath></defs><g transform="translate(-14.7 -14.7) scale(0.40909)"><g transform="translate(256 256) scale(1.25000) translate(-256 -258)"><path d="M129.59 120.61 L250.40 103.63 A54 54 0 0 1 311.39 149.59 L328.37 270.40 A54 54 0 0 1 282.41 331.39 L161.60 348.37 A54 54 0 0 1 100.61 302.41 L83.63 181.60 A54 54 0 0 1 129.59 120.61 Z" class="nz-mc"/><path d="M261.60 167.63 L382.41 184.61 A54 54 0 0 1 428.37 245.60 L411.39 366.41 A54 54 0 0 1 350.40 412.37 L229.59 395.39 A54 54 0 0 1 183.63 334.40 L200.61 213.59 A54 54 0 0 1 261.60 167.63 Z" class="nz-mp"/><g clip-path="url(#wovh)"><path d="M261.60 167.63 L382.41 184.61 A54 54 0 0 1 428.37 245.60 L411.39 366.41 A54 54 0 0 1 350.40 412.37 L229.59 395.39 A54 54 0 0 1 183.63 334.40 L200.61 213.59 A54 54 0 0 1 261.60 167.63 Z" class="nz-my"/></g></g></g><g transform="translate(196.0 152.2)"><path d="M10.3 -6.5 L10.5 -5.3 L10.8 -4.1 L11.9 -2.3 L12.8 -1.4 L13.9 -0.7 L15.1 -0.2 L16.1 -0.0 L24.2 0.0 L26.1 -0.2 L27.4 -0.8 L28.8 -1.8 L29.7 -2.9 L30.3 -4.1 L30.7 -5.3 L30.8 -6.5 L30.8 -57.8 L30.7 -68.6 L31.1 -70.1 L32.0 -71.3 L33.3 -72.0 L34.8 -72.2 L35.9 -72.0 L36.9 -71.4 L37.7 -70.6 L38.1 -69.9 L62.0 -4.3 L63.1 -2.4 L64.0 -1.5 L64.9 -0.8 L66.1 -0.3 L67.4 -0.0 L84.5 -0.0 L86.3 -0.2 L87.7 -0.8 L89.1 -1.8 L90.0 -2.9 L90.8 -4.7 L91.0 -6.5 L91.0 -117.9 L90.8 -119.7 L90.2 -121.1 L89.2 -122.4 L88.1 -123.4 L86.5 -124.1 L85.1 -124.4 L77.1 -124.4 L75.7 -124.3 L73.9 -123.6 L72.5 -122.6 L71.4 -121.1 L70.8 -119.7 L70.6 -117.9 L70.7 -56.0 L70.3 -54.5 L69.4 -53.3 L68.1 -52.5 L66.9 -52.3 L65.8 -52.5 L64.8 -52.9 L63.9 -53.6 L63.1 -54.9 L39.6 -120.1 L38.5 -121.9 L37.6 -122.9 L36.5 -123.6 L35.3 -124.1 L34.2 -124.4 L16.9 -124.4 L15.1 -124.1 L13.7 -123.6 L12.3 -122.6 L11.4 -121.4 L10.6 -119.7 L10.3 -117.9 Z" fill="currentColor" fill-rule="evenodd"/><path d="M145.0 1.4 L149.6 1.1 L153.8 0.3 L158.9 -1.2 L162.3 -2.8 L165.5 -5.0 L168.2 -7.3 L170.2 -9.6 L171.3 -11.1 L173.1 -14.3 L174.5 -17.8 L175.2 -20.1 L176.1 -24.0 L176.6 -28.4 L176.8 -33.1 L176.7 -62.9 L176.4 -67.2 L176.0 -69.7 L175.2 -73.4 L174.0 -77.1 L172.4 -80.4 L171.2 -82.4 L169.1 -85.2 L166.9 -87.4 L164.1 -89.5 L162.2 -90.7 L158.9 -92.3 L155.6 -93.4 L153.4 -94.0 L149.3 -94.7 L145.0 -95.0 L140.3 -95.0 L135.9 -94.6 L131.8 -93.9 L126.7 -92.3 L123.3 -90.7 L120.0 -88.5 L117.3 -86.1 L115.3 -83.8 L114.3 -82.4 L112.4 -79.1 L111.0 -75.7 L110.3 -73.4 L109.4 -69.4 L108.9 -65.0 L108.7 -60.4 L108.7 -30.5 L109.1 -26.2 L109.4 -23.7 L110.3 -20.0 L111.5 -16.3 L113.1 -13.0 L114.3 -11.1 L116.5 -8.3 L118.7 -6.1 L121.5 -4.0 L123.4 -2.8 L126.7 -1.2 L130.0 -0.1 L132.2 0.4 L136.3 1.1 L140.6 1.4 Z M141.9 -16.8 L139.9 -17.0 L137.6 -17.5 L136.0 -18.2 L134.4 -19.2 L133.3 -20.3 L132.2 -21.6 L131.3 -23.5 L130.6 -25.3 L129.9 -29.1 L129.6 -32.7 L129.6 -60.7 L129.9 -64.3 L130.6 -68.1 L131.6 -70.8 L133.2 -73.1 L135.0 -74.7 L137.5 -75.9 L140.1 -76.4 L143.6 -76.6 L145.7 -76.4 L148.0 -75.9 L149.6 -75.2 L151.2 -74.2 L152.3 -73.2 L153.3 -71.8 L154.3 -70.0 L154.9 -68.1 L155.6 -64.3 L155.9 -60.7 L155.9 -32.7 L155.6 -29.1 L154.9 -25.3 L153.9 -22.7 L152.4 -20.4 L150.6 -18.8 L148.1 -17.6 L145.4 -17.0 Z" fill="currentColor" fill-rule="evenodd"/><path d="M187.0 -81.8 L187.2 -80.4 L187.8 -78.8 L188.6 -77.6 L189.5 -76.7 L191.0 -75.8 L192.2 -75.4 L196.1 -75.3 L197.2 -75.0 L197.9 -74.6 L198.7 -73.9 L199.3 -72.9 L199.5 -72.1 L199.6 -29.1 L199.9 -22.6 L200.4 -18.4 L201.5 -13.5 L202.7 -10.1 L204.4 -6.8 L206.5 -4.3 L208.0 -3.0 L209.6 -1.9 L211.6 -0.9 L213.4 -0.2 L218.0 0.9 L223.3 1.4 L227.1 1.4 L230.3 1.2 L233.5 0.9 L236.8 0.2 L238.7 -0.2 L240.0 -0.9 L241.1 -1.7 L242.1 -3.1 L242.7 -4.3 L243.0 -5.8 L242.9 -12.2 L242.2 -14.0 L241.4 -15.2 L240.5 -16.1 L239.6 -16.7 L237.6 -17.4 L235.8 -17.4 L232.8 -16.9 L230.1 -16.8 L227.9 -16.9 L226.0 -17.4 L224.4 -18.2 L223.1 -19.3 L222.1 -20.9 L221.4 -22.8 L220.8 -25.7 L220.5 -29.3 L220.5 -71.4 L220.8 -72.9 L221.4 -73.9 L222.2 -74.6 L223.3 -75.1 L224.4 -75.3 L237.0 -75.3 L238.9 -75.8 L240.5 -76.8 L241.4 -77.7 L242.1 -78.8 L242.5 -80.0 L242.8 -81.2 L242.7 -87.7 L242.3 -89.4 L241.7 -90.5 L240.8 -91.6 L239.8 -92.4 L238.7 -93.0 L237.5 -93.4 L224.0 -93.5 L222.9 -93.8 L221.9 -94.3 L221.0 -95.5 L220.5 -97.0 L220.4 -112.2 L220.1 -113.6 L219.4 -115.2 L218.6 -116.2 L217.6 -117.0 L216.5 -117.6 L215.3 -118.0 L213.9 -118.1 L207.3 -118.0 L205.9 -117.6 L204.3 -116.6 L203.1 -115.3 L202.3 -113.6 L202.0 -112.2 L200.5 -97.0 L200.0 -95.5 L199.1 -94.3 L198.1 -93.8 L197.0 -93.5 L192.2 -93.3 L190.4 -92.6 L188.9 -91.5 L187.8 -89.9 L187.1 -88.1 Z" fill="currentColor" fill-rule="evenodd"/><path d="M274.0 -37.8 L274.3 -39.3 L274.9 -40.3 L275.8 -41.0 L277.2 -41.6 L314.0 -41.7 L315.4 -42.0 L317.0 -42.7 L318.1 -43.7 L318.9 -44.7 L319.7 -46.2 L319.9 -47.7 L320.0 -60.5 L319.6 -67.3 L319.2 -69.8 L318.5 -73.5 L317.8 -75.8 L316.6 -79.0 L315.6 -81.0 L314.0 -83.5 L312.6 -85.3 L310.6 -87.4 L307.4 -89.8 L304.4 -91.6 L301.4 -92.8 L299.1 -93.5 L295.6 -94.3 L293.2 -94.7 L289.0 -95.0 L284.4 -95.0 L281.9 -94.9 L278.1 -94.4 L275.8 -93.9 L272.4 -92.9 L270.3 -92.1 L267.4 -90.7 L264.6 -88.8 L262.8 -87.4 L260.7 -85.2 L258.4 -82.0 L256.9 -79.2 L256.1 -77.5 L254.8 -73.4 L253.7 -67.5 L253.3 -60.3 L253.3 -32.6 L253.5 -27.7 L254.0 -23.2 L255.3 -17.6 L256.9 -13.8 L257.7 -12.2 L259.3 -9.7 L261.6 -7.0 L264.5 -4.5 L267.0 -2.9 L268.6 -2.0 L272.5 -0.5 L275.9 0.4 L278.2 0.8 L284.6 1.4 L291.3 1.3 L297.5 0.6 L302.8 -0.8 L305.5 -1.9 L307.3 -2.8 L309.5 -4.3 L311.0 -5.5 L312.8 -7.3 L314.0 -8.8 L315.6 -11.3 L316.8 -14.1 L317.8 -17.1 L318.4 -20.6 L318.3 -22.5 L317.9 -23.9 L317.0 -25.4 L315.6 -26.7 L314.3 -27.4 L312.4 -27.8 L304.6 -27.8 L302.6 -27.5 L300.9 -26.6 L299.5 -25.3 L298.6 -23.8 L297.8 -21.1 L297.1 -19.6 L296.0 -18.2 L294.4 -17.0 L292.1 -16.1 L289.4 -15.6 L286.1 -15.5 L282.6 -16.0 L280.3 -16.9 L278.2 -18.3 L276.7 -20.0 L275.6 -22.2 L274.8 -24.8 L274.3 -27.8 L274.0 -31.2 Z M274.0 -59.5 L274.2 -65.2 L274.4 -67.4 L275.0 -69.9 L275.9 -72.1 L276.8 -73.6 L278.1 -75.1 L279.4 -76.1 L281.1 -77.0 L283.4 -77.7 L286.1 -77.9 L289.4 -77.8 L291.8 -77.3 L293.8 -76.4 L295.5 -75.1 L296.8 -73.5 L297.8 -71.5 L298.6 -69.1 L299.0 -66.4 L299.3 -63.1 L299.3 -59.5 L299.1 -58.8 L298.6 -57.7 L297.9 -56.9 L296.9 -56.3 L295.4 -56.0 L277.2 -56.1 L275.8 -56.7 L274.9 -57.4 L274.5 -58.1 Z" fill="currentColor" fill-rule="evenodd"/><path d="M354.7 -9.3 L354.1 -7.6 L354.0 -6.2 L354.3 -4.5 L354.9 -3.2 L355.9 -1.9 L357.0 -1.0 L358.5 -0.3 L360.0 -0.0 L421.2 -0.0 L422.9 -0.2 L424.3 -0.8 L425.7 -1.8 L426.6 -2.9 L427.3 -4.5 L427.6 -5.9 L427.5 -13.9 L427.1 -15.3 L426.2 -16.7 L425.2 -17.8 L423.7 -18.7 L422.5 -19.0 L421.1 -19.2 L387.5 -19.1 L386.1 -19.5 L385.1 -20.2 L384.3 -21.5 L383.9 -23.0 L384.1 -24.1 L384.4 -24.8 L391.3 -38.2 L428.9 -115.6 L429.2 -116.8 L429.3 -118.0 L429.0 -120.0 L428.4 -121.2 L427.8 -122.0 L426.3 -123.4 L424.6 -124.2 L422.8 -124.4 L363.0 -124.4 L361.2 -124.1 L359.9 -123.6 L358.5 -122.6 L357.6 -121.4 L356.8 -119.9 L356.6 -118.4 L356.6 -110.5 L357.0 -109.3 L357.7 -108.0 L358.8 -106.7 L360.0 -105.9 L361.7 -105.3 L363.1 -105.2 L395.3 -105.2 L396.7 -104.8 L397.9 -103.9 L398.7 -102.5 L398.9 -101.4 L398.8 -100.6 L398.4 -99.6 L393.9 -90.4 Z" class="nz-zm" fill-rule="evenodd"/><path d="M343.3 -9.3 L342.7 -7.6 L342.6 -6.2 L342.9 -4.5 L343.5 -3.2 L344.5 -1.9 L345.7 -1.0 L347.2 -0.3 L348.6 -0.0 L409.8 -0.0 L411.6 -0.2 L412.9 -0.8 L414.3 -1.8 L415.2 -2.9 L416.0 -4.5 L416.2 -5.9 L416.2 -13.9 L415.7 -15.3 L414.8 -16.7 L413.8 -17.8 L412.3 -18.7 L411.1 -19.0 L409.7 -19.2 L376.2 -19.1 L374.7 -19.5 L373.8 -20.2 L372.9 -21.5 L372.6 -23.0 L372.7 -24.1 L373.0 -24.8 L379.9 -38.2 L417.5 -115.6 L417.9 -117.6 L417.9 -118.8 L417.7 -119.8 L417.2 -121.0 L416.5 -122.0 L414.9 -123.4 L413.2 -124.2 L411.4 -124.4 L351.6 -124.4 L349.9 -124.1 L348.5 -123.6 L347.1 -122.6 L346.2 -121.4 L345.5 -119.9 L345.2 -118.4 L345.3 -110.5 L345.7 -109.1 L346.6 -107.6 L347.5 -106.7 L348.7 -105.9 L350.3 -105.3 L351.7 -105.2 L383.9 -105.2 L385.4 -104.8 L386.6 -103.9 L387.2 -102.9 L387.5 -101.4 L387.4 -100.6 L387.1 -99.6 L382.5 -90.4 Z" class="nz-zy" fill-rule="evenodd"/><path d="M331.9 -9.3 L331.4 -7.6 L331.3 -6.2 L331.6 -4.5 L332.1 -3.2 L333.2 -1.9 L334.3 -1.0 L335.8 -0.3 L337.2 -0.0 L398.4 -0.0 L400.2 -0.2 L401.5 -0.8 L402.9 -1.8 L403.9 -2.9 L404.6 -4.5 L404.9 -5.9 L404.8 -13.9 L404.4 -15.3 L403.5 -16.7 L402.4 -17.8 L401.0 -18.7 L399.8 -19.0 L398.4 -19.2 L364.8 -19.1 L363.3 -19.5 L362.4 -20.2 L361.5 -21.5 L361.2 -23.0 L361.4 -24.1 L361.7 -24.8 L368.6 -38.2 L406.1 -115.6 L406.5 -116.8 L406.6 -118.0 L406.2 -120.0 L405.7 -121.2 L405.1 -122.0 L403.6 -123.4 L401.9 -124.2 L400.0 -124.4 L340.2 -124.4 L338.5 -124.1 L337.1 -123.6 L335.8 -122.6 L334.8 -121.4 L334.1 -119.9 L333.8 -118.4 L333.9 -110.5 L334.3 -109.3 L334.9 -108.0 L336.1 -106.7 L337.3 -105.9 L338.9 -105.3 L340.3 -105.2 L372.5 -105.2 L374.0 -104.8 L375.2 -103.9 L375.9 -102.5 L376.1 -101.4 L376.1 -100.6 L375.7 -99.6 L371.1 -90.4 Z" class="nz-zb" fill-rule="evenodd"/></g></svg></a>
         <nav>
-          <a class="hide-s" href="#writing">Writing</a>
-          <a class="hide-s" href="#throw">Phone → PC</a>
-          <a class="hide-s" href="#files">Your files</a>
-          <a href="#get">Get it</a>
+          <a href="#places">How it works</a>
+          <a href="#try">Try the pin</a>
+          <a href="#features">Features</a>
+          <a href="#files">Your files</a>
+          <a class="cta" href="#get">Get it free</a>
         </nav>
       </div>
-    </div>
+    </header>
 
-    <div class="sheet hero" id="top">
-      <div class="ruled">
-        <div class="mark">Windows<br />Android<br />Web</div>
-        <div class="body hero-grid">
+    <main id="top">
+      <section class="hero">
+        <div class="wrap">
           <div>
-            <h1>Notes that<br />stick <em>around.</em></h1>
-            <p class="stand">
-              Write it, sketch it or say it on your phone — then <b>pin it, and it appears on your
-              PC screen</b>, on top of everything, waiting for you. Your notes live in your own
-              Google Drive as ordinary files, and nowhere else.
-            </p>
+            <h1>Sticky notes that follow you <span class="hl">to your desk.</span></h1>
+            <p class="lede">Write a note on your phone and pin it. It's waiting on your Windows desktop, on top of everything, when you sit down. It's free, and your notes stay in your own Google Drive.</p>
             <div class="acts">
-              <a class="act solid" href="https://github.com/voodoofox/NotezZz/releases/latest/download/NotezZz-Setup.exe">
-                <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" /></svg>
+              <a class="btn solid" href="https://github.com/voodoofox/NotezZz/releases/latest/download/NotezZz-Setup.exe">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.1 10.4 4v7.2H3V5.1zm8.4-1.2L21 2.5v8.7h-9.6V3.9zM3 12.2h7.4v7.2L3 18.3v-6.1zm8.4 0H21V21l-9.6-1.4v-7.4z"/></svg>
                 Download for Windows
               </a>
-              <a class="act" href="https://github.com/voodoofox/NotezZz/releases/latest/download/NotezZz-Android.apk">Get the Android app</a>
-              <a class="act" href="https://flatvoxel.com/NotezZz/">Open the web app</a>
+              <a class="btn" href="https://github.com/voodoofox/NotezZz/releases/latest/download/NotezZz-Android.apk">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 9.2 19.3 6a.4.4 0 0 0-.7-.4l-1.8 3.2A10.6 10.6 0 0 0 12 7.8c-1.7 0-3.3.4-4.8 1L5.4 5.6a.4.4 0 0 0-.7.4l1.8 3.2A9.2 9.2 0 0 0 2 16.5h20a9.2 9.2 0 0 0-4.5-7.3zM7.5 13.8a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm9 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></svg>
+                Get the Android app
+              </a>
+              <a class="btn" href="https://flatvoxel.com/NotezZz/">Open the web app</a>
             </div>
-            <p class="under">Free · no account with us · <span data-version>v0.18.12 · 15 Sep 2026</span></p>
-
-            <div class="plate" style="margin-top: clamp(40px, 6vw, 76px)">
-              <img src="shots/app-dark.png" alt="NotezZz on Windows: the note list on the left, a formatted note open on the right" width="2400" height="1360" />
-            </div>
-            <p class="cap">Windows · dark theme · the note keeps its own colour</p>
+            <p class="under">Free · no account with us · <span data-version>v0.26.0</span></p>
           </div>
-          <!-- Reserved space for the fixed rail (see .rail); on narrow screens
-               the note appears inline here instead. -->
-          <aside>
-            <figure class="pinned hero-inline">
-              <img src="shots/sticky.png" alt="A yellow sticky note pinned on the desktop, listing groceries" />
-              <figcaption>↑ a real sticky note</figcaption>
-            </figure>
-          </aside>
-        </div>
-      </div>
-    </div>
 
-    <section id="writing">
-      <div class="sheet ruled">
-        <div class="mark">Writing</div>
-        <div class="body">
-          <h2>Everything a thought<br />arrives as</h2>
-          <p class="lede">Typed, drawn, photographed or spoken — one note holds all of it, and all of it syncs.</p>
-
-          <div class="rows">
-            <div class="row">
-              <div class="txt">
-                <h3>Ink, not mouse trails</h3>
-                <p>
-                  Strokes are shaped by speed and pressure, so a quick sketch looks like a pen rather
-                  than a wobble. Erase whole strokes, drop a photo underneath, draw on top of it.
-                </p>
-                <ul class="notes-list">
-                  <li>Finger, stylus or mouse</li>
-                  <li>Vectors — they stay sharp at any size</li>
-                  <li>Stored inside the note, synced like text</li>
-                </ul>
-              </div>
-              <div class="plate">
-                <img src="shots/app-drawing.png" alt="A note containing a hand-drawn sketch" width="2400" height="1360" loading="lazy" />
-              </div>
-            </div>
-
-            <div class="row flip">
-              <div class="txt">
-                <h3>Ten colours that agree with each other</h3>
-                <p>
-                  Even steps around the colour wheel at one saturation, plus paper and graphite. When
-                  none of them is right, slide hue, shade and saturation until it is.
-                </p>
-                <div class="chips" aria-hidden="true">
-                  <i style="background:#FBFAF6"></i><i style="background:#F0CDC2"></i>
-                  <i style="background:#F0E7C2"></i><i style="background:#D9F0C2"></i>
-                  <i style="background:#C2F0CD"></i><i style="background:#C2F0EC"></i>
-                  <i style="background:#C2D9F0"></i><i style="background:#D3C2F0"></i>
-                  <i style="background:#F0C2D9"></i><i style="background:#292C31"></i>
+          <figure class="scene-fig" aria-label="A note pinned on a phone appears as a sticky note on a PC screen">
+            <div class="scene">
+              <div class="mon">
+                <div class="screen">
+                  <div class="w" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+                  <article class="sticky c-rose s-dentist"><header><b>Dentist</b><i aria-hidden="true">×</i></header>
+                    <div class="body">3 pm Thursday. Bring the form.</div></article>
+                  <article class="sticky c-sun s-groc"><header><b>Groceries</b><i aria-hidden="true">×</i></header>
+                    <div class="body"><ul><li>Olive oil</li><li>Rye bread</li><li>Coffee beans</li></ul></div></article>
+                  <article class="sticky c-sky s-today"><header><b>Today</b><i aria-hidden="true">×</i></header>
+                    <div class="body"><ul class="check"><li class="done">Send the invoice</li><li>Call the landlord</li></ul></div></article>
+                  <div class="bar" aria-hidden="true"></div>
                 </div>
               </div>
-              <div class="plate">
-                <img src="shots/app-colors.png" alt="The colour picker open, showing the palette grid and custom colour sliders" width="1800" height="1240" loading="lazy" />
+              <div class="mon-stand" aria-hidden="true"></div>
+              <div class="h-phone" aria-hidden="true">
+                <svg class="nz-logo" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="NotezZz" viewBox="0 0 625.4 180.0"><defs><clipPath id="wovhp"><path d="M129.59 120.61 L250.40 103.63 A54 54 0 0 1 311.39 149.59 L328.37 270.40 A54 54 0 0 1 282.41 331.39 L161.60 348.37 A54 54 0 0 1 100.61 302.41 L83.63 181.60 A54 54 0 0 1 129.59 120.61 Z"/></clipPath></defs><g transform="translate(-14.7 -14.7) scale(0.40909)"><g transform="translate(256 256) scale(1.25000) translate(-256 -258)"><path d="M129.59 120.61 L250.40 103.63 A54 54 0 0 1 311.39 149.59 L328.37 270.40 A54 54 0 0 1 282.41 331.39 L161.60 348.37 A54 54 0 0 1 100.61 302.41 L83.63 181.60 A54 54 0 0 1 129.59 120.61 Z" class="nz-mc"/><path d="M261.60 167.63 L382.41 184.61 A54 54 0 0 1 428.37 245.60 L411.39 366.41 A54 54 0 0 1 350.40 412.37 L229.59 395.39 A54 54 0 0 1 183.63 334.40 L200.61 213.59 A54 54 0 0 1 261.60 167.63 Z" class="nz-mp"/><g clip-path="url(#wovhp)"><path d="M261.60 167.63 L382.41 184.61 A54 54 0 0 1 428.37 245.60 L411.39 366.41 A54 54 0 0 1 350.40 412.37 L229.59 395.39 A54 54 0 0 1 183.63 334.40 L200.61 213.59 A54 54 0 0 1 261.60 167.63 Z" class="nz-my"/></g></g></g><g transform="translate(196.0 152.2)"><path d="M10.3 -6.5 L10.5 -5.3 L10.8 -4.1 L11.9 -2.3 L12.8 -1.4 L13.9 -0.7 L15.1 -0.2 L16.1 -0.0 L24.2 0.0 L26.1 -0.2 L27.4 -0.8 L28.8 -1.8 L29.7 -2.9 L30.3 -4.1 L30.7 -5.3 L30.8 -6.5 L30.8 -57.8 L30.7 -68.6 L31.1 -70.1 L32.0 -71.3 L33.3 -72.0 L34.8 -72.2 L35.9 -72.0 L36.9 -71.4 L37.7 -70.6 L38.1 -69.9 L62.0 -4.3 L63.1 -2.4 L64.0 -1.5 L64.9 -0.8 L66.1 -0.3 L67.4 -0.0 L84.5 -0.0 L86.3 -0.2 L87.7 -0.8 L89.1 -1.8 L90.0 -2.9 L90.8 -4.7 L91.0 -6.5 L91.0 -117.9 L90.8 -119.7 L90.2 -121.1 L89.2 -122.4 L88.1 -123.4 L86.5 -124.1 L85.1 -124.4 L77.1 -124.4 L75.7 -124.3 L73.9 -123.6 L72.5 -122.6 L71.4 -121.1 L70.8 -119.7 L70.6 -117.9 L70.7 -56.0 L70.3 -54.5 L69.4 -53.3 L68.1 -52.5 L66.9 -52.3 L65.8 -52.5 L64.8 -52.9 L63.9 -53.6 L63.1 -54.9 L39.6 -120.1 L38.5 -121.9 L37.6 -122.9 L36.5 -123.6 L35.3 -124.1 L34.2 -124.4 L16.9 -124.4 L15.1 -124.1 L13.7 -123.6 L12.3 -122.6 L11.4 -121.4 L10.6 -119.7 L10.3 -117.9 Z" fill="currentColor" fill-rule="evenodd"/><path d="M145.0 1.4 L149.6 1.1 L153.8 0.3 L158.9 -1.2 L162.3 -2.8 L165.5 -5.0 L168.2 -7.3 L170.2 -9.6 L171.3 -11.1 L173.1 -14.3 L174.5 -17.8 L175.2 -20.1 L176.1 -24.0 L176.6 -28.4 L176.8 -33.1 L176.7 -62.9 L176.4 -67.2 L176.0 -69.7 L175.2 -73.4 L174.0 -77.1 L172.4 -80.4 L171.2 -82.4 L169.1 -85.2 L166.9 -87.4 L164.1 -89.5 L162.2 -90.7 L158.9 -92.3 L155.6 -93.4 L153.4 -94.0 L149.3 -94.7 L145.0 -95.0 L140.3 -95.0 L135.9 -94.6 L131.8 -93.9 L126.7 -92.3 L123.3 -90.7 L120.0 -88.5 L117.3 -86.1 L115.3 -83.8 L114.3 -82.4 L112.4 -79.1 L111.0 -75.7 L110.3 -73.4 L109.4 -69.4 L108.9 -65.0 L108.7 -60.4 L108.7 -30.5 L109.1 -26.2 L109.4 -23.7 L110.3 -20.0 L111.5 -16.3 L113.1 -13.0 L114.3 -11.1 L116.5 -8.3 L118.7 -6.1 L121.5 -4.0 L123.4 -2.8 L126.7 -1.2 L130.0 -0.1 L132.2 0.4 L136.3 1.1 L140.6 1.4 Z M141.9 -16.8 L139.9 -17.0 L137.6 -17.5 L136.0 -18.2 L134.4 -19.2 L133.3 -20.3 L132.2 -21.6 L131.3 -23.5 L130.6 -25.3 L129.9 -29.1 L129.6 -32.7 L129.6 -60.7 L129.9 -64.3 L130.6 -68.1 L131.6 -70.8 L133.2 -73.1 L135.0 -74.7 L137.5 -75.9 L140.1 -76.4 L143.6 -76.6 L145.7 -76.4 L148.0 -75.9 L149.6 -75.2 L151.2 -74.2 L152.3 -73.2 L153.3 -71.8 L154.3 -70.0 L154.9 -68.1 L155.6 -64.3 L155.9 -60.7 L155.9 -32.7 L155.6 -29.1 L154.9 -25.3 L153.9 -22.7 L152.4 -20.4 L150.6 -18.8 L148.1 -17.6 L145.4 -17.0 Z" fill="currentColor" fill-rule="evenodd"/><path d="M187.0 -81.8 L187.2 -80.4 L187.8 -78.8 L188.6 -77.6 L189.5 -76.7 L191.0 -75.8 L192.2 -75.4 L196.1 -75.3 L197.2 -75.0 L197.9 -74.6 L198.7 -73.9 L199.3 -72.9 L199.5 -72.1 L199.6 -29.1 L199.9 -22.6 L200.4 -18.4 L201.5 -13.5 L202.7 -10.1 L204.4 -6.8 L206.5 -4.3 L208.0 -3.0 L209.6 -1.9 L211.6 -0.9 L213.4 -0.2 L218.0 0.9 L223.3 1.4 L227.1 1.4 L230.3 1.2 L233.5 0.9 L236.8 0.2 L238.7 -0.2 L240.0 -0.9 L241.1 -1.7 L242.1 -3.1 L242.7 -4.3 L243.0 -5.8 L242.9 -12.2 L242.2 -14.0 L241.4 -15.2 L240.5 -16.1 L239.6 -16.7 L237.6 -17.4 L235.8 -17.4 L232.8 -16.9 L230.1 -16.8 L227.9 -16.9 L226.0 -17.4 L224.4 -18.2 L223.1 -19.3 L222.1 -20.9 L221.4 -22.8 L220.8 -25.7 L220.5 -29.3 L220.5 -71.4 L220.8 -72.9 L221.4 -73.9 L222.2 -74.6 L223.3 -75.1 L224.4 -75.3 L237.0 -75.3 L238.9 -75.8 L240.5 -76.8 L241.4 -77.7 L242.1 -78.8 L242.5 -80.0 L242.8 -81.2 L242.7 -87.7 L242.3 -89.4 L241.7 -90.5 L240.8 -91.6 L239.8 -92.4 L238.7 -93.0 L237.5 -93.4 L224.0 -93.5 L222.9 -93.8 L221.9 -94.3 L221.0 -95.5 L220.5 -97.0 L220.4 -112.2 L220.1 -113.6 L219.4 -115.2 L218.6 -116.2 L217.6 -117.0 L216.5 -117.6 L215.3 -118.0 L213.9 -118.1 L207.3 -118.0 L205.9 -117.6 L204.3 -116.6 L203.1 -115.3 L202.3 -113.6 L202.0 -112.2 L200.5 -97.0 L200.0 -95.5 L199.1 -94.3 L198.1 -93.8 L197.0 -93.5 L192.2 -93.3 L190.4 -92.6 L188.9 -91.5 L187.8 -89.9 L187.1 -88.1 Z" fill="currentColor" fill-rule="evenodd"/><path d="M274.0 -37.8 L274.3 -39.3 L274.9 -40.3 L275.8 -41.0 L277.2 -41.6 L314.0 -41.7 L315.4 -42.0 L317.0 -42.7 L318.1 -43.7 L318.9 -44.7 L319.7 -46.2 L319.9 -47.7 L320.0 -60.5 L319.6 -67.3 L319.2 -69.8 L318.5 -73.5 L317.8 -75.8 L316.6 -79.0 L315.6 -81.0 L314.0 -83.5 L312.6 -85.3 L310.6 -87.4 L307.4 -89.8 L304.4 -91.6 L301.4 -92.8 L299.1 -93.5 L295.6 -94.3 L293.2 -94.7 L289.0 -95.0 L284.4 -95.0 L281.9 -94.9 L278.1 -94.4 L275.8 -93.9 L272.4 -92.9 L270.3 -92.1 L267.4 -90.7 L264.6 -88.8 L262.8 -87.4 L260.7 -85.2 L258.4 -82.0 L256.9 -79.2 L256.1 -77.5 L254.8 -73.4 L253.7 -67.5 L253.3 -60.3 L253.3 -32.6 L253.5 -27.7 L254.0 -23.2 L255.3 -17.6 L256.9 -13.8 L257.7 -12.2 L259.3 -9.7 L261.6 -7.0 L264.5 -4.5 L267.0 -2.9 L268.6 -2.0 L272.5 -0.5 L275.9 0.4 L278.2 0.8 L284.6 1.4 L291.3 1.3 L297.5 0.6 L302.8 -0.8 L305.5 -1.9 L307.3 -2.8 L309.5 -4.3 L311.0 -5.5 L312.8 -7.3 L314.0 -8.8 L315.6 -11.3 L316.8 -14.1 L317.8 -17.1 L318.4 -20.6 L318.3 -22.5 L317.9 -23.9 L317.0 -25.4 L315.6 -26.7 L314.3 -27.4 L312.4 -27.8 L304.6 -27.8 L302.6 -27.5 L300.9 -26.6 L299.5 -25.3 L298.6 -23.8 L297.8 -21.1 L297.1 -19.6 L296.0 -18.2 L294.4 -17.0 L292.1 -16.1 L289.4 -15.6 L286.1 -15.5 L282.6 -16.0 L280.3 -16.9 L278.2 -18.3 L276.7 -20.0 L275.6 -22.2 L274.8 -24.8 L274.3 -27.8 L274.0 -31.2 Z M274.0 -59.5 L274.2 -65.2 L274.4 -67.4 L275.0 -69.9 L275.9 -72.1 L276.8 -73.6 L278.1 -75.1 L279.4 -76.1 L281.1 -77.0 L283.4 -77.7 L286.1 -77.9 L289.4 -77.8 L291.8 -77.3 L293.8 -76.4 L295.5 -75.1 L296.8 -73.5 L297.8 -71.5 L298.6 -69.1 L299.0 -66.4 L299.3 -63.1 L299.3 -59.5 L299.1 -58.8 L298.6 -57.7 L297.9 -56.9 L296.9 -56.3 L295.4 -56.0 L277.2 -56.1 L275.8 -56.7 L274.9 -57.4 L274.5 -58.1 Z" fill="currentColor" fill-rule="evenodd"/><path d="M354.7 -9.3 L354.1 -7.6 L354.0 -6.2 L354.3 -4.5 L354.9 -3.2 L355.9 -1.9 L357.0 -1.0 L358.5 -0.3 L360.0 -0.0 L421.2 -0.0 L422.9 -0.2 L424.3 -0.8 L425.7 -1.8 L426.6 -2.9 L427.3 -4.5 L427.6 -5.9 L427.5 -13.9 L427.1 -15.3 L426.2 -16.7 L425.2 -17.8 L423.7 -18.7 L422.5 -19.0 L421.1 -19.2 L387.5 -19.1 L386.1 -19.5 L385.1 -20.2 L384.3 -21.5 L383.9 -23.0 L384.1 -24.1 L384.4 -24.8 L391.3 -38.2 L428.9 -115.6 L429.2 -116.8 L429.3 -118.0 L429.0 -120.0 L428.4 -121.2 L427.8 -122.0 L426.3 -123.4 L424.6 -124.2 L422.8 -124.4 L363.0 -124.4 L361.2 -124.1 L359.9 -123.6 L358.5 -122.6 L357.6 -121.4 L356.8 -119.9 L356.6 -118.4 L356.6 -110.5 L357.0 -109.3 L357.7 -108.0 L358.8 -106.7 L360.0 -105.9 L361.7 -105.3 L363.1 -105.2 L395.3 -105.2 L396.7 -104.8 L397.9 -103.9 L398.7 -102.5 L398.9 -101.4 L398.8 -100.6 L398.4 -99.6 L393.9 -90.4 Z" class="nz-zm" fill-rule="evenodd"/><path d="M343.3 -9.3 L342.7 -7.6 L342.6 -6.2 L342.9 -4.5 L343.5 -3.2 L344.5 -1.9 L345.7 -1.0 L347.2 -0.3 L348.6 -0.0 L409.8 -0.0 L411.6 -0.2 L412.9 -0.8 L414.3 -1.8 L415.2 -2.9 L416.0 -4.5 L416.2 -5.9 L416.2 -13.9 L415.7 -15.3 L414.8 -16.7 L413.8 -17.8 L412.3 -18.7 L411.1 -19.0 L409.7 -19.2 L376.2 -19.1 L374.7 -19.5 L373.8 -20.2 L372.9 -21.5 L372.6 -23.0 L372.7 -24.1 L373.0 -24.8 L379.9 -38.2 L417.5 -115.6 L417.9 -117.6 L417.9 -118.8 L417.7 -119.8 L417.2 -121.0 L416.5 -122.0 L414.9 -123.4 L413.2 -124.2 L411.4 -124.4 L351.6 -124.4 L349.9 -124.1 L348.5 -123.6 L347.1 -122.6 L346.2 -121.4 L345.5 -119.9 L345.2 -118.4 L345.3 -110.5 L345.7 -109.1 L346.6 -107.6 L347.5 -106.7 L348.7 -105.9 L350.3 -105.3 L351.7 -105.2 L383.9 -105.2 L385.4 -104.8 L386.6 -103.9 L387.2 -102.9 L387.5 -101.4 L387.4 -100.6 L387.1 -99.6 L382.5 -90.4 Z" class="nz-zy" fill-rule="evenodd"/><path d="M331.9 -9.3 L331.4 -7.6 L331.3 -6.2 L331.6 -4.5 L332.1 -3.2 L333.2 -1.9 L334.3 -1.0 L335.8 -0.3 L337.2 -0.0 L398.4 -0.0 L400.2 -0.2 L401.5 -0.8 L402.9 -1.8 L403.9 -2.9 L404.6 -4.5 L404.9 -5.9 L404.8 -13.9 L404.4 -15.3 L403.5 -16.7 L402.4 -17.8 L401.0 -18.7 L399.8 -19.0 L398.4 -19.2 L364.8 -19.1 L363.3 -19.5 L362.4 -20.2 L361.5 -21.5 L361.2 -23.0 L361.4 -24.1 L361.7 -24.8 L368.6 -38.2 L406.1 -115.6 L406.5 -116.8 L406.6 -118.0 L406.2 -120.0 L405.7 -121.2 L405.1 -122.0 L403.6 -123.4 L401.9 -124.2 L400.0 -124.4 L340.2 -124.4 L338.5 -124.1 L337.1 -123.6 L335.8 -122.6 L334.8 -121.4 L334.1 -119.9 L333.8 -118.4 L333.9 -110.5 L334.3 -109.3 L334.9 -108.0 L336.1 -106.7 L337.3 -105.9 L338.9 -105.3 L340.3 -105.2 L372.5 -105.2 L374.0 -104.8 L375.2 -103.9 L375.9 -102.5 L376.1 -101.4 L376.1 -100.6 L375.7 -99.6 L371.1 -90.4 Z" class="nz-zb" fill-rule="evenodd"/></g></svg>
+                <div class="h-list">
+                  <div class="h-row c-rose on"><span>Dentist</span><svg viewBox="0 0 24 24"><path d="M16 9V4h1a1 1 0 0 0 0-2H7a1 1 0 0 0 0 2h1v5a3 3 0 0 1-3 3v2h6v7l1 1 1-1v-7h6v-2a3 3 0 0 1-3-3z"/></svg></div>
+                  <div class="h-row c-sun"><span>Groceries</span><svg viewBox="0 0 24 24"><path d="M16 9V4h1a1 1 0 0 0 0-2H7a1 1 0 0 0 0 2h1v5a3 3 0 0 1-3 3v2h6v7l1 1 1-1v-7h6v-2a3 3 0 0 1-3-3z"/></svg></div>
+                  <div class="h-row c-sky"><span>Today</span><svg viewBox="0 0 24 24"><path d="M16 9V4h1a1 1 0 0 0 0-2H7a1 1 0 0 0 0 2h1v5a3 3 0 0 1-3 3v2h6v7l1 1 1-1v-7h6v-2a3 3 0 0 1-3-3z"/></svg></div>
+                </div>
+                <div class="h-note c-rose">
+                  <div class="h-head"><b>Dentist</b><span class="h-pin"><svg viewBox="0 0 24 24"><path d="M16 9V4h1a1 1 0 0 0 0-2H7a1 1 0 0 0 0 2h1v5a3 3 0 0 1-3 3v2h6v7l1 1 1-1v-7h6v-2a3 3 0 0 1-3-3z"/></svg></span></div>
+                  <div class="h-body">3 pm Thursday. Bring the form.</div>
+                </div>
               </div>
+              <svg class="curl" viewBox="0 0 100 68.75" aria-hidden="true">
+                <defs><marker id="curlhead" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto" markerUnits="strokeWidth"><path d="M1.5 1.5 L7.5 5 L1.5 8.5" /></marker></defs>
+                <path class="curl-line" d="" marker-end="url(#curlhead)" />
+                <circle class="curl-dot" cx="0" cy="0" r="0" />
+              </svg>
             </div>
-          </div>
+            <figcaption class="scene-cap"><span>Pinned on your phone</span><span>On your PC seconds later</span></figcaption>
+          </figure>
+        </div>
+      </section>
 
-          <div class="caps">
-            <div class="cap-row">
-              <h4>Voice memos</h4>
-              <p>Press record and talk. The clip lands in the note as a player, small enough to sync in a blink.</p>
+      <section id="places">
+        <div class="wrap">
+          <h2>One note. Your phone, your Drive, your PC.</h2>
+          <p class="lede">Here is the same shopping list three ways: a widget on your phone, a file in your Google Drive, and a sticky on your Windows desktop. Change it in one place and the others catch up.</p>
+          <div class="places">
+            <figure class="place">
+              <div class="stage" aria-hidden="true">
+                <div class="hs">
+                  <span class="time">9:41</span>
+                  <div class="sticky widget c-sun"><header><b>Groceries</b></header><div class="body"><ul><li>Olive oil</li><li>Rye bread</li><li>Coffee beans</li><li>Lemons</li></ul></div></div>
+                  <div class="icons"><img src="icon.svg" alt="" /><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                </div>
+              </div>
+              <figcaption><b>On your phone</b>A home-screen widget. Tap it and the note opens.</figcaption>
+            </figure>
+            <div class="link" aria-hidden="true"></div>
+            <figure class="place">
+              <div class="stage" aria-hidden="true">
+                <div class="file">
+                  <div class="crumbs">My Drive › NotezZz › notes</div>
+                  <div class="fname"><i></i>a3f2c91e-7b4d….json</div>
+<pre>{
+  "id": "a3f2c91e-7b4d…",
+  <b>"title": "Groceries",</b>
+  "contentHtml": "&lt;ul&gt;&lt;li&gt;Olive oil…",
+  "paletteId": "sunflower",
+  <b>"pinned": true,</b>
+  …
+}</pre>
+                </div>
+              </div>
+              <figcaption><b>In your Google Drive</b>Each note is one small file in a folder the app made. The files are yours to keep.</figcaption>
+            </figure>
+            <div class="link" aria-hidden="true"></div>
+            <figure class="place">
+              <div class="stage">
+                <div class="desk">
+                  <div class="w" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+                  <img src="shots/sticky.png" alt="The Groceries note as a sticky window on the Windows desktop" loading="lazy" />
+                  <div class="bar" aria-hidden="true"></div>
+                </div>
+              </div>
+              <figcaption><b>On your PC</b>Because it's pinned, it floats above your work until you close it.</figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <section id="try" class="try">
+        <div class="wrap">
+          <div>
+            <h2>Pin it from the sofa. Unpin it at your desk.</h2>
+            <p class="lede">Pinning belongs to the note, not to one device. Tap the pin on the phone and watch the PC. The tuck button slides the sticky against the screen edge when it's in the way.</p>
+            <p class="status" role="status" aria-live="polite">Pinned. The sticky is open on your PC.</p>
+          </div>
+          <div class="demo" data-pinned="true" data-tucked="false">
+            <div class="d-phone">
+              <svg class="nz-logo" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="NotezZz" viewBox="0 0 625.4 180.0"><defs><clipPath id="wovd"><path d="M129.59 120.61 L250.40 103.63 A54 54 0 0 1 311.39 149.59 L328.37 270.40 A54 54 0 0 1 282.41 331.39 L161.60 348.37 A54 54 0 0 1 100.61 302.41 L83.63 181.60 A54 54 0 0 1 129.59 120.61 Z"/></clipPath></defs><g transform="translate(-14.7 -14.7) scale(0.40909)"><g transform="translate(256 256) scale(1.25000) translate(-256 -258)"><path d="M129.59 120.61 L250.40 103.63 A54 54 0 0 1 311.39 149.59 L328.37 270.40 A54 54 0 0 1 282.41 331.39 L161.60 348.37 A54 54 0 0 1 100.61 302.41 L83.63 181.60 A54 54 0 0 1 129.59 120.61 Z" class="nz-mc"/><path d="M261.60 167.63 L382.41 184.61 A54 54 0 0 1 428.37 245.60 L411.39 366.41 A54 54 0 0 1 350.40 412.37 L229.59 395.39 A54 54 0 0 1 183.63 334.40 L200.61 213.59 A54 54 0 0 1 261.60 167.63 Z" class="nz-mp"/><g clip-path="url(#wovd)"><path d="M261.60 167.63 L382.41 184.61 A54 54 0 0 1 428.37 245.60 L411.39 366.41 A54 54 0 0 1 350.40 412.37 L229.59 395.39 A54 54 0 0 1 183.63 334.40 L200.61 213.59 A54 54 0 0 1 261.60 167.63 Z" class="nz-my"/></g></g></g><g transform="translate(196.0 152.2)"><path d="M10.3 -6.5 L10.5 -5.3 L10.8 -4.1 L11.9 -2.3 L12.8 -1.4 L13.9 -0.7 L15.1 -0.2 L16.1 -0.0 L24.2 0.0 L26.1 -0.2 L27.4 -0.8 L28.8 -1.8 L29.7 -2.9 L30.3 -4.1 L30.7 -5.3 L30.8 -6.5 L30.8 -57.8 L30.7 -68.6 L31.1 -70.1 L32.0 -71.3 L33.3 -72.0 L34.8 -72.2 L35.9 -72.0 L36.9 -71.4 L37.7 -70.6 L38.1 -69.9 L62.0 -4.3 L63.1 -2.4 L64.0 -1.5 L64.9 -0.8 L66.1 -0.3 L67.4 -0.0 L84.5 -0.0 L86.3 -0.2 L87.7 -0.8 L89.1 -1.8 L90.0 -2.9 L90.8 -4.7 L91.0 -6.5 L91.0 -117.9 L90.8 -119.7 L90.2 -121.1 L89.2 -122.4 L88.1 -123.4 L86.5 -124.1 L85.1 -124.4 L77.1 -124.4 L75.7 -124.3 L73.9 -123.6 L72.5 -122.6 L71.4 -121.1 L70.8 -119.7 L70.6 -117.9 L70.7 -56.0 L70.3 -54.5 L69.4 -53.3 L68.1 -52.5 L66.9 -52.3 L65.8 -52.5 L64.8 -52.9 L63.9 -53.6 L63.1 -54.9 L39.6 -120.1 L38.5 -121.9 L37.6 -122.9 L36.5 -123.6 L35.3 -124.1 L34.2 -124.4 L16.9 -124.4 L15.1 -124.1 L13.7 -123.6 L12.3 -122.6 L11.4 -121.4 L10.6 -119.7 L10.3 -117.9 Z" fill="currentColor" fill-rule="evenodd"/><path d="M145.0 1.4 L149.6 1.1 L153.8 0.3 L158.9 -1.2 L162.3 -2.8 L165.5 -5.0 L168.2 -7.3 L170.2 -9.6 L171.3 -11.1 L173.1 -14.3 L174.5 -17.8 L175.2 -20.1 L176.1 -24.0 L176.6 -28.4 L176.8 -33.1 L176.7 -62.9 L176.4 -67.2 L176.0 -69.7 L175.2 -73.4 L174.0 -77.1 L172.4 -80.4 L171.2 -82.4 L169.1 -85.2 L166.9 -87.4 L164.1 -89.5 L162.2 -90.7 L158.9 -92.3 L155.6 -93.4 L153.4 -94.0 L149.3 -94.7 L145.0 -95.0 L140.3 -95.0 L135.9 -94.6 L131.8 -93.9 L126.7 -92.3 L123.3 -90.7 L120.0 -88.5 L117.3 -86.1 L115.3 -83.8 L114.3 -82.4 L112.4 -79.1 L111.0 -75.7 L110.3 -73.4 L109.4 -69.4 L108.9 -65.0 L108.7 -60.4 L108.7 -30.5 L109.1 -26.2 L109.4 -23.7 L110.3 -20.0 L111.5 -16.3 L113.1 -13.0 L114.3 -11.1 L116.5 -8.3 L118.7 -6.1 L121.5 -4.0 L123.4 -2.8 L126.7 -1.2 L130.0 -0.1 L132.2 0.4 L136.3 1.1 L140.6 1.4 Z M141.9 -16.8 L139.9 -17.0 L137.6 -17.5 L136.0 -18.2 L134.4 -19.2 L133.3 -20.3 L132.2 -21.6 L131.3 -23.5 L130.6 -25.3 L129.9 -29.1 L129.6 -32.7 L129.6 -60.7 L129.9 -64.3 L130.6 -68.1 L131.6 -70.8 L133.2 -73.1 L135.0 -74.7 L137.5 -75.9 L140.1 -76.4 L143.6 -76.6 L145.7 -76.4 L148.0 -75.9 L149.6 -75.2 L151.2 -74.2 L152.3 -73.2 L153.3 -71.8 L154.3 -70.0 L154.9 -68.1 L155.6 -64.3 L155.9 -60.7 L155.9 -32.7 L155.6 -29.1 L154.9 -25.3 L153.9 -22.7 L152.4 -20.4 L150.6 -18.8 L148.1 -17.6 L145.4 -17.0 Z" fill="currentColor" fill-rule="evenodd"/><path d="M187.0 -81.8 L187.2 -80.4 L187.8 -78.8 L188.6 -77.6 L189.5 -76.7 L191.0 -75.8 L192.2 -75.4 L196.1 -75.3 L197.2 -75.0 L197.9 -74.6 L198.7 -73.9 L199.3 -72.9 L199.5 -72.1 L199.6 -29.1 L199.9 -22.6 L200.4 -18.4 L201.5 -13.5 L202.7 -10.1 L204.4 -6.8 L206.5 -4.3 L208.0 -3.0 L209.6 -1.9 L211.6 -0.9 L213.4 -0.2 L218.0 0.9 L223.3 1.4 L227.1 1.4 L230.3 1.2 L233.5 0.9 L236.8 0.2 L238.7 -0.2 L240.0 -0.9 L241.1 -1.7 L242.1 -3.1 L242.7 -4.3 L243.0 -5.8 L242.9 -12.2 L242.2 -14.0 L241.4 -15.2 L240.5 -16.1 L239.6 -16.7 L237.6 -17.4 L235.8 -17.4 L232.8 -16.9 L230.1 -16.8 L227.9 -16.9 L226.0 -17.4 L224.4 -18.2 L223.1 -19.3 L222.1 -20.9 L221.4 -22.8 L220.8 -25.7 L220.5 -29.3 L220.5 -71.4 L220.8 -72.9 L221.4 -73.9 L222.2 -74.6 L223.3 -75.1 L224.4 -75.3 L237.0 -75.3 L238.9 -75.8 L240.5 -76.8 L241.4 -77.7 L242.1 -78.8 L242.5 -80.0 L242.8 -81.2 L242.7 -87.7 L242.3 -89.4 L241.7 -90.5 L240.8 -91.6 L239.8 -92.4 L238.7 -93.0 L237.5 -93.4 L224.0 -93.5 L222.9 -93.8 L221.9 -94.3 L221.0 -95.5 L220.5 -97.0 L220.4 -112.2 L220.1 -113.6 L219.4 -115.2 L218.6 -116.2 L217.6 -117.0 L216.5 -117.6 L215.3 -118.0 L213.9 -118.1 L207.3 -118.0 L205.9 -117.6 L204.3 -116.6 L203.1 -115.3 L202.3 -113.6 L202.0 -112.2 L200.5 -97.0 L200.0 -95.5 L199.1 -94.3 L198.1 -93.8 L197.0 -93.5 L192.2 -93.3 L190.4 -92.6 L188.9 -91.5 L187.8 -89.9 L187.1 -88.1 Z" fill="currentColor" fill-rule="evenodd"/><path d="M274.0 -37.8 L274.3 -39.3 L274.9 -40.3 L275.8 -41.0 L277.2 -41.6 L314.0 -41.7 L315.4 -42.0 L317.0 -42.7 L318.1 -43.7 L318.9 -44.7 L319.7 -46.2 L319.9 -47.7 L320.0 -60.5 L319.6 -67.3 L319.2 -69.8 L318.5 -73.5 L317.8 -75.8 L316.6 -79.0 L315.6 -81.0 L314.0 -83.5 L312.6 -85.3 L310.6 -87.4 L307.4 -89.8 L304.4 -91.6 L301.4 -92.8 L299.1 -93.5 L295.6 -94.3 L293.2 -94.7 L289.0 -95.0 L284.4 -95.0 L281.9 -94.9 L278.1 -94.4 L275.8 -93.9 L272.4 -92.9 L270.3 -92.1 L267.4 -90.7 L264.6 -88.8 L262.8 -87.4 L260.7 -85.2 L258.4 -82.0 L256.9 -79.2 L256.1 -77.5 L254.8 -73.4 L253.7 -67.5 L253.3 -60.3 L253.3 -32.6 L253.5 -27.7 L254.0 -23.2 L255.3 -17.6 L256.9 -13.8 L257.7 -12.2 L259.3 -9.7 L261.6 -7.0 L264.5 -4.5 L267.0 -2.9 L268.6 -2.0 L272.5 -0.5 L275.9 0.4 L278.2 0.8 L284.6 1.4 L291.3 1.3 L297.5 0.6 L302.8 -0.8 L305.5 -1.9 L307.3 -2.8 L309.5 -4.3 L311.0 -5.5 L312.8 -7.3 L314.0 -8.8 L315.6 -11.3 L316.8 -14.1 L317.8 -17.1 L318.4 -20.6 L318.3 -22.5 L317.9 -23.9 L317.0 -25.4 L315.6 -26.7 L314.3 -27.4 L312.4 -27.8 L304.6 -27.8 L302.6 -27.5 L300.9 -26.6 L299.5 -25.3 L298.6 -23.8 L297.8 -21.1 L297.1 -19.6 L296.0 -18.2 L294.4 -17.0 L292.1 -16.1 L289.4 -15.6 L286.1 -15.5 L282.6 -16.0 L280.3 -16.9 L278.2 -18.3 L276.7 -20.0 L275.6 -22.2 L274.8 -24.8 L274.3 -27.8 L274.0 -31.2 Z M274.0 -59.5 L274.2 -65.2 L274.4 -67.4 L275.0 -69.9 L275.9 -72.1 L276.8 -73.6 L278.1 -75.1 L279.4 -76.1 L281.1 -77.0 L283.4 -77.7 L286.1 -77.9 L289.4 -77.8 L291.8 -77.3 L293.8 -76.4 L295.5 -75.1 L296.8 -73.5 L297.8 -71.5 L298.6 -69.1 L299.0 -66.4 L299.3 -63.1 L299.3 -59.5 L299.1 -58.8 L298.6 -57.7 L297.9 -56.9 L296.9 -56.3 L295.4 -56.0 L277.2 -56.1 L275.8 -56.7 L274.9 -57.4 L274.5 -58.1 Z" fill="currentColor" fill-rule="evenodd"/><path d="M354.7 -9.3 L354.1 -7.6 L354.0 -6.2 L354.3 -4.5 L354.9 -3.2 L355.9 -1.9 L357.0 -1.0 L358.5 -0.3 L360.0 -0.0 L421.2 -0.0 L422.9 -0.2 L424.3 -0.8 L425.7 -1.8 L426.6 -2.9 L427.3 -4.5 L427.6 -5.9 L427.5 -13.9 L427.1 -15.3 L426.2 -16.7 L425.2 -17.8 L423.7 -18.7 L422.5 -19.0 L421.1 -19.2 L387.5 -19.1 L386.1 -19.5 L385.1 -20.2 L384.3 -21.5 L383.9 -23.0 L384.1 -24.1 L384.4 -24.8 L391.3 -38.2 L428.9 -115.6 L429.2 -116.8 L429.3 -118.0 L429.0 -120.0 L428.4 -121.2 L427.8 -122.0 L426.3 -123.4 L424.6 -124.2 L422.8 -124.4 L363.0 -124.4 L361.2 -124.1 L359.9 -123.6 L358.5 -122.6 L357.6 -121.4 L356.8 -119.9 L356.6 -118.4 L356.6 -110.5 L357.0 -109.3 L357.7 -108.0 L358.8 -106.7 L360.0 -105.9 L361.7 -105.3 L363.1 -105.2 L395.3 -105.2 L396.7 -104.8 L397.9 -103.9 L398.7 -102.5 L398.9 -101.4 L398.8 -100.6 L398.4 -99.6 L393.9 -90.4 Z" class="nz-zm" fill-rule="evenodd"/><path d="M343.3 -9.3 L342.7 -7.6 L342.6 -6.2 L342.9 -4.5 L343.5 -3.2 L344.5 -1.9 L345.7 -1.0 L347.2 -0.3 L348.6 -0.0 L409.8 -0.0 L411.6 -0.2 L412.9 -0.8 L414.3 -1.8 L415.2 -2.9 L416.0 -4.5 L416.2 -5.9 L416.2 -13.9 L415.7 -15.3 L414.8 -16.7 L413.8 -17.8 L412.3 -18.7 L411.1 -19.0 L409.7 -19.2 L376.2 -19.1 L374.7 -19.5 L373.8 -20.2 L372.9 -21.5 L372.6 -23.0 L372.7 -24.1 L373.0 -24.8 L379.9 -38.2 L417.5 -115.6 L417.9 -117.6 L417.9 -118.8 L417.7 -119.8 L417.2 -121.0 L416.5 -122.0 L414.9 -123.4 L413.2 -124.2 L411.4 -124.4 L351.6 -124.4 L349.9 -124.1 L348.5 -123.6 L347.1 -122.6 L346.2 -121.4 L345.5 -119.9 L345.2 -118.4 L345.3 -110.5 L345.7 -109.1 L346.6 -107.6 L347.5 -106.7 L348.7 -105.9 L350.3 -105.3 L351.7 -105.2 L383.9 -105.2 L385.4 -104.8 L386.6 -103.9 L387.2 -102.9 L387.5 -101.4 L387.4 -100.6 L387.1 -99.6 L382.5 -90.4 Z" class="nz-zy" fill-rule="evenodd"/><path d="M331.9 -9.3 L331.4 -7.6 L331.3 -6.2 L331.6 -4.5 L332.1 -3.2 L333.2 -1.9 L334.3 -1.0 L335.8 -0.3 L337.2 -0.0 L398.4 -0.0 L400.2 -0.2 L401.5 -0.8 L402.9 -1.8 L403.9 -2.9 L404.6 -4.5 L404.9 -5.9 L404.8 -13.9 L404.4 -15.3 L403.5 -16.7 L402.4 -17.8 L401.0 -18.7 L399.8 -19.0 L398.4 -19.2 L364.8 -19.1 L363.3 -19.5 L362.4 -20.2 L361.5 -21.5 L361.2 -23.0 L361.4 -24.1 L361.7 -24.8 L368.6 -38.2 L406.1 -115.6 L406.5 -116.8 L406.6 -118.0 L406.2 -120.0 L405.7 -121.2 L405.1 -122.0 L403.6 -123.4 L401.9 -124.2 L400.0 -124.4 L340.2 -124.4 L338.5 -124.1 L337.1 -123.6 L335.8 -122.6 L334.8 -121.4 L334.1 -119.9 L333.8 -118.4 L333.9 -110.5 L334.3 -109.3 L334.9 -108.0 L336.1 -106.7 L337.3 -105.9 L338.9 -105.3 L340.3 -105.2 L372.5 -105.2 L374.0 -104.8 L375.2 -103.9 L375.9 -102.5 L376.1 -101.4 L376.1 -100.6 L375.7 -99.6 L371.1 -90.4 Z" class="nz-zb" fill-rule="evenodd"/></g></svg>
+              <div class="d-note c-rose">
+                <div class="d-head">
+                  <b>Dentist</b>
+                  <button type="button" class="d-btn" data-act="pin" aria-pressed="true" aria-label="Pin to the PC desktop">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 9V4h1a1 1 0 0 0 0-2H7a1 1 0 0 0 0 2h1v5a3 3 0 0 1-3 3v2h6v7l1 1 1-1v-7h6v-2a3 3 0 0 1-3-3z"/></svg>
+                  </button>
+                  <button type="button" class="d-btn" data-act="tuck" aria-pressed="false" aria-label="Tuck against the screen edge">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11h11.2l-3.6-3.6L12 6l6 6-6 6-1.4-1.4 3.6-3.6H3v-2zm16-6h2v14h-2V5z"/></svg>
+                  </button>
+                </div>
+                <div class="d-body">3 pm Thursday. Bring the form.</div>
+              </div>
+              <p class="d-tap">try both buttons</p>
             </div>
-            <div class="cap-row">
-              <h4>Desktop stickies</h4>
-              <p>Pinned notes float above your work, always on top, each with its own transparency.</p>
-            </div>
-            <div class="cap-row">
-              <h4>Search</h4>
-              <p>Filters the list as you type, through titles and note text. No folders, no tags to keep tidy.</p>
-            </div>
-            <div class="cap-row">
-              <h4>Share into a note</h4>
-              <p>Send text, a link or photos from any Android app — as a new note, or added to the end of one you pick.</p>
-            </div>
-            <div class="cap-row">
-              <h4>Checklists</h4>
-              <p>Tick things off as you go. Done items fade and strike through; the widgets show the boxes too.</p>
-            </div>
-            <div class="cap-row">
-              <h4>Reminders</h4>
-              <p>Pick a time and the note comes to you: pinned on your PC screen, and a notification on your phone.</p>
-            </div>
-            <div class="cap-row">
-              <h4>Archive</h4>
-              <p>Put a note away without deleting it. Still searchable, one tap to bring back, with Undo if you slip.</p>
-            </div>
-            <div class="cap-row">
-              <h4>Jump to any note</h4>
-              <p>Ctrl+K and a few letters of it. No scrolling through the list.</p>
+            <div class="d-pc">
+              <div class="d-screen">
+                <div class="w" aria-hidden="true"><i></i><i></i><i></i></div>
+                <article class="sticky c-rose d-sticky" aria-hidden="true"><header><b>Dentist</b><i>×</i></header><div class="body">3 pm Thursday. Bring the form.</div></article>
+                <div class="bar" aria-hidden="true"></div>
+              </div>
+              <div class="d-stand" aria-hidden="true"></div>
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section id="throw">
-      <div class="sheet ruled">
-        <div class="mark">Phone → PC</div>
-        <div class="body">
-          <h2>Throw it onto<br />your other screen</h2>
-          <p class="lede">
-            The thing NotezZz does that a notes app usually can't: put something from your hand
-            onto the monitor you're about to sit in front of.
-          </p>
-
-          <div class="rows">
-            <div class="row">
-              <div class="txt">
-                <h3>Share it, pin it, walk to your desk</h3>
-                <p>
-                  Share a link, an address or a paragraph from any Android app, tick
-                  <b>Pin it to my desktop</b>, and it's already waiting as a sticky note on your PC
-                  when you get there — no messaging yourself, no email to yourself.
-                </p>
-                <ul class="notes-list">
-                  <li>Any app with a share button</li>
-                  <li>New note, or added to one you choose</li>
-                  <li>Arrives within seconds</li>
-                </ul>
-              </div>
-              <div class="plate" style="max-width: 300px">
-                <img src="shots/app-share.png" alt="Sharing a link into NotezZz on Android with “Pin it to my desktop” ticked" width="1200" height="2400" loading="lazy" />
-              </div>
-            </div>
-
-            <div class="row flip">
-              <div class="txt">
-                <h3>Pin from the sofa, unpin from the desk</h3>
-                <p>
-                  Pinning is a property of the note, not of one machine. Tap the pin on your phone
-                  and the sticky opens on your PC by itself; unpin anywhere and it closes.
-                </p>
-                <ul class="notes-list">
-                  <li>Always on top, with its own transparency</li>
-                  <li>Tuck it against the screen edge, from the PC or from your phone</li>
-                  <li>Optional hand-placed tilt</li>
-                  <li>Stays where you put it on screen</li>
-                </ul>
-              </div>
-              <figure style="margin:0">
-                <img src="shots/sticky.png" alt="A sticky note on the desktop" style="max-width: 260px; filter: drop-shadow(10px 16px 26px rgba(35,38,42,.22)); transform: rotate(-1.6deg)" loading="lazy" />
-                <figcaption class="cap">landed on the desktop</figcaption>
-              </figure>
-            </div>
+      <section id="features">
+        <div class="wrap">
+          <h2>Everything a thought arrives as</h2>
+          <p class="lede">Type it, tick it, draw it, photograph it or say it. One note holds all of it, and all of it syncs.</p>
+          <div class="feats">
+            <article class="fnote c-sky"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 7h-9v2h9V7zm0 8h-9v2h9v-2zM5.5 11 2 7.5l1.4-1.4 2.1 2.1 4.2-4.2 1.4 1.4L5.5 11zm0 8L2 15.5l1.4-1.4 2.1 2.1 4.2-4.2 1.4 1.4L5.5 19z"/></svg>
+              <h3>Checklists</h3><p>Tick things off. Finished items fade and are struck through, and the widgets show the boxes too.</p></article>
+            <article class="fnote c-teal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.2V21h3.8l11-11.1-3.7-3.7L3 17.2zM20.7 7a1 1 0 0 0 0-1.4l-2.3-2.3a1 1 0 0 0-1.4 0l-1.8 1.8 3.7 3.7L20.7 7z"/></svg>
+              <h3>Drawing</h3><p>Strokes follow your speed and pressure. Draw with a finger, pen or mouse, even over a photo.</p></article>
+            <article class="fnote c-rose"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5.3-3a5.3 5.3 0 0 1-10.6 0H5a7 7 0 0 0 6 6.9V21h2v-3.1a7 7 0 0 0 6-6.9h-1.7z"/></svg>
+              <h3>Voice memos</h3><p>Press record and talk. The clip sits in the note as a player.</p></article>
+            <article class="fnote c-sun"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 13.5l2.5 3 3.5-4.5 4.5 6H5l3.5-4.5z"/></svg>
+              <h3>Photos</h3><p>Add pictures to a note, or share them in straight from your gallery.</p></article>
+            <article class="fnote c-lav"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16a3 3 0 0 0-2 .8L8.9 12.7a3 3 0 0 0 0-1.4L16 7.2A3 3 0 1 0 15 5l.1.7L8 9.8a3 3 0 1 0 0 4.4l7.1 4.1-.1.7a3 3 0 1 0 3-3z"/></svg>
+              <h3>Share from any app</h3><p>Send in text, links and photos as a new note, or add them to one you pick.</p></article>
+            <article class="fnote c-lime"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm13 0h2v3h3v2h-3v3h-2v-3h-3v-2h3v-3z"/></svg>
+              <h3>Widgets</h3><p>Put one note, your whole list, or a one-tap new note on your home screen.</p></article>
+            <article class="fnote c-coral"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.1-1.6-5.6-4.5-6.3V4a1.5 1.5 0 0 0-3 0v.7C7.6 5.4 6 7.9 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+              <h3>Reminders</h3><p>When it's due, the note pins itself on your PC and your phone buzzes.</p></article>
+            <article class="fnote c-paper"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 5.2 19.1 3.5A1.5 1.5 0 0 0 18 3H6c-.5 0-.9.2-1.2.5L3.5 5.2c-.3.4-.5.8-.5 1.3V19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6.5c0-.5-.2-.9-.5-1.3zM12 17.5 6.5 12H10v-2h4v2h3.5L12 17.5zM5.1 5l.8-1h12l.9 1H5.1z"/></svg>
+              <h3>Archive</h3><p>Put a note away without deleting it. Undo is right there if you slip.</p></article>
+            <article class="fnote c-sky"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 14.4l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg>
+              <h3>Ctrl+K and search</h3><p>Jump to any note by typing a few letters. The list filters as you type.</p></article>
+            <article class="fnote c-rose"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0 0 18c.8 0 1.5-.7 1.5-1.5 0-.4-.1-.7-.4-1a1.5 1.5 0 0 1 1.1-2.5H16a5 5 0 0 0 5-5c0-4.4-4-8-9-8zm-5.5 9a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>
+              <h3>Colours</h3><p>Choose from nine colours and five patterns, or mix your own colours and paint your own pixel patterns.</p></article>
           </div>
+
+          <div class="frame">
+            <div class="tb" aria-hidden="true"><i></i><i></i><i></i><span>NotezZz</span></div>
+            <img src="shots/app-list.png" alt="The NotezZz Windows app: the list of notes on the left and an open checklist note on the right" width="2400" height="860" loading="lazy" />
+          </div>
+          <p class="frame-cap">The full app on Windows shows your list on the left and the open note on the right. Pinned notes also float as their own stickies.</p>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section id="phone">
-      <div class="sheet ruled">
-        <div class="mark">Phone</div>
-        <div class="body row">
-          <div class="txt">
-            <h2>The same notes,<br />thumb-sized</h2>
-            <p class="lede">
-              The list sits above the note so you can move between them without leaving the keyboard.
-              Expand a note full-screen when it deserves the room.
-            </p>
-            <ul class="notes-list">
-              <li>A real Android app that signs in with the account already on your phone</li>
-              <li>Home-screen widgets: one chosen note, your whole list, or one tap for a new note, a voice memo or a drawing</li>
-              <li>Reminders: the note pins itself on your PC and your phone taps you on the shoulder</li>
-              <li>Works offline, catches up when you're back</li>
-              <li>Pin here, and the sticky opens on your PC</li>
-            </ul>
-            <div class="acts">
-              <a class="act solid" href="https://github.com/voodoofox/NotezZz/releases/latest/download/NotezZz-Android.apk">Get the Android app</a>
-              <a class="act" href="https://flatvoxel.com/NotezZz/">Or open it in the browser</a>
-            </div>
+      <section id="files" class="files">
+        <div class="wrap">
+          <div>
+            <h2>We never see a single word.</h2>
+            <p class="lede">There is no NotezZz server and no NotezZz account, because there's nothing for us to run. Your notes are files in one folder of your own Drive. If you'd rather not sign in, they stay on your device.</p>
+            <p class="more"><a href="privacy.html">Privacy policy</a> · <a href="terms.html">Terms</a></p>
           </div>
-          <div class="plate" style="max-width: 330px">
-            <img src="shots/app-phone.png" alt="NotezZz on a phone: the note list above, the open note below" width="1200" height="2400" loading="lazy" />
-          </div>
+          <dl class="spec">
+            <div><dt>stored in</dt><dd>My Drive › NotezZz › notes, with one file per note.</dd></div>
+            <div><dt>app can open</dt><dd>Only the files it created. That's Google's <code>drive.file</code> permission, and Google enforces it.</dd></div>
+            <div><dt>sent to us</dt><dd>Nothing. We get no notes and no email address.</dd></div>
+            <div><dt>analytics</dt><dd>None.</dd></div>
+            <div><dt>no sign-in</dt><dd>Your notes stay on the device.</dd></div>
+            <div><dt>updates</dt><dd>The apps only ask GitHub whether a newer version exists.</dd></div>
+          </dl>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section id="files">
-      <div class="sheet ruled">
-        <div class="mark">Your files</div>
-        <div class="body">
-          <h2>We never see<br />a single word</h2>
-          <p class="lede">
-            There is no NotezZz server and no NotezZz account, because there's nothing for us to run.
-            Your notes are files in one folder of your own Drive — or only on your device, if you'd
-            rather not sign in at all.
-          </p>
-
-          <div class="receipt">
-            <span class="k">stored at</span> ~/Google&nbsp;Drive/NotezZz/notes/a3f2…json<br />
-            <span class="k">readable by</span> you, and anything that opens a text file<br />
-            <span class="k">permission</span> drive.file — files this app made, nothing else<br />
-            <span class="k">sent to us</span> <span class="no">notes</span> <span class="no">email</span>
-            <span class="no">analytics</span> <span class="no">telemetry</span> → nothing
-          </div>
-
-          <p style="margin-top:28px">
-            <code style="font-family:'Plex',monospace;font-size:.9em">drive.file</code> is the most
-            restricted permission Google offers: it reaches only files the app itself created. NotezZz
-            <em>cannot</em> list or read the rest of your Drive — that's enforced by Google, not
-            promised by us.
-          </p>
-          <p class="caveat">
-            Want no cloud at all? Open it without signing in. Your notes never leave the device; the
-            Windows and Android apps only ask GitHub whether a newer version exists. <a href="privacy.html">Privacy policy</a> · <a href="terms.html">Terms</a>
-          </p>
-        </div>
-      </div>
-    </section>
-
-    <section id="get">
-      <div class="sheet ruled">
-        <div class="mark">Get it</div>
-        <div class="body">
-          <h2>Three ways in</h2>
+      <section id="get">
+        <div class="wrap">
+          <h2>Get it free</h2>
           <div class="get">
-            <div>
-              <h4>Windows</h4>
-              <p>Sticky notes, tray icon, launch on startup, optional Google sync.</p>
-              <a class="act solid" href="https://github.com/voodoofox/NotezZz/releases/latest/download/NotezZz-Setup.exe">Download installer</a>
-              <p class="under">Windows 10 / 11 · 64-bit · <span data-version>v0.18.12 · 15 Sep 2026</span></p>
+            <div class="card">
+              <span class="plat">Windows 10 / 11 · 64-bit</span>
+              <h3>For your PC</h3>
+              <p>Stickies float above your work, and a tray icon keeps the app close. It can start with Windows if you like, and it updates itself.</p>
+              <a class="btn solid" href="https://github.com/voodoofox/NotezZz/releases/latest/download/NotezZz-Setup.exe">Download for Windows</a>
             </div>
-            <div>
-              <h4>Android</h4>
-              <p>The phone app, with share-to, home-screen widgets and Google sign-in. Updates itself.</p>
-              <a class="act solid" href="https://github.com/voodoofox/NotezZz/releases/latest/download/NotezZz-Android.apk">Download the app</a>
-              <p class="under">Android 7 or newer · <span data-version>v0.21.0 · 29 Sep 2026</span></p>
+            <div class="card">
+              <span class="plat">Android 7 or newer</span>
+              <h3>For your phone</h3>
+              <p>It has widgets, sharing from any app, reminders, and sign-in with the Google account already on your phone. It updates itself.</p>
+              <a class="btn solid" href="https://github.com/voodoofox/NotezZz/releases/latest/download/NotezZz-Android.apk">Download the app</a>
             </div>
-            <div>
-              <h4>Web</h4>
-              <p>Any modern browser, nothing to install. Add it to your home screen if you like.</p>
-              <a class="act" href="https://flatvoxel.com/NotezZz/">Open the web app</a>
-              <p class="under">Chrome menu → Add to Home screen</p>
+            <div class="card">
+              <span class="plat">Any modern browser</span>
+              <h3>On the web</h3>
+              <p>There's nothing to install, and you see the same notes from the same Drive folder. Add it to your home screen if you like.</p>
+              <a class="btn" href="https://flatvoxel.com/NotezZz/">Open the web app</a>
             </div>
           </div>
-          <p class="caveat">
-            First run on Windows: the installer isn't code-signed yet, so Windows may say “Windows
-            protected your PC” — choose <b>More info → Run anyway</b>. If you sign in with Google,
-            Windows also asks once to allow a local connection; that's the loopback address Google
-            returns your sign-in to, not a service listening to the world.
-          </p>
-          <p class="caveat">
-            First install on Android: the app comes from here rather than the Play Store, so your
-            browser asks once to allow installing apps from it. After that, NotezZz offers its own
-            updates, and Android only accepts them if they carry the same signature.
-          </p>
+          <div class="caveats">
+            <p>First run on Windows: the installer isn't code-signed yet, so Windows may say it protected your PC. Choose More info, then Run anyway.</p>
+            <p>First install on Android: the app comes from GitHub rather than the Play Store, so your browser asks once to allow it. After that, NotezZz offers its own updates.</p>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </main>
 
     <footer>
-      <div class="sheet">
-        <span>NotezZz — free, and yours</span>
-        <span>
-          <a href="privacy.html">Privacy</a><a href="terms.html">Terms</a>
-          <a href="mailto:voodoofox@gmail.com">Contact</a>
-        </span>
+      <div class="wrap">
+        <span>NotezZz · free, and yours · <span data-version>v0.26.0</span></span>
+        <nav><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="mailto:voodoofox@gmail.com">Contact</a></nav>
       </div>
     </footer>
 
     <script>
-      // The sticky note holds its place until the writing section arrives,
-      // then bows out rather than following you down the whole page.
-      (() => {
-        const rail = document.getElementById('rail');
-        const stop = document.getElementById('writing');
-        if (!rail || !stop) return;
-        const update = () => {
-          rail.dataset.off = stop.getBoundingClientRect().top < 260 ? '1' : '0';
+      // Hero: a curly arrow from the phone's pin to the sticky it put on the
+      // PC. One loop, drawn as a prolate cycloid along the line between them,
+      // bulging away from the phone; redrawn when a note moves or the page resizes.
+      const drawCurl = (() => {
+        const scene = document.querySelector('.scene');
+        const svg = scene && scene.querySelector('.curl');
+        if (!svg) return () => {};
+        const line = svg.querySelector('.curl-line'), dot = svg.querySelector('.curl-dot');
+        const pin = scene.querySelector('.h-pin'), target = scene.querySelector('.s-dentist');
+        const f = (v) => v.toFixed(2);
+        return () => {
+          const r = scene.getBoundingClientRect();
+          const k = 100 / r.width;
+          svg.setAttribute('viewBox', `0 0 100 ${f(r.height * k)}`);
+          const p = pin.getBoundingClientRect(), t = target.getBoundingClientRect();
+          const P = { x: (p.right - r.left) * k + 1, y: (p.top + p.height / 2 - r.top) * k };
+          const T = { x: (t.left - r.left) * k + t.width * k * 0.4, y: (t.bottom - r.top) * k + 1.4 };
+          dot.setAttribute('cx', f(P.x)); dot.setAttribute('cy', f(P.y)); dot.setAttribute('r', '0.7');
+          // Leave the pin heading right, make one round loop, then rise up
+          // into the bottom of the note.
+          const S = { x: P.x + 4, y: P.y - 1 }, E = { x: T.x - 7, y: T.y + 10 };
+          const dx = E.x - S.x, dy = E.y - S.y, L = Math.hypot(dx, dy);
+          if (L < 6) {
+            line.setAttribute('d', `M${f(P.x)} ${f(P.y)} C${f(P.x + 6)} ${f(P.y)} ${f(T.x)} ${f(T.y + 6)} ${f(T.x)} ${f(T.y)}`);
+            return;
+          }
+          const ux = dx / L, uy = dy / L;
+          let nx = uy, ny = -ux;
+          if (ny > 0) { nx = -nx; ny = -ny; }
+          const b = 0.48 * L, c = 0.42 * L, pts = [];
+          for (let i = 1; i <= 160; i++) {
+            const a = (i / 160) * 2 * Math.PI;
+            const along = (L * a) / (2 * Math.PI) + b * Math.sin(a);
+            const side = c * (1 - Math.cos(a));
+            pts.push(`${f(S.x + ux * along + nx * side)} ${f(S.y + uy * along + ny * side)}`);
+          }
+          const head = `M${f(P.x)} ${f(P.y)} C${f(P.x + 2)} ${f(P.y)} ${f(S.x - ux * 2)} ${f(S.y - uy * 2)} ${f(S.x)} ${f(S.y)}`;
+          const tail = `C${f(E.x + ux * 4)} ${f(E.y + uy * 4)} ${f(T.x)} ${f(T.y + 5)} ${f(T.x)} ${f(T.y)}`;
+          line.setAttribute('d', `${head} L${pts.join(' L')} ${tail}`);
         };
-        update();
-        addEventListener('scroll', update, { passive: true });
-        addEventListener('resize', update);
+      })();
+      drawCurl();
+      document.fonts && document.fonts.ready.then(drawCurl);
+      addEventListener('resize', drawCurl);
+
+      // Hero: drag a sticky around the PC screen by its top bar, like the real window.
+      (() => {
+        let z = 10;
+        document.querySelectorAll('.screen .sticky header').forEach((bar) => {
+          const note = bar.parentElement;
+          const box = note.parentElement;
+          bar.addEventListener('pointerdown', (e) => {
+            bar.setPointerCapture(e.pointerId);
+            const r = box.getBoundingClientRect();
+            const sx = e.clientX, sy = e.clientY, x0 = note.offsetLeft, y0 = note.offsetTop;
+            const maxX = r.width - note.offsetWidth * 0.4, maxY = r.height - note.offsetHeight * 0.4;
+            note.style.zIndex = ++z;
+            note.classList.add('lift');
+            const move = (ev) => {
+              const x = Math.min(maxX, Math.max(-note.offsetWidth * 0.6, x0 + ev.clientX - sx));
+              const y = Math.min(maxY, Math.max(0, y0 + ev.clientY - sy));
+              note.style.setProperty('--x', (x / r.width) * 100 + '%');
+              note.style.setProperty('--y', (y / r.height) * 100 + '%');
+              drawCurl();
+            };
+            const up = () => {
+              note.classList.remove('lift');
+              setTimeout(drawCurl, 250);
+              bar.removeEventListener('pointermove', move);
+              bar.removeEventListener('pointerup', up);
+              bar.removeEventListener('pointercancel', up);
+            };
+            bar.addEventListener('pointermove', move);
+            bar.addEventListener('pointerup', up);
+            bar.addEventListener('pointercancel', up);
+          });
+        });
+      })();
+
+      // Try it: the phone's pin and tuck drive the PC's sticky, after a short sync.
+      (() => {
+        const demo = document.querySelector('.demo');
+        if (!demo) return;
+        const pin = demo.querySelector('[data-act="pin"]');
+        const tuck = demo.querySelector('[data-act="tuck"]');
+        const status = document.querySelector('.status');
+        const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        let timer;
+        const say = () => {
+          const pinned = demo.dataset.pinned === 'true', tucked = demo.dataset.tucked === 'true';
+          status.textContent = !pinned ? 'Unpinned. The sticky has closed on your PC.'
+            : tucked ? 'Tucked. The sticky waits at the edge of your PC screen.'
+            : 'Pinned. The sticky is open on your PC.';
+        };
+        const sync = (apply) => {
+          clearTimeout(timer);
+          if (still) { apply(); say(); return; }
+          demo.classList.add('syncing');
+          status.textContent = 'Syncing through your Drive…';
+          timer = setTimeout(() => { demo.classList.remove('syncing'); apply(); say(); }, 700);
+        };
+        pin.addEventListener('click', () => {
+          const on = pin.getAttribute('aria-pressed') !== 'true';
+          pin.setAttribute('aria-pressed', on);
+          // Unpinning brings a tucked sticky back too, as in the app.
+          if (!on) tuck.setAttribute('aria-pressed', 'false');
+          tuck.disabled = !on;
+          sync(() => { demo.dataset.pinned = on; if (!on) demo.dataset.tucked = 'false'; });
+        });
+        tuck.addEventListener('click', () => {
+          const on = tuck.getAttribute('aria-pressed') !== 'true';
+          tuck.setAttribute('aria-pressed', on);
+          sync(() => { demo.dataset.tucked = on; });
+        });
       })();
     </script>
   </body>
