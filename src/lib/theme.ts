@@ -68,7 +68,7 @@ export const BUILTIN_THEMES: ThemeDef[] = [
       light: { color: '#ffffff', strength: 0.5, reach: 0.4 },
       shade: { color: '#000000', strength: 0.16, reach: 0.4 },
       curve: 4,
-      grain: 0.1,
+      grain: 0.07,
       header: 0.075,
       strip: { color: '#000000', strength: 0.075 },
       toolbar: 0,

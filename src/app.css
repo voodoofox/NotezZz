@@ -37,6 +37,10 @@
      corners) — a sticky's corner hugs its corner button. */
   --edge: 6px;
   --sticker-radius: calc(var(--btn-radius) + var(--edge));
+  /* Where text starts inside a note: the left edge of the first toolbar
+     glyph (a 20px icon centred in its button; the B's stem sits 4.17px left
+     of centre), so the title, the text and the buttons share one line. */
+  --text-inset: calc(var(--edge) + var(--btn) / 2 - 4.17px);
   --sticky-radius: calc(var(--btn-radius) + var(--edge));
   /* The note as a surface; the active theme (theme.ts) sets these. Until
      it does, a note looks flat: no light, shade or grain, a solid title

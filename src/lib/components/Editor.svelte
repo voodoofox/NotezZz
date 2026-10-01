@@ -230,7 +230,7 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 10px 14px;
+    padding: 10px var(--text-inset); /* in line with the title and the toolbar's first glyph */
   }
   .content :global(.ProseMirror) {
     outline: none;

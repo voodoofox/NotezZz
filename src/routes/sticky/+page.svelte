@@ -527,7 +527,7 @@
     gap: var(--btn-gap);
     /* Buttons --edge from the top and right, so the corner button's curve
        runs parallel to the window's (whose radius is button + edge). */
-    padding: var(--edge) var(--edge) var(--edge) 10px;
+    padding: var(--edge) var(--edge) var(--edge) var(--text-inset); /* title in line with the text */
     /* The adhesive strip, as solid as the theme says (see NotePane). */
     background-color: color-mix(in srgb, var(--note-header) var(--note-header-mix), transparent);
     --pat-base: color-mix(in srgb, var(--note-header) var(--note-header-mix), transparent);

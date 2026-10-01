@@ -410,7 +410,8 @@
     display: flex;
     align-items: center;
     gap: var(--btn-gap);
-    padding: var(--edge) var(--edge) var(--edge) 12px; /* left matches the list */
+    /* The title (2px into its input) in line with the note's text. */
+    padding: var(--edge) var(--edge) var(--edge) calc(var(--text-inset) - 2px);
     /* The title strip is the note's adhesive: as solid as the theme says.
        -color, not the shorthand: the shorthand would wipe a pattern's
        background-image, which these two variables tone down with it. */

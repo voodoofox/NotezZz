@@ -1577,3 +1577,39 @@ test.describe('themes', () => {
     expect(all).not.toContain('evil.example');
   });
 });
+
+test("a note's title, text and first toolbar glyph share one left edge", async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Biology');
+  await typeInEditor(page, 'Transport from particle to ribosome.');
+  await page.waitForTimeout(500);
+  const id = await page.evaluate(
+    () => Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!.slice('notezzz:note:'.length)
+  );
+  const textLeft = () =>
+    page.locator('.ProseMirror p').first().evaluate((p) => {
+      const r = document.createRange();
+      r.selectNodeContents(p);
+      return r.getClientRects()[0].left;
+    });
+  const glyphLeft = () => page.getByTestId('fmt-bold').locator('path').evaluate((el) => el.getBoundingClientRect().left);
+  for (const width of [300, 460]) {
+    await page.setViewportSize({ width, height: 400 });
+    await page.goto(`/sticky?id=${id}`);
+    const title = (await page.getByTestId('sticky-title').boundingBox())!.x;
+    const text = await textLeft();
+    const glyph = await glyphLeft();
+    expect(Math.abs(title - text), `title vs text at ${width}`).toBeLessThan(1);
+    expect(Math.abs(glyph - text), `glyph vs text at ${width}`).toBeLessThan(1);
+  }
+  // The full app, too.
+  await page.setViewportSize({ width: 1100, height: 700 });
+  await page.goto('/?local');
+  await page.getByTestId('note-item').first().click();
+  const titleInput = await page.getByTestId('title-input').evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return r.left + parseFloat(getComputedStyle(el).paddingLeft);
+  });
+  expect(Math.abs(titleInput - (await textLeft()))).toBeLessThan(1);
+  expect(Math.abs((await glyphLeft()) - (await textLeft()))).toBeLessThan(1);
+});
