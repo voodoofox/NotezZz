@@ -22,6 +22,15 @@ async function createNote(page: Page) {
   return page.locator('.ProseMirror');
 }
 
+/** Delete the open note the way the app offers it: archive it, open it
+ *  from the archive, delete it forever there. */
+async function archiveAndDelete(page: Page) {
+  await page.getByTestId('note-archive').click();
+  await page.getByTestId('archive-toggle').click();
+  await page.getByTestId('note-pick').first().click();
+  await page.getByTestId('note-delete').click();
+}
+
 async function typeInEditor(page: Page, text: string) {
   const pm = page.locator('.ProseMirror');
   await pm.click();
@@ -186,9 +195,54 @@ test('search filters the note list live', async ({ page }) => {
 test('base font-size slider (in tools popover) updates its readout', async ({ page }) => {
   await createNote(page);
   await page.getByTestId('tools-toggle').click();
+  // A new note starts at 22, on a slider that stands upright.
+  await expect(page.getByTestId('size-value')).toHaveText('22');
+  const box = (await page.getByTestId('size-slider').boundingBox())!;
+  expect(box.height).toBeGreaterThan(box.width * 3);
   await page.getByTestId('size-slider').fill('28');
   await expect(page.getByTestId('size-value')).toHaveText('28');
-  await expect(page.getByTestId('tools-toggle')).toContainText('28');
+  await expect(page.getByTestId('tools-toggle')).toHaveAttribute('title', /28/);
+});
+
+test('an account still on the old default text size moves to 22, once', async ({ page }) => {
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.includes('settings')) ?? 'notezzz:settings';
+    const cur = JSON.parse(localStorage.getItem(key) ?? '{}');
+    localStorage.setItem(key, JSON.stringify({ ...cur, defaultFontSize: 18, settingsVersion: 1 }));
+  });
+  await page.reload();
+  await page.getByTestId('open-settings').click();
+  await expect(page.getByTestId('set-fontsize')).toHaveValue('22');
+  // A size someone picked themselves is left alone.
+  await page.getByTestId('set-fontsize').fill('30');
+  await page.getByTestId('set-fontsize').press('Tab');
+  await page.reload();
+  await page.getByTestId('open-settings').click();
+  await expect(page.getByTestId('set-fontsize')).toHaveValue('30');
+});
+
+test('delete is only offered in the archive', async ({ page }) => {
+  await createNote(page);
+  await expect(page.getByTestId('note-archive')).toBeVisible();
+  await expect(page.getByTestId('note-delete')).toHaveCount(0);
+  await page.getByTestId('note-archive').click();
+  await page.getByTestId('archive-toggle').click();
+  await page.getByTestId('note-pick').first().click();
+  await expect(page.getByTestId('note-delete')).toBeVisible();
+  await expect(page.getByTestId('note-delete')).toHaveAttribute('title', 'Delete forever');
+});
+
+test('the note header buttons match the formatting toolbar', async ({ page }) => {
+  await createNote(page);
+  const top = page.getByTestId('pane-pin');
+  const bottom = page.getByTestId('fmt-bold');
+  const [t, b] = await Promise.all([top.boundingBox(), bottom.boundingBox()]);
+  expect(Math.round(t!.height)).toBe(Math.round(b!.height));
+  const look = (l: typeof top) => l.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return `${cs.opacity} ${cs.color}`;
+  });
+  expect(await look(top)).toBe(await look(bottom));
 });
 
 test('opacity control is desktop-only (hidden on web)', async ({ page }) => {
@@ -301,7 +355,7 @@ test('selecting a different note switches the editor content', async ({ page }) 
 test('deleting a note removes it', async ({ page }) => {
   await createNote(page);
   await expect(page.getByTestId('note-item')).toHaveCount(1);
-  await page.getByTestId('note-delete').click();
+  await archiveAndDelete(page);
   await expect(page.getByTestId('note-item')).toHaveCount(0);
   await expect(page.getByTestId('empty-state')).toBeVisible();
 });
@@ -365,16 +419,52 @@ test.describe('mobile layout', () => {
     await page.getByTestId('new-note').click();
     await page.getByTestId('title-input').fill('A very long note title that would push buttons out');
     const pane = (await page.getByTestId('note-pane').boundingBox())!;
-    const del = (await page.getByTestId('note-delete').boundingBox())!;
-    // Delete must sit inside the pane with breathing room, never clipped.
-    expect(del.x + del.width).toBeLessThanOrEqual(pane.x + pane.width - 8);
+    const more = (await page.getByTestId('note-more').boundingBox())!;
+    // The last button sits inside the pane, never clipped.
+    expect(more.x + more.width).toBeLessThanOrEqual(pane.x + pane.width);
   });
 
-  test('deleting in fullscreen returns to the split view', async ({ page }) => {
+  test('the title keeps its room: the other actions live in the ⋯ menu', async ({ page }) => {
+    await page.getByTestId('new-note').click();
+    const title = (await page.getByTestId('title-input').boundingBox())!;
+    expect(title.width).toBeGreaterThan(200); // was ~40px with seven buttons
+    await expect(page.getByTestId('note-color')).toHaveCount(0);
+    await expect(page.getByTestId('note-archive')).toHaveCount(0);
+    await page.getByTestId('note-more').click();
+    const menu = page.getByTestId('note-menu');
+    await expect(menu).toBeVisible();
+    await expect(menu.getByTestId('menu-delete')).toHaveCount(0); // not outside the archive
+    // A panel opened from the menu replaces it.
+    await page.getByTestId('menu-size').click();
+    await expect(page.getByTestId('note-menu')).toHaveCount(0);
+    await expect(page.getByTestId('size-value')).toHaveText('22');
+    await page.getByTestId('size-slider').fill('30');
+    await expect(page.getByTestId('size-value')).toHaveText('30');
+    await page.getByTestId('note-more').click();
+    await page.getByTestId('menu-color').click();
+    await expect(page.getByTestId('note-menu')).toHaveCount(0);
+    await expect(page.locator('.palmenu')).toBeVisible();
+  });
+
+  test('archiving in fullscreen returns to the split view', async ({ page }) => {
     await page.getByTestId('new-note').click();
     await page.getByTestId('note-fullscreen').click();
-    await page.getByTestId('note-delete').click();
-    await expect(page.getByTestId('empty-state')).toBeVisible();
+    await page.getByTestId('note-more').click();
+    await page.getByTestId('menu-archive').click();
+    await expect(page.getByTestId('new-note')).toBeVisible();
+    await expect(page.getByTestId('note-item')).toHaveCount(0);
+  });
+
+  test('delete forever, from the archive, through the menu', async ({ page }) => {
+    await page.getByTestId('new-note').click();
+    await page.getByTestId('note-more').click();
+    await page.getByTestId('menu-archive').click();
+    await page.getByTestId('archive-toggle').click();
+    await page.getByTestId('note-pick').first().click();
+    await page.getByTestId('note-more').click();
+    await page.getByTestId('menu-delete').click();
+    await expect(page.getByTestId('note-item')).toHaveCount(0);
+    await expect(page.getByTestId('archive-toggle')).toHaveCount(0);
   });
 });
 
@@ -709,8 +799,9 @@ test('deleting a note right after typing in it does not bring it back', async ({
   // found the note gone, and wrote its captured copy straight back.
   await createNote(page);
   await typeInEditor(page, 'gone');
-  await page.getByTestId('note-delete').click();
+  await archiveAndDelete(page);
   await expect(page.getByTestId('note-item')).toHaveCount(0);
+  await expect(page.getByTestId('archive-toggle')).toHaveCount(0);
   await page.waitForTimeout(700); // the whole window the old timer could fire in
   await page.goto('/?local');
   await expect(page.getByTestId('note-item')).toHaveCount(0);
@@ -1220,4 +1311,27 @@ test('archive: Undo on the floating button brings the note straight back', async
   await expect(page.getByTestId('note-item')).toHaveCount(2);
   await expect(page.getByTestId('title-input')).toHaveValue('Oops');
   await expect(page.getByTestId('archive-toggle')).toHaveCount(0);
+});
+
+test.describe('touch phone', () => {
+  test.use({ viewport: { width: 400, height: 800 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+
+  test('pinching a note you are typing in does not jump back to the cursor', async ({ page }) => {
+    // The keep-the-caret-in-view handler ran on every visual-viewport resize,
+    // and a pinch is one: each pinch step scrolled the note back to the
+    // cursor, so zooming and scrolling a focused note "stopped working".
+    await page.getByTestId('new-note').click();
+    const pm = page.locator('.ProseMirror');
+    await pm.click();
+    for (let i = 0; i < 50; i++) await pm.pressSequentially(`line ${i}\n`);
+    const scroller = page.locator('.editorWrap .content');
+    await scroller.evaluate((el) => (el.scrollTop = 0)); // caret stays at the end
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.synthesizePinchGesture', {
+      x: 200, y: 600, scaleFactor: 1.6, relativeSpeed: 400, gestureSourceType: 'default',
+    });
+    await page.waitForTimeout(400);
+    expect(await page.evaluate(() => visualViewport!.scale)).toBeGreaterThan(1.3);
+    expect(await scroller.evaluate((el) => el.scrollTop)).toBeLessThan(40);
+  });
 });

@@ -161,10 +161,18 @@
   // Android's own selection menu. Re-anchor on every viewport change.
   onMount(() => {
     const vv = window.visualViewport;
+    let lastHeight = vv?.height ?? 0;
     // When the keyboard opens the viewport shrinks under whatever you were
-    // looking at; bring the caret back onto screen.
+    // looking at; bring the caret back onto screen. ONLY then: a pinch also
+    // resizes the visual viewport, and snapping back to the caret on every
+    // pinch step made zooming and scrolling a note you were typing in
+    // impossible (it jumped straight back to the cursor).
     const keepInView = () => {
       updateBubble();
+      if (!vv) return;
+      const keyboardOpened = vv.height < lastHeight - 60 && vv.scale <= 1.01;
+      lastHeight = vv.height;
+      if (!keyboardOpened) return;
       if (editor && !editor.isDestroyed && editor.isFocused) {
         clearTimeout(scrollTimer);
         scrollTimer = setTimeout(() => {

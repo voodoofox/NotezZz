@@ -10,6 +10,7 @@
   import Icon from './Icon.svelte';
 
   import { popoverStyle } from '$lib/popover';
+  import { MediaQuery } from 'svelte/reactivity';
 
   let note = $derived(store.active);
   let pal = $derived(getPalette(note?.paletteId ?? ''));
@@ -26,19 +27,37 @@
       ? on ? 'Bring the sticky back' : 'Tuck the sticky to the screen edge'
       : on ? 'Bring the sticky back on your PC' : 'Tuck the sticky away on your PC';
 
-  // Toolbar popovers (note color / base text size), fixed-positioned so the
-  // toolbar's overflow can't clip them; any outside tap closes them.
-  let openPop = $state<'pal' | 'size' | 'remind' | null>(null);
+  // Phones: the title gets the room. The pin stays in the bar (and the
+  // reminder, while one is set); everything else moves into the ⋯ menu.
+  // Rendered either/or, not hidden with CSS, so each control exists once.
+  const narrow = new MediaQuery('max-width: 700px', false);
+
+  // Header popovers (colour, text size, reminder, the ⋯ menu), fixed-
+  // positioned so nothing clips them; any outside tap closes them.
+  type Pop = 'pal' | 'size' | 'remind' | 'more';
+  let openPop = $state<Pop | null>(null);
   let popStyle = $state('');
   let palWrap = $state<HTMLElement | null>(null);
   let sizeWrapEl = $state<HTMLElement | null>(null);
   let remindWrap = $state<HTMLElement | null>(null);
+  let moreWrap = $state<HTMLElement | null>(null);
+  let popEl = $state<HTMLElement | null>(null);
 
-  function togglePop(which: 'pal' | 'size' | 'remind') {
+  const popWidth = (which: Pop) =>
+    which === 'pal' ? 226 : which === 'size' ? (desktop ? 168 : 100) : which === 'remind' ? 250 : 236;
+
+  function togglePop(which: Pop, anchor?: HTMLElement | null) {
     if (openPop === which) return void (openPop = null);
-    const anchor = which === 'pal' ? palWrap : which === 'size' ? sizeWrapEl : remindWrap;
-    if (anchor) popStyle = popoverStyle(anchor, which === 'pal' ? 226 : which === 'size' ? 270 : 250);
+    const a =
+      anchor ?? (which === 'pal' ? palWrap : which === 'size' ? sizeWrapEl : which === 'remind' ? remindWrap : moreWrap);
+    if (a) popStyle = popoverStyle(a, popWidth(which));
     openPop = which;
+  }
+
+  /** A ⋯ menu entry that opens a panel: the panel takes the menu's place. */
+  function fromMenu(which: 'pal' | 'size' | 'remind') {
+    openPop = null;
+    togglePop(which, moreWrap);
   }
 
   // ---- reminders --------------------------------------------------------
@@ -88,7 +107,8 @@
   function closePopsOutside(e: PointerEvent) {
     if (!openPop) return;
     const t = e.target as Node;
-    if (!palWrap?.contains(t) && !sizeWrapEl?.contains(t) && !remindWrap?.contains(t)) openPop = null;
+    if ([palWrap, sizeWrapEl, remindWrap, moreWrap, popEl].some((el) => el?.contains(t))) return;
+    openPop = null;
   }
 
   // Evidence for Diagnostics: a pattern that fails to paint on some machine
@@ -119,14 +139,18 @@
 
   function toggleArchive() {
     if (!note) return;
+    openPop = null;
     const wasFullscreen = fullscreen;
     const archiving = !note.archived;
     store.setArchived(note.id, archiving);
     if (archiving && wasFullscreen) exitFullscreen();
   }
 
+  /** Only offered in the archive: archiving is the everyday way to put a
+   *  note away (with Undo), deleting is the deliberate second step. */
   function deleteNote() {
-    if (!note || !confirm('Delete this note?')) return;
+    openPop = null;
+    if (!note || !confirm("Delete this note forever? This can't be undone.")) return;
     const wasFullscreen = fullscreen;
     void store.remove(note.id);
     if (wasFullscreen) exitFullscreen(); // drop the fullscreen history entry
@@ -175,109 +199,40 @@
         value={note.title}
         oninput={(e) => store.update(note!.id, { title: (e.currentTarget as HTMLInputElement).value })}
       />
-      <span class="twrap" bind:this={palWrap}>
-        <button
-          class="icon"
-          class:on={openPop === 'pal'}
-          data-testid="note-color"
-          title="Note color"
-          aria-label="Note color"
-          onclick={() => togglePop('pal')}
-        ><Icon name="palette" /></button>
-        {#if openPop === 'pal'}
-          <div class="pop palmenu" style={popStyle}>
-            <ColorPicker
-              paletteId={note.paletteId}
-              onPick={(id) => {
-                store.update(note!.id, { paletteId: id });
-                // Sliders keep the menu open (they're continuous); a chip closes it.
-                if (!id.startsWith('custom:')) openPop = null;
-              }}
-            />
-          </div>
-        {/if}
-      </span>
-
-      <span class="twrap" bind:this={sizeWrapEl}>
-        <button
-          class="icon aa"
-          class:on={openPop === 'size'}
-          data-testid="tools-toggle"
-          title="Base text size{desktop ? ' & sticker opacity' : ''}"
-          onclick={() => togglePop('size')}
-        >Aa·{note.fontSize}</button>
-        {#if openPop === 'size'}
-          <div class="pop panel" style={popStyle}>
-            <div class="ctl">
-              <div class="crowhead">
-                <span>Text size</span>
-                <span class="val" data-testid="size-value">{note.fontSize}</span>
-              </div>
-              <input
-                type="range" min="12" max="40" step="1"
-                data-testid="size-slider"
-                value={note.fontSize}
-                oninput={(e) => store.update(note!.id, { fontSize: +(e.currentTarget as HTMLInputElement).value })}
-              />
-            </div>
-            {#if desktop}
-              <div class="ctl">
-                <div class="crowhead">
-                  <span>Sticker opacity</span>
-                  <span class="val" data-testid="opacity-value">{Math.round(note.opacity * 100)}%</span>
-                </div>
-                <input
-                  type="range" min="0.2" max="1" step="0.05"
-                  data-testid="opacity-slider"
-                  value={note.opacity}
-                  oninput={(e) => store.update(note!.id, { opacity: +(e.currentTarget as HTMLInputElement).value })}
-                />
-              </div>
-            {/if}
-          </div>
-        {/if}
-      </span>
-
-      <span class="twrap" bind:this={remindWrap}>
-        <button
-          class="icon"
-          class:on={openPop === 'remind' || !!note.remindAt}
-          data-testid="note-remind"
-          title={note.remindAt ? `Reminder: ${fmtWhen(note.remindAt)}` : 'Remind me'}
-          aria-label="Reminder"
-          onclick={() => togglePop('remind')}
-        ><Icon name="alarm" /></button>
-        {#if openPop === 'remind'}
-          <div class="pop panel remind" style={popStyle} data-testid="remind-pop">
-            <div class="crowhead">
-              <span>Remind me</span>
-              {#if note.remindAt}
-                <span class="val" data-testid="remind-when">
-                  {note.remindAt < Date.now() ? 'Was due ' : ''}{fmtWhen(note.remindAt)}
-                </span>
-              {/if}
-            </div>
-            <div class="quick">
-              {#each quickTimes() as q (q.label)}
-                <button data-testid="remind-quick" onclick={() => setRemind(q.at)}>{q.label}</button>
-              {/each}
-            </div>
-            <input
-              type="datetime-local"
-              data-testid="remind-at"
-              value={toLocalInput(note.remindAt)}
-              onchange={(e) => {
-                const v = (e.currentTarget as HTMLInputElement).value;
-                if (v) setRemind(new Date(v).getTime());
-              }}
-            />
-            {#if note.remindAt}
-              <button class="clear" data-testid="remind-clear" onclick={() => setRemind(null)}>Clear reminder</button>
-            {/if}
-            <p class="rhint">When it's time, your PC pins the note as a sticky and your phone shows a notification.</p>
-          </div>
-        {/if}
-      </span>
+{#if !narrow.current}
+        <span class="twrap" bind:this={palWrap}>
+          <button
+            class="icon"
+            class:on={openPop === 'pal'}
+            data-testid="note-color"
+            title="Note color"
+            aria-label="Note color"
+            onclick={() => togglePop('pal')}
+          ><Icon name="palette" /></button>
+        </span>
+        <span class="twrap" bind:this={sizeWrapEl}>
+          <button
+            class="icon"
+            class:on={openPop === 'size'}
+            data-testid="tools-toggle"
+            title="Text size {note.fontSize}{desktop ? ' · sticker opacity' : ''}"
+            aria-label="Text size"
+            onclick={() => togglePop('size')}
+          ><Icon name="noteSize" /></button>
+        </span>
+      {/if}
+      {#if !narrow.current || note.remindAt}
+        <span class="twrap" bind:this={remindWrap}>
+          <button
+            class="icon"
+            class:on={openPop === 'remind' || !!note.remindAt}
+            data-testid="note-remind"
+            title={note.remindAt ? `Reminder: ${fmtWhen(note.remindAt)}` : 'Remind me'}
+            aria-label="Reminder"
+            onclick={() => togglePop('remind')}
+          ><Icon name="alarm" /></button>
+        </span>
+      {/if}
 
       <button
         class="icon"
@@ -288,31 +243,160 @@
         aria-label="Pin note"
         onclick={() => store.update(note!.id, { pinned: !note!.pinned })}
       ><Icon name="pin" /></button>
-      {#if note.pinned}
+
+      {#if !narrow.current}
+        {#if note.pinned}
+          <button
+            class="icon"
+            data-testid="pane-tuck"
+            class:on={!!note.tucked}
+            aria-pressed={!!note.tucked}
+            title={tuckTitle(note.tucked)}
+            aria-label={tuckTitle(note.tucked)}
+            onclick={() => store.update(note!.id, { tucked: !note!.tucked })}
+          ><Icon name={note.tucked ? 'untuck' : 'tuck'} /></button>
+        {/if}
         <button
           class="icon"
-          data-testid="pane-tuck"
-          class:on={!!note.tucked}
-          aria-pressed={!!note.tucked}
-          title={tuckTitle(note.tucked)}
-          aria-label={tuckTitle(note.tucked)}
-          onclick={() => store.update(note!.id, { tucked: !note!.tucked })}
-        ><Icon name={note.tucked ? 'untuck' : 'tuck'} /></button>
+          data-testid="note-archive"
+          title={note.archived ? 'Move back to notes' : 'Archive note'}
+          aria-label={note.archived ? 'Move back to notes' : 'Archive note'}
+          onclick={toggleArchive}
+        ><Icon name={note.archived ? 'unarchive' : 'archive'} /></button>
+        {#if note.archived}
+          <button
+            class="icon"
+            data-testid="note-delete"
+            title="Delete forever"
+            aria-label="Delete forever"
+            onclick={deleteNote}
+          ><Icon name="deleteForever" /></button>
+        {/if}
+      {:else}
+        <span class="twrap" bind:this={moreWrap}>
+          <button
+            class="icon"
+            class:on={openPop === 'more'}
+            data-testid="note-more"
+            title="More"
+            aria-label="More actions"
+            aria-haspopup="menu"
+            aria-expanded={openPop === 'more'}
+            onclick={() => togglePop('more')}
+          ><Icon name="more" /></button>
+        </span>
       {/if}
-      <button
-        class="icon"
-        data-testid="note-archive"
-        title={note.archived ? 'Move back to notes' : 'Archive note'}
-        aria-label={note.archived ? 'Move back to notes' : 'Archive note'}
-        onclick={toggleArchive}
-      ><Icon name={note.archived ? 'unarchive' : 'archive'} /></button>
-      <button
-        class="icon danger"
-        data-testid="note-delete"
-        title="Delete note"
-        aria-label="Delete note"
-        onclick={deleteNote}
-      ><Icon name="trash" /></button>
+
+      <!-- One popover at a time, outside the buttons' wrappers: a panel
+           opened from the ⋯ menu belongs to no visible button. -->
+      {#if openPop}
+        <div class="popwrap" bind:this={popEl}>
+          {#if openPop === 'pal'}
+            <div class="pop palmenu" style={popStyle}>
+              <ColorPicker
+                paletteId={note.paletteId}
+                onPick={(id) => {
+                  store.update(note!.id, { paletteId: id });
+                  // Sliders keep the menu open (they're continuous); a chip closes it.
+                  if (!id.startsWith('custom:')) openPop = null;
+                }}
+              />
+            </div>
+          {:else if openPop === 'size'}
+            <div class="pop panel sizepanel" style={popStyle}>
+              <label class="vctl">
+                <span class="vval" data-testid="size-value">{note.fontSize}</span>
+                <input
+                  class="vrange"
+                  type="range" min="12" max="40" step="1"
+                  data-testid="size-slider"
+                  aria-label="Text size"
+                  value={note.fontSize}
+                  oninput={(e) => store.update(note!.id, { fontSize: +(e.currentTarget as HTMLInputElement).value })}
+                />
+                <span class="vlab">Text size</span>
+              </label>
+              {#if desktop}
+                <label class="vctl">
+                  <span class="vval" data-testid="opacity-value">{Math.round(note.opacity * 100)}%</span>
+                  <input
+                    class="vrange"
+                    type="range" min="0.2" max="1" step="0.05"
+                    data-testid="opacity-slider"
+                    aria-label="Sticker opacity"
+                    value={note.opacity}
+                    oninput={(e) => store.update(note!.id, { opacity: +(e.currentTarget as HTMLInputElement).value })}
+                  />
+                  <span class="vlab">Opacity</span>
+                </label>
+              {/if}
+            </div>
+          {:else if openPop === 'remind'}
+            <div class="pop panel remind" style={popStyle} data-testid="remind-pop">
+              <div class="crowhead">
+                <span>Remind me</span>
+                {#if note.remindAt}
+                  <span class="val" data-testid="remind-when">
+                    {note.remindAt < Date.now() ? 'Was due ' : ''}{fmtWhen(note.remindAt)}
+                  </span>
+                {/if}
+              </div>
+              <div class="quick">
+                {#each quickTimes() as q (q.label)}
+                  <button data-testid="remind-quick" onclick={() => setRemind(q.at)}>{q.label}</button>
+                {/each}
+              </div>
+              <input
+                type="datetime-local"
+                data-testid="remind-at"
+                value={toLocalInput(note.remindAt)}
+                onchange={(e) => {
+                  const v = (e.currentTarget as HTMLInputElement).value;
+                  if (v) setRemind(new Date(v).getTime());
+                }}
+              />
+              {#if note.remindAt}
+                <button class="clear" data-testid="remind-clear" onclick={() => setRemind(null)}>Clear reminder</button>
+              {/if}
+              <p class="rhint">When it's time, your PC pins the note as a sticky and your phone shows a notification.</p>
+            </div>
+          {:else if openPop === 'more'}
+            <div class="pop menu" role="menu" style={popStyle} data-testid="note-menu">
+              <button class="mi" role="menuitem" data-testid="menu-color" onclick={() => fromMenu('pal')}>
+                <Icon name="palette" /><span>Note color</span>
+              </button>
+              <button class="mi" role="menuitem" data-testid="menu-size" onclick={() => fromMenu('size')}>
+                <Icon name="noteSize" /><span>Text size</span><span class="mv">{note.fontSize}</span>
+              </button>
+              <button class="mi" role="menuitem" data-testid="menu-remind" onclick={() => fromMenu('remind')}>
+                <Icon name="alarm" /><span>{note.remindAt ? 'Reminder' : 'Remind me'}</span>
+                {#if note.remindAt}<span class="mv">{fmtWhen(note.remindAt)}</span>{/if}
+              </button>
+              {#if note.pinned}
+                <button
+                  class="mi"
+                  role="menuitemcheckbox"
+                  data-testid="menu-tuck"
+                  aria-checked={!!note.tucked}
+                  onclick={() => {
+                    store.update(note!.id, { tucked: !note!.tucked });
+                    openPop = null;
+                  }}
+                ><Icon name={note.tucked ? 'untuck' : 'tuck'} /><span>{tuckTitle(note.tucked)}</span></button>
+              {/if}
+              <button class="mi" role="menuitem" data-testid="menu-archive" onclick={toggleArchive}>
+                <Icon name={note.archived ? 'unarchive' : 'archive'} />
+                <span>{note.archived ? 'Move back to notes' : 'Archive'}</span>
+              </button>
+              {#if note.archived}
+                <button class="mi danger" role="menuitem" data-testid="menu-delete" onclick={deleteNote}>
+                  <Icon name="deleteForever" /><span>Delete forever</span>
+                </button>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      {/if}
     </div>
 
     <div class="editorWrap">
@@ -368,8 +452,9 @@
   .topbar {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 18px 8px 12px; /* insets: left matches list, right keeps trash off the edge */
+    /* Same rhythm as the formatting toolbar: equal buttons, 3px apart. */
+    gap: 3px;
+    padding: 5px 8px 5px 12px; /* left matches the list */
     /* -color, not the shorthand: the shorthand would wipe a pattern's background-image */
     background-color: var(--note-header);
   }
@@ -391,16 +476,17 @@
     color: var(--note-fg);
     opacity: 0.45;
   }
+  /* The same buttons as the formatting toolbar below: size, ink and hover.
+     (They used to be smaller and faded to 55%, so the two bars disagreed.) */
   .icon {
     border: none;
     background: transparent;
     color: var(--note-fg);
-    height: 34px;
-    min-width: 34px;
+    height: 30px;
+    min-width: 32px;
     padding: 0 8px;
     border-radius: var(--radius-sm);
     cursor: pointer;
-    opacity: 0.55;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -408,19 +494,16 @@
   }
   .icon:hover {
     /* Mixed from the note's ink so dark palettes get a visible hover. */
-    background: color-mix(in srgb, var(--note-fg) 9%, transparent);
-    opacity: 1;
+    background: color-mix(in srgb, var(--note-fg) 8%, transparent);
   }
   /* Monochrome active state: invert the note's colors. */
   .icon.on {
-    opacity: 1;
     background: var(--note-fg);
     color: var(--note-bg);
   }
   /* Fullscreen/back toggles only exist in the phone layout. */
   .mob {
     display: none;
-    opacity: 0.8;
   }
   /* Phone: the pane is the lower 70% of the stacked split, or all of it in
      fullscreen (.note-open on the page's <main>). */
@@ -432,6 +515,15 @@
   @media (max-width: 700px) {
     .mob {
       display: inline-flex;
+    }
+    /* Phone: the toolbar's 42px touch targets, edge to edge. */
+    .topbar {
+      gap: 0;
+      padding: 4px;
+    }
+    .icon {
+      height: 42px;
+      min-width: 42px;
     }
     .pane {
       height: 70%;
@@ -448,6 +540,9 @@
   .twrap {
     position: relative;
     display: inline-flex;
+  }
+  .popwrap {
+    display: contents;
   }
   /* Popovers are fixed-positioned via inline style (see popoverStyle). */
   .pop {
@@ -512,26 +607,72 @@
     padding: 14px 16px;
     width: 270px;
   }
-  .ctl {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
   .crowhead {
     display: flex;
     justify-content: space-between;
     font-size: 14px;
     color: var(--app-muted);
   }
-  .ctl input[type='range'] {
-    width: 100%;
+  /* Text size (and, on the PC, sticker opacity): vertical sliders, low at
+     the bottom, the value on top. */
+  .sizepanel {
+    flex-direction: row;
+    justify-content: center;
+    gap: 20px;
+    padding: 14px 10px 12px;
+  }
+  .vctl {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--app-muted);
+  }
+  .vval {
+    font-size: 16px;
+    color: var(--app-fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .vrange {
+    writing-mode: vertical-lr;
+    direction: rtl;
+    width: 30px;
+    height: 180px;
+    margin: 0;
     accent-color: var(--app-fg);
   }
-  .icon.aa {
-    font-size: 14px;
-    white-space: nowrap;
-    width: auto;
-    padding: 0 10px;
+  /* The ⋯ menu on phones. */
+  .menu {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+  }
+  .mi {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font: inherit;
+    font-size: 15px;
+    text-align: left;
+    padding: 10px 12px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--app-fg);
+    cursor: pointer;
+  }
+  .mi:hover {
+    background: var(--app-bg);
+  }
+  .mi .mv {
+    margin-left: auto;
+    font-size: 13px;
+    color: var(--app-muted);
+  }
+  .mi.danger {
+    color: var(--app-danger);
   }
   .editorWrap {
     flex: 1;

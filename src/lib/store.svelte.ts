@@ -9,7 +9,7 @@
 // which is why flush() exists for page-hide.
 
 import { isDriveAccessError } from './drive/driveAccess';
-import { DEFAULT_SETTINGS, newNote, rollTilt, type Note, type Settings } from './types';
+import { BASE_FONT_PX, DEFAULT_NOTE_PX, DEFAULT_SETTINGS, newNote, rollTilt, type Note, type Settings } from './types';
 import { welcomeNotes } from './welcome';
 import { Outbox, type OutboxOp } from './outbox';
 import type { StorageBackend } from './storage/backend';
@@ -673,11 +673,17 @@ class AppStore {
    * Settings changes that must reach accounts which already saved the old
    * value, once each. Runs only after a successful load, so an offline start
    * can never write defaults over the real settings. v1 (0.22): list above
-   * the note with automatic columns, and sticky tilt off.
+   * the note with automatic columns, and sticky tilt off. v2 (0.27): new
+   * notes start at text size 22 instead of 18, unless someone chose
+   * another size themselves.
    */
   #migrateSettings() {
-    if ((this.settings.settingsVersion ?? 0) >= 1) return;
-    void this.saveSettings({ layout: 'top', listColumns: 'auto', stickyTilt: false, settingsVersion: 1 });
+    const v = this.settings.settingsVersion ?? 0;
+    if (v >= 2) return;
+    const patch: Partial<Settings> = { settingsVersion: 2 };
+    if (v < 1) Object.assign(patch, { layout: 'top', listColumns: 'auto', stickyTilt: false });
+    if (this.settings.defaultFontSize === BASE_FONT_PX) patch.defaultFontSize = DEFAULT_NOTE_PX;
+    void this.saveSettings(patch);
   }
 
   /** Manual "sync now" — bypasses the focus throttle and any backoff. */

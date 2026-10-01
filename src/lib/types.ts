@@ -4,6 +4,12 @@
 /** Default body font size (px). The FontSize extension renders sizes as em
  *  relative to this, so the base-size slider is a true text zoom. */
 export const BASE_FONT_PX = 18;
+/**
+ * The text size a new note starts at. Separate from BASE_FONT_PX on purpose:
+ * that one is the unit sizes inside a note are stored against (em of 18px),
+ * and changing it would rescale every sized word in every existing note.
+ */
+export const DEFAULT_NOTE_PX = 22;
 
 export interface Note {
   id: string;
@@ -75,7 +81,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   defaultPaletteId: 'paper',
-  defaultFontSize: BASE_FONT_PX,
+  defaultFontSize: DEFAULT_NOTE_PX,
   appTheme: 'light',
   autostart: false,
   syncFolder: null,
@@ -101,7 +107,7 @@ export function newNote(partial: Partial<Note> = {}): Note {
     title: '',
     contentHtml: '',
     paletteId: 'paper',
-    fontSize: BASE_FONT_PX,
+    fontSize: DEFAULT_NOTE_PX,
     pinned: false,
     opacity: 1,
     win: null,
