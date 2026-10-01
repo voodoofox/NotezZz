@@ -1499,7 +1499,7 @@ test.describe('themes', () => {
     const image = () => pane.evaluate((el) => getComputedStyle(el).backgroundImage);
     expect(await image()).toContain('linear-gradient');
     expect(await image()).toContain('data:image/svg+xml');
-    expect(await rootVar(page, '--note-header-mix')).toBe('10%');
+    expect(await rootVar(page, '--note-header-mix')).toBe('7.5%');
     expect(await rootVar(page, '--note-chin-mix')).toBe('0%');
     // The adhesive strip under the title darkens it.
     const strip = await page.locator('.topbar').evaluate((el) => getComputedStyle(el).boxShadow);

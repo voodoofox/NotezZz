@@ -68,9 +68,9 @@ export const BUILTIN_THEMES: ThemeDef[] = [
       light: { color: '#ffffff', strength: 0.5, reach: 0.4 },
       shade: { color: '#000000', strength: 0.16, reach: 0.4 },
       curve: 4,
-      grain: 0.2,
-      header: 0.1,
-      strip: { color: '#000000', strength: 0.1 },
+      grain: 0.1,
+      header: 0.075,
+      strip: { color: '#000000', strength: 0.075 },
       toolbar: 0,
     },
     buttons: { ...LOGO_BUTTONS },
@@ -217,7 +217,7 @@ export function grainImage(opacity: number): string {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
-const pct = (v: number) => `${Math.round(v * 100)}%`;
+const pct = (v: number) => `${+(v * 100).toFixed(1)}%`;
 
 function stripShadow(s: { color: string; strength: number }): string {
   if (s.strength <= 0) return 'none';
