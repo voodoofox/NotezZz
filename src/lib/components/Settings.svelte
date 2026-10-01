@@ -241,17 +241,20 @@
 
     <section>
       <h3>Appearance</h3>
-      <label class="row">
+      <div class="row">
         <span>App theme</span>
-        <select
-          data-testid="set-theme"
-          value={store.settings.appTheme}
-          onchange={(e) => store.saveSettings({ appTheme: (e.currentTarget as HTMLSelectElement).value as 'light' | 'dark' })}
-        >
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-        </select>
-      </label>
+        <span class="seg" role="radiogroup" aria-label="App theme" data-testid="set-theme">
+          {#each [['light', 'Light'], ['dark', 'Dark']] as [v, label]}
+            <button
+              role="radio"
+              aria-checked={store.settings.appTheme === v}
+              class:on={store.settings.appTheme === v}
+              data-value={v}
+              onclick={() => store.saveSettings({ appTheme: v as 'light' | 'dark' })}
+            >{label}</button>
+          {/each}
+        </span>
+      </div>
 
       <label class="row">
         <span>Default palette</span>
@@ -270,17 +273,20 @@
            the setting syncs: showing it there would offer a switch that does
            nothing here and rearranges the PC. -->
       {#if !mobile}
-        <label class="row">
+        <div class="row">
           <span>Note list</span>
-          <select
-            data-testid="set-layout"
-            value={store.settings.layout ?? 'top'}
-            onchange={(e) => store.saveSettings({ layout: (e.currentTarget as HTMLSelectElement).value as 'side' | 'top' })}
-          >
-            <option value="top">Above the note (like the phone)</option>
-            <option value="side">Beside the note</option>
-          </select>
-        </label>
+          <span class="seg" role="radiogroup" aria-label="Note list" data-testid="set-layout">
+            {#each [['top', 'Above the note'], ['side', 'Beside it']] as [v, label]}
+              <button
+                role="radio"
+                aria-checked={(store.settings.layout ?? 'top') === v}
+                class:on={(store.settings.layout ?? 'top') === v}
+                data-value={v}
+                onclick={() => store.saveSettings({ layout: v as 'side' | 'top' })}
+              >{label}</button>
+            {/each}
+          </span>
+        </div>
         {#if (store.settings.layout ?? 'top') === 'top'}
           <label class="row">
             <span>List columns</span>
@@ -591,13 +597,15 @@
     padding: 7px 0;
     font-size: 16px;
   }
+  /* Fields and buttons: tinted like the app's buttons, no outlines. */
   .row select,
   .row input[type='number'] {
-    background: var(--app-bg);
+    background: color-mix(in srgb, var(--app-fg) 7%, transparent);
     color: var(--app-fg);
-    border: 1px solid var(--app-border);
-    border-radius: var(--radius-sm);
-    padding: 5px 8px;
+    border: none;
+    border-radius: var(--btn-radius);
+    min-height: var(--btn);
+    padding: 0 10px;
     font-size: 15px;
   }
   .row input[type='number'] {
@@ -639,13 +647,53 @@
   }
   .folder button,
   .panel button:not(.close) {
+    background: color-mix(in srgb, var(--app-fg) 9%, transparent);
+    color: var(--app-fg);
+    border: none;
+    border-radius: var(--btn-radius);
+    min-height: var(--btn);
+    padding: 0 13px;
+    font-size: 15px;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .panel button:not(.close):hover,
+  .panel button:not(.close):active {
+    background: color-mix(in srgb, var(--app-fg) 15%, transparent);
+  }
+  /* Two or three choices side by side: a tinted strip, the chosen one
+     filled (inverted, like every "on" state). */
+  .seg {
+    display: inline-flex;
+    gap: var(--btn-gap);
+    padding: 2px;
+    border-radius: calc(var(--btn-radius) + 2px);
+    background: color-mix(in srgb, var(--app-fg) 7%, transparent);
+  }
+  .panel .seg button {
+    background: transparent;
+    min-height: calc(var(--btn) - 4px);
+    padding: 0 12px;
+  }
+  .panel .seg button.on {
     background: var(--app-fg);
     color: var(--app-panel);
-    border: none;
-    border-radius: var(--radius-sm);
-    padding: 7px 13px;
-    font-size: 15px;
-    cursor: pointer;
+  }
+  /* Phones: settings take the whole screen, a page rather than a card. */
+  @media (max-width: 700px) {
+    .overlay {
+      align-items: stretch;
+    }
+    .panel {
+      width: 100%;
+      max-width: none;
+      max-height: none;
+      height: 100%;
+      border: none;
+      border-radius: 0;
+      padding-top: calc(4px + var(--safe-top, 0px));
+      box-shadow: none;
+    }
   }
   .folder button:disabled {
     opacity: 0.5;

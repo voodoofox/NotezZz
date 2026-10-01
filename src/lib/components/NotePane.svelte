@@ -176,6 +176,7 @@
       --note-fg: {pal.fg};
       --note-ink: {pal.ink ?? pal.fg};
       --slider-ink: {inkOnWhite(pal.bg, pal.fg)};
+      --own-strip: {pal.dark ? 'var(--note-strip-dark)' : 'var(--note-strip)'};
       --pat-img: {pal.patternImage ?? 'none'};
       color-scheme: {pal.dark ? 'dark' : 'light'};
     "
@@ -461,7 +462,7 @@
     background-color: color-mix(in srgb, var(--note-header) var(--note-header-mix), transparent);
     --pat-base: color-mix(in srgb, var(--note-header) var(--note-header-mix), transparent);
     --pat-ink: color-mix(in srgb, var(--note-ink) var(--note-pat-mix), transparent);
-    box-shadow: var(--note-strip); /* the adhesive tint */
+    box-shadow: var(--own-strip, var(--note-strip)); /* the adhesive tint (lighter on dark notes) */
   }
   .title {
     flex: 1 1 0;
@@ -497,9 +498,16 @@
     justify-content: center;
     flex-shrink: 0;
   }
-  .icon:hover {
-    /* Mixed from the note's ink so dark palettes get a visible hover. */
-    background: color-mix(in srgb, var(--note-fg) 8%, transparent);
+  /* Mixed from the note's ink so dark palettes get a visible hover. Hover
+     only with a real pointer (a phone keeps it on the last tap); a press
+     shows everywhere. */
+  @media (hover: hover) {
+    .icon:hover {
+      background: color-mix(in srgb, var(--note-fg) 8%, transparent);
+    }
+  }
+  .icon:active {
+    background: color-mix(in srgb, var(--note-fg) 16%, transparent);
   }
   /* Monochrome active state: invert the note's colors. */
   .icon.on {
@@ -648,6 +656,7 @@
     gap: 12px;
     font: inherit;
     font-size: 15px;
+    font-weight: 400; /* the body's light weight read grey in a menu */
     text-align: left;
     padding: 10px 12px;
     border: none;
@@ -656,7 +665,8 @@
     color: var(--app-fg);
     cursor: pointer;
   }
-  .mi:hover {
+  .mi:hover,
+  .mi:active {
     background: var(--app-bg);
   }
   .mi .mv {

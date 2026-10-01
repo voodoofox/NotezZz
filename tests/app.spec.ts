@@ -91,7 +91,6 @@ test('italic and underline apply', async ({ page }) => {
   await typeInEditor(page, 'styled');
   await page.locator('.ProseMirror').press('ControlOrMeta+a');
   await page.getByTestId('fmt-italic').click();
-  await page.getByTestId('fmt-more').click(); // underline lives in the toolbar's ⋯
   await page.getByTestId('fmt-underline').click();
   await expect(page.locator('.ProseMirror em')).toHaveCount(1);
   await expect(page.locator('.ProseMirror u')).toHaveCount(1);
@@ -137,6 +136,7 @@ test('image import inserts a picture into the note', async ({ page }) => {
 test('custom color sliders recolor the note', async ({ page }) => {
   await createNote(page);
   await menu(page, 'color');
+  await page.getByTestId('custom-toggle').click();
   await page.getByTestId('custom-hue').fill('200');
   await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', /custom:#/);
 });
@@ -269,6 +269,7 @@ test('a pinned note on the desktop has its own transparency control', async ({ p
     () => Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!.slice('notezzz:note:'.length)
   );
   await page.goto(`/sticky?id=${id}`);
+  await page.getByTestId('sticky-more').click(); // transparency lives in the sticky's ⋯, as on the note
   await page.getByTestId('sticky-opacity').click();
   const slider = page.getByTestId('sticky-opacity-slider');
   await expect(slider).toBeVisible();
@@ -463,7 +464,7 @@ test('settings shows the version/build stamp', async ({ page }) => {
 test('settings: switching theme updates the document', async ({ page }) => {
   await page.getByTestId('open-settings').click();
   await expect(page.getByTestId('settings-close')).toBeVisible();
-  await page.getByTestId('set-theme').selectOption('dark');
+  await page.getByTestId('set-theme').locator('[data-value="dark"]').click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.getByTestId('settings-close').click();
 });
@@ -1170,7 +1171,7 @@ test('settings: the new-sticky shortcut is off by default and sticks when enable
 test('settings: the note list can move above the note, in columns', async ({ page }) => {
   await createNote(page);
   await page.getByTestId('open-settings').click();
-  await page.getByTestId('set-layout').selectOption('top');
+  await page.getByTestId('set-layout').locator('[data-value="top"]').click();
   await page.getByTestId('set-columns').selectOption('3');
   await page.getByTestId('settings-close').click();
 
@@ -1180,7 +1181,7 @@ test('settings: the note list can move above the note, in columns', async ({ pag
 
   // It is a setting: back to the side layout and it stays.
   await page.getByTestId('open-settings').click();
-  await page.getByTestId('set-layout').selectOption('side');
+  await page.getByTestId('set-layout').locator('[data-value="side"]').click();
   await page.getByTestId('settings-close').click();
   await expect(app).not.toHaveClass(/stacked/);
 });
@@ -1205,6 +1206,7 @@ test('a sticky can be renamed in place with a double-click on its title', async 
 test('a custom colour can be saved to a slot and reset from Settings', async ({ page }) => {
   await createNote(page);
   await menu(page, 'color');
+  await page.getByTestId('custom-toggle').click();
   await page.getByTestId('custom-hue').fill('120');
   await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', /custom:#/);
   await page.getByTestId('save-color').click();
@@ -1438,7 +1440,7 @@ test.describe("phone: the logo's design rules", () => {
   test('every button is the same rounded square, 2px from its neighbour', async ({ page }) => {
     await page.getByTestId('new-note').click();
     await page.getByTestId('pane-pin').click(); // brings the tuck button into the bar
-    const ids = ['pane-pin', 'pane-tuck', 'note-more', 'fmt-bold', 'fmt-record', 'new-note', 'search-toggle', 'fmt-more'];
+    const ids = ['pane-pin', 'pane-tuck', 'note-more', 'fmt-bold', 'fmt-record', 'new-note', 'search-toggle'];
     const boxes = await Promise.all(ids.map((id) => page.getByTestId(id).boundingBox()));
     const w = Math.round(boxes[0]!.width);
     for (const [i, b] of boxes.entries()) {
@@ -1453,10 +1455,10 @@ test.describe("phone: the logo's design rules", () => {
     const radius = await page.getByTestId('pane-pin').evaluate((el) => parseFloat(getComputedStyle(el).borderTopLeftRadius));
     expect(radius / w).toBeGreaterThan(0.2);
     expect(radius / w).toBeLessThan(0.27);
-    // The toolbar's ⋯ ends the edge (6px) in from the screen's right, like
-    // the note's ⋯ and the header's + above it.
-    const tmore = boxes[7]!;
-    expect(Math.round(400 - (tmore.x + tmore.width))).toBe(6);
+    // The toolbar's buttons spread over the row: the mic ends the edge (6px)
+    // in from the screen's right, like the note's ⋯ and the header's +.
+    const mic = boxes[4]!;
+    expect(Math.round(400 - (mic.x + mic.width))).toBe(6);
   });
 
   test('the ⋯ menu lines up with the right edge of its button', async ({ page }) => {
@@ -1683,7 +1685,7 @@ test('Daylight: light and shade meet three quarters down; grain on top, blended 
 /** Settings -> where the list sits, and how many columns it gets. */
 async function listLayout(page: Page, layout: 'top' | 'side', columns?: 'auto' | '1' | '2' | '3') {
   await page.getByTestId('open-settings').click();
-  await page.getByTestId('set-layout').selectOption(layout);
+  await page.getByTestId('set-layout').locator(`[data-value="${layout}"]`).click();
   if (columns) await page.getByTestId('set-columns').selectOption(columns);
   await page.getByTestId('settings-close').click();
 }
@@ -1812,7 +1814,7 @@ test('the selected row fills with its note colour, grown out of the colour bar',
 test.describe('phone: one line of buttons down the right', () => {
   test.use({ viewport: { width: 412, height: 915 } });
 
-  test("the header's +, each row's last button, the note's ⋯ and the toolbar's ⋯ share a centre", async ({ page }) => {
+  test("the header's +, each row's last button, the note's ⋯ and the toolbar's mic share a centre", async ({ page }) => {
     for (let i = 0; i < 8; i++) await createNote(page); // enough to scroll the list
     await page.getByTestId('note-item').first().getByTestId('note-pin').click(); // a row with a tuck button too
     const cx = async (l: ReturnType<Page['locator']>) => {
@@ -1821,7 +1823,7 @@ test.describe('phone: one line of buttons down the right', () => {
     };
     const line = await cx(page.getByTestId('new-note'));
     expect(Math.abs((await cx(page.getByTestId('note-more'))) - line)).toBeLessThan(0.5);
-    expect(Math.abs((await cx(page.getByTestId('fmt-more'))) - line)).toBeLessThan(0.5);
+    expect(Math.abs((await cx(page.getByTestId('fmt-record'))) - line)).toBeLessThan(0.5);
     const rows = page.getByTestId('note-item');
     for (let i = 0; i < 3; i++) {
       const last = rows.nth(i).locator('button').last();
@@ -1861,25 +1863,6 @@ test.describe('phone: one line of buttons down the right', () => {
   });
 });
 
-test("the toolbar's ⋯ holds underline, strikethrough, numbered list and the selection's size", async ({ page }) => {
-  await createNote(page);
-  await typeInEditor(page, 'sized');
-  await page.locator('.ProseMirror').press('ControlOrMeta+a');
-  await page.getByTestId('fmt-more').click();
-  await expect(page.getByTestId('fmt-menu')).toBeVisible();
-  for (const id of ['fmt-underline', 'fmt-strike', 'fmt-ordered', 'fmt-size']) await expect(page.getByTestId(id)).toBeVisible();
-  await page.getByTestId('fmt-strike').click();
-  await expect(page.getByTestId('fmt-menu')).toHaveCount(0); // a pick closes it
-  await expect(page.locator('.ProseMirror s')).toHaveCount(1);
-  await page.getByTestId('fmt-more').click();
-  await expect(page.getByTestId('fmt-strike')).toHaveAttribute('aria-checked', 'true');
-  await page.getByTestId('fmt-size').click();
-  await page.getByTestId('size-menu').getByText('24', { exact: true }).click();
-  // Stored relative to the note's own size (24px on an 18px note: 1.3333em).
-  await expect(page.locator('.ProseMirror span[style*="font-size"]')).toHaveCount(1);
-});
-
-
 test('while recording, the mic button stays red even under the pointer (a phone keeps :hover after a tap)', async ({ page }) => {
   await createNote(page);
   const rec = page.getByTestId('fmt-record');
@@ -1900,3 +1883,158 @@ test('while recording, the mic button stays red even under the pointer (a phone 
   expect(bg).toBe(danger);
   await rec.click(); // stop
 });
+
+test('the toolbar: no numbered list, no ⋯; recording shows red with no seconds', async ({ page }) => {
+  await createNote(page);
+  await expect(page.getByTestId('fmt-ordered')).toHaveCount(0);
+  await expect(page.getByTestId('fmt-more')).toHaveCount(0);
+  for (const id of ['fmt-underline', 'fmt-strike', 'fmt-size']) await expect(page.getByTestId(id)).toBeVisible();
+  const rec = page.getByTestId('fmt-record');
+  const w = (await rec.boundingBox())!.width;
+  await rec.click();
+  await expect(rec).toHaveAttribute('aria-pressed', 'true');
+  await page.waitForTimeout(1200);
+  expect(await rec.innerText()).toBe(''); // the icon only
+  expect(Math.round((await rec.boundingBox())!.width)).toBe(Math.round(w)); // still one button
+  await rec.click();
+});
+
+test('a horizontal line is the ink at half strength', async ({ page }) => {
+  await createNote(page);
+  const pm = page.locator('.ProseMirror');
+  await pm.click();
+  await page.keyboard.type('above');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('---');
+  await expect(pm.locator('hr')).toHaveCount(1);
+  const c = await pm.locator('hr').evaluate((el) => getComputedStyle(el).borderTopColor);
+  expect(c).toMatch(/rgba?\(.*0\.5\)|color\(srgb .* \/ 0\.5\)/);
+});
+
+test('checklist boxes follow the text size and the button shape', async ({ page }) => {
+  await createNote(page);
+  await page.locator('.ProseMirror').click();
+  await page.keyboard.type('milk');
+  await page.getByTestId('fmt-checklist').click();
+  const box = await page.locator('.ProseMirror input[type=checkbox]').evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    return { w: r.width, font: parseFloat(cs.fontSize), radius: parseFloat(cs.borderTopLeftRadius), border: cs.borderTopStyle };
+  });
+  expect(box.w).toBeGreaterThan(18); // 0.9em of the 22px text, not the browser's 13px
+  expect(Math.abs(box.w - box.font * 0.9)).toBeLessThan(0.6);
+  expect(box.radius / box.w).toBeGreaterThan(0.2);
+  expect(box.border).toBe('none');
+});
+
+test('a dropped connection is retried quietly; a run of them is said in words', async ({ page }) => {
+  await createNote(page);
+  const sync = () => page.evaluate(() => (window as unknown as { __nzSyncNow: () => Promise<void> }).__nzSyncNow());
+  await page.evaluate(() => localStorage.setItem('notezzz:test:failLoads', '1'));
+  await sync();
+  await sync();
+  await expect(page.getByTestId('sync-error')).toHaveCount(0); // weather, not news
+  await sync();
+  await expect(page.getByTestId('sync-error')).toBeVisible();
+  await expect(page.getByTestId('sync-error')).toContainText("Can't reach Google Drive");
+  await expect(page.getByTestId('sync-error')).not.toContainText('signal timed out');
+  await page.evaluate(() => localStorage.removeItem('notezzz:test:failLoads'));
+  await sync();
+  await expect(page.getByTestId('sync-error')).toHaveCount(0); // gone on its own
+});
+
+test.describe('phone: the selection balloon', () => {
+  test.use({ viewport: { width: 412, height: 915 } });
+
+  test('stays whole on screen, buttons like every other', async ({ page }) => {
+    await createNote(page);
+    const pm = page.locator('.ProseMirror');
+    await pm.click();
+    await page.keyboard.type('amplify this word');
+    // Select the first word, at the far left of the line.
+    await page.keyboard.press('Home');
+    await page.keyboard.press('Shift+ControlOrMeta+ArrowRight');
+    const bubble = page.getByTestId('format-bubble');
+    await expect(bubble).toBeVisible();
+    const b = (await bubble.boundingBox())!;
+    expect(b.x).toBeGreaterThanOrEqual(5);
+    expect(b.x + b.width).toBeLessThanOrEqual(412 - 5);
+    const [btn, bar] = await Promise.all([
+      bubble.locator('button').first().boundingBox(),
+      page.getByTestId('fmt-bold').boundingBox(),
+    ]);
+    expect(Math.round(btn!.width)).toBe(Math.round(bar!.width));
+    expect(Math.round(btn!.height)).toBe(Math.round(bar!.height));
+  });
+
+  test('settings fill the screen', async ({ page }) => {
+    await page.getByTestId('open-settings').click();
+    const p = (await page.locator('.panel').boundingBox())!;
+    expect(Math.round(p.width)).toBe(412);
+    expect(Math.round(p.height)).toBe(915);
+  });
+});
+
+test('sign-in: the logo and Google’s own button', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.gate .nz-logo')).toBeVisible();
+  const g = page.locator('.google');
+  await expect(g).toContainText('Sign in with Google');
+  await expect(g.locator('svg path[fill="#4285F4"]')).toHaveCount(1);
+  expect(await g.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(255, 255, 255)');
+});
+
+test('the list shows a pin only on pinned notes, filled like every on button', async ({ page }) => {
+  await createNote(page);
+  await createNote(page);
+  const rows = page.getByTestId('note-item');
+  const pinOf = (i: number) => rows.nth(i).getByTestId('note-pin');
+  await page.mouse.move(5, 790); // away from the list
+  expect(await pinOf(1).evaluate((el) => getComputedStyle(el).opacity)).toBe('0');
+  await pinOf(1).click({ force: true });
+  await expect(pinOf(1)).toHaveAttribute('aria-pressed', 'true');
+  await page.mouse.move(5, 790);
+  const on = await pinOf(1).evaluate((el) => ({ o: getComputedStyle(el).opacity, bg: getComputedStyle(el).backgroundColor }));
+  expect(on.o).toBe('1');
+  expect(on.bg).not.toBe('rgba(0, 0, 0, 0)');
+});
+
+test('right-click on a row: pin and archive without opening the note', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Errands');
+  const row = page.getByTestId('note-item').first();
+  await row.click({ button: 'right' });
+  await expect(page.getByTestId('row-menu')).toBeVisible();
+  await page.getByTestId('row-menu-pin').click();
+  await expect(row.getByTestId('note-pin')).toHaveAttribute('aria-pressed', 'true');
+  await row.click({ button: 'right' });
+  await page.getByTestId('row-menu-archive').click();
+  await expect(page.getByTestId('note-item')).toHaveCount(0);
+});
+
+test('a dark note keeps a visible title strip; long lines stop near 70 characters', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await createNote(page);
+  await menu(page, 'color');
+  await page.locator('[data-testid="palette-chip"][data-palette="black"]').click();
+  const strip = await page.locator('.topbar').evaluate((el) => getComputedStyle(el).boxShadow);
+  expect(strip).toContain('255, 255, 255');
+  const pad = await page.locator('.ProseMirror').evaluate((el) => parseFloat(getComputedStyle(el).paddingRight));
+  expect(pad).toBeGreaterThan(100);
+});
+
+test('the sticky header: add, pinned, tuck and ⋯ (colour and transparency inside)', async ({ page }) => {
+  await createNote(page);
+  await page.waitForTimeout(500);
+  const id = await page.evaluate(
+    () => Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!.slice('notezzz:note:'.length)
+  );
+  await page.goto(`/sticky?id=${id}`);
+  await expect(page.getByTestId('sticky-unpin')).toHaveAttribute('aria-pressed', 'true');
+  await page.getByTestId('sticky-more').click();
+  await expect(page.getByTestId('sticky-color')).toBeVisible();
+  await expect(page.getByTestId('sticky-opacity')).toBeVisible();
+  await page.getByTestId('sticky-color').click();
+  await expect(page.getByTestId('palette-chip').first()).toBeVisible();
+});
+

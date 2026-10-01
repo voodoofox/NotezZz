@@ -16,6 +16,21 @@
   }
   let { editor, tick, x, y, baseSize }: Props = $props();
 
+  // Always whole on screen: the Editor centres it on the selection, which
+  // near an edge pushed half of it off. Measured, then kept inside what is
+  // visible; under pinch-zoom it stays its normal size (counter-scaled).
+  let w = $state(0);
+  const place = $derived.by(() => {
+    void x;
+    const vv = window.visualViewport;
+    const s = vv?.scale ?? 1;
+    const ox = vv?.offsetLeft ?? 0;
+    const vw = vv?.width ?? window.innerWidth;
+    const shown = w / s;
+    const left = Math.min(Math.max(x - shown / 2, ox + 6 / s), ox + vw - shown - 6 / s);
+    return { left: Math.round(left), s };
+  });
+
   function isActive(name: string) {
     void tick;
     return editor?.isActive(name) ?? false;
@@ -37,60 +52,72 @@
 <div
   class="bubble"
   data-testid="format-bubble"
-  style="left: {x}px; top: {y}px"
+  style="left: {place.left}px; top: {y}px; transform: scale({1 / place.s})"
+  bind:offsetWidth={w}
   onpointerdown={(e) => e.preventDefault()}
 >
-  <button aria-label="Bold" aria-pressed={isActive('bold')} class:active={isActive('bold')} onclick={() => editor?.chain().focus().toggleBold().run()}><Icon name="bold" size={17} /></button>
-  <button aria-label="Italic" aria-pressed={isActive('italic')} class:active={isActive('italic')} onclick={() => editor?.chain().focus().toggleItalic().run()}><Icon name="italic" size={17} /></button>
-  <button aria-label="Underline" aria-pressed={isActive('underline')} class:active={isActive('underline')} onclick={() => editor?.chain().focus().toggleUnderline().run()}><Icon name="underline" size={17} /></button>
-  <button aria-label="Strikethrough" aria-pressed={isActive('strike')} class:active={isActive('strike')} onclick={() => editor?.chain().focus().toggleStrike().run()}><Icon name="strike" size={17} /></button>
+  <button aria-label="Bold" aria-pressed={isActive('bold')} class:active={isActive('bold')} onclick={() => editor?.chain().focus().toggleBold().run()}><Icon name="bold" /></button>
+  <button aria-label="Italic" aria-pressed={isActive('italic')} class:active={isActive('italic')} onclick={() => editor?.chain().focus().toggleItalic().run()}><Icon name="italic" /></button>
+  <button aria-label="Underline" aria-pressed={isActive('underline')} class:active={isActive('underline')} onclick={() => editor?.chain().focus().toggleUnderline().run()}><Icon name="underline" /></button>
+  <button aria-label="Strikethrough" aria-pressed={isActive('strike')} class:active={isActive('strike')} onclick={() => editor?.chain().focus().toggleStrike().run()}><Icon name="strike" /></button>
   <span class="bsep"></span>
   <button class="atext" aria-label="Smaller text" onclick={() => bumpSize(-1)}>A−</button>
   <button class="atext" aria-label="Larger text" onclick={() => bumpSize(1)}>A+</button>
 </div>
 
 <style>
-  /* Monochrome inverted pill floating below the selection. */
+  /* A balloon like the note's menus: a small sticker on the app panel,
+     its buttons the same rounded squares as everywhere, the active one
+     inverted. Floats below the selection (Android's own menu sits above). */
   .bubble {
     position: fixed;
-    transform: translateX(-50%);
+    transform-origin: 0 0;
     z-index: 40;
     display: flex;
     align-items: center;
     gap: var(--btn-gap);
     padding: var(--edge);
-    border-radius: var(--sticker-radius); /* a small sticker, like every balloon */
-    background: var(--app-fg);
-    color: var(--app-bg);
+    border-radius: var(--sticker-radius);
+    background: var(--app-panel);
+    color: var(--app-fg);
+    border: 1px solid var(--app-border);
     box-shadow: var(--sticker-shadow);
   }
   .bubble button {
     border: none;
     background: transparent;
     color: inherit;
-    min-width: var(--btn);
+    width: var(--btn);
     height: var(--btn);
+    padding: 0;
     border-radius: var(--btn-radius);
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     font: inherit;
-    font-size: 14px;
-    padding: 0 6px;
+    font-size: 15px;
+  }
+  @media (hover: hover) {
+    .bubble button:hover {
+      background: color-mix(in srgb, var(--app-fg) 8%, transparent);
+    }
+  }
+  .bubble button:active {
+    background: color-mix(in srgb, var(--app-fg) 16%, transparent);
   }
   .bubble button.active {
-    background: var(--app-bg);
-    color: var(--app-fg);
+    background: var(--app-fg);
+    color: var(--app-panel);
   }
   .bubble .atext {
     font-weight: 600;
   }
   .bsep {
     width: 1px;
-    height: 18px;
+    height: 20px;
     background: currentColor;
-    opacity: 0.3;
-    margin: 0 3px;
+    opacity: 0.16;
+    margin: 0 5px;
   }
 </style>

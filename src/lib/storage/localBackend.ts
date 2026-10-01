@@ -11,6 +11,8 @@ export class LocalBackend implements StorageBackend {
   readonly kind = 'local' as const;
 
   async listNotes(): Promise<Note[]> {
+    // Test hook: a network timeout, the way Drive's fetch reports one.
+    if (localStorage.getItem('notezzz:test:failLoads')) throw new DOMException('signal timed out', 'TimeoutError');
     const notes: Note[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);

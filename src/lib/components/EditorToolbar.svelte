@@ -1,6 +1,6 @@
 <script lang="ts">
-  // The formatting strip at the bottom of the note. Owns its ⋯ menu (and
-  // the size grid behind it), the image picker and the record button's UI; the
+  // The formatting strip above (desktop) / below (phones) the note body.
+  // Owns the size menu, the image picker and the record button's UI; the
   // TipTap instance and the recorder are the Editor's.
   import type { Editor } from '@tiptap/core';
   import { FONT_SIZES } from '../editor/fontSize';
@@ -19,31 +19,20 @@
   }
   let { editor, tick, recorder, onRecord, onDraw }: Props = $props();
 
-  // The ⋯ at the end of the bar: the less used tools, and from there the
-  // size grid for the selected text (like the note's own ⋯ menu).
-  let open = $state<null | 'menu' | 'size'>(null);
-  let moreWrap = $state<HTMLDivElement | null>(null);
+  let showSizes = $state(false);
+  let sizeWrap = $state<HTMLDivElement | null>(null);
   let barEl = $state<HTMLElement | null>(null);
-  let menuStyle = $state('');
+  let sizeMenuStyle = $state('');
   let fileInput = $state<HTMLInputElement | null>(null);
 
-  function show(which: 'menu' | 'size') {
-    if (moreWrap) menuStyle = popoverStyle(moreWrap, which === 'menu' ? 230 : 168, 'end', barEl);
-    open = which;
-  }
-  function toggleMore() {
-    if (open) open = null;
-    else show('menu');
-  }
-  /** Run a formatting command from the menu, then close it. */
-  function fromMenu(run: (e: Editor) => void) {
-    if (editor) run(editor);
-    open = null;
+  function toggleSizes() {
+    if (!showSizes && sizeWrap) sizeMenuStyle = popoverStyle(sizeWrap, 168, 'center', barEl);
+    showSizes = !showSizes;
   }
 
-  // Tapping anywhere else (including the text) closes the menu.
+  // Tapping anywhere else (including the text) closes the size menu.
   function onGlobalPointerDown(e: PointerEvent) {
-    if (open && moreWrap && !moreWrap.contains(e.target as Node)) open = null;
+    if (showSizes && sizeWrap && !sizeWrap.contains(e.target as Node)) showSizes = false;
   }
 
   /** Insert a photo/image, downscaled so notes stay reasonably sized. */
@@ -88,6 +77,23 @@
     aria-label="Italic"
     onclick={() => editor?.chain().focus().toggleItalic().run()}
   ><Icon name="italic" /></button>
+  <button
+    data-testid="fmt-underline"
+    class:active={isActive('underline')}
+    aria-pressed={isActive('underline')}
+    title="Underline (Ctrl+U)"
+    aria-label="Underline"
+    onclick={() => editor?.chain().focus().toggleUnderline().run()}
+  ><Icon name="underline" /></button>
+  <button
+    data-testid="fmt-strike"
+    class:active={isActive('strike')}
+    aria-pressed={isActive('strike')}
+    title="Strikethrough"
+    aria-label="Strikethrough"
+    onclick={() => editor?.chain().focus().toggleStrike().run()}
+  ><Icon name="strike" /></button>
+
   <span class="sep"></span>
 
   <button
@@ -112,6 +118,43 @@
   <button data-testid="fmt-draw" title="Draw a sketch" aria-label="Draw" onclick={onDraw}>
     <Icon name="draw" />
   </button>
+
+  <span class="sep"></span>
+
+  <div class="sizewrap" bind:this={sizeWrap}>
+    <button
+      data-testid="fmt-size"
+      class:active={showSizes}
+      aria-pressed={showSizes}
+      aria-expanded={showSizes}
+      title="Text size"
+      aria-label="Text size"
+      onclick={toggleSizes}
+    ><Icon name="textSize" /></button>
+    {#if showSizes}
+      <div class="sizemenu" style={sizeMenuStyle} data-testid="size-menu">
+        <button
+          class="sopt"
+          class:cur={currentSize() === ''}
+          onclick={() => {
+            editor?.chain().focus().unsetFontSize().run();
+            showSizes = false;
+          }}
+        >Auto</button>
+        {#each FONT_SIZES as s}
+          <button
+            class="sopt"
+            class:cur={currentSize() === String(s)}
+            onclick={() => {
+              editor?.chain().focus().setFontSize(`${s}px`).run();
+              showSizes = false;
+            }}
+          >{s}</button>
+        {/each}
+      </div>
+    {/if}
+  </div>
+
   <button
     data-testid="fmt-image"
     title="Insert image"
@@ -128,67 +171,7 @@
     onclick={onRecord}
   >
     <Icon name={recorder.recording ? 'stop' : 'mic'} />
-    {#if recorder.recording}<span class="rectime">{recorder.seconds}s</span>{/if}
   </button>
-
-  <span class="sep end"></span>
-
-  <div class="morewrap" bind:this={moreWrap}>
-    <button
-      data-testid="fmt-more"
-      class:active={open !== null}
-      aria-expanded={open !== null}
-      title="More formatting"
-      aria-label="More formatting"
-      onclick={toggleMore}
-    ><Icon name="more" /></button>
-    {#if open === 'menu'}
-      <div class="tmenu" role="menu" style={menuStyle} data-testid="fmt-menu">
-        <button
-          class="mi"
-          class:on={isActive('underline')}
-          role="menuitemcheckbox"
-          aria-checked={isActive('underline')}
-          data-testid="fmt-underline"
-          onclick={() => fromMenu((e) => e.chain().focus().toggleUnderline().run())}
-        ><Icon name="underline" /><span>Underline</span></button>
-        <button
-          class="mi"
-          class:on={isActive('strike')}
-          role="menuitemcheckbox"
-          aria-checked={isActive('strike')}
-          data-testid="fmt-strike"
-          onclick={() => fromMenu((e) => e.chain().focus().toggleStrike().run())}
-        ><Icon name="strike" /><span>Strikethrough</span></button>
-        <button
-          class="mi"
-          class:on={isActive('orderedList')}
-          role="menuitemcheckbox"
-          aria-checked={isActive('orderedList')}
-          data-testid="fmt-ordered"
-          onclick={() => fromMenu((e) => e.chain().focus().toggleOrderedList().run())}
-        ><Icon name="orderedList" /><span>Numbered list</span></button>
-        <button class="mi" role="menuitem" data-testid="fmt-size" onclick={() => show('size')}>
-          <Icon name="textSize" /><span>Size of selected text</span><span class="mv">{currentSize() || 'Auto'}</span>
-        </button>
-      </div>
-    {:else if open === 'size'}
-      <div class="sizemenu" style={menuStyle} data-testid="size-menu">
-        <button
-          class="sopt"
-          class:cur={currentSize() === ''}
-          onclick={() => fromMenu((e) => e.chain().focus().unsetFontSize().run())}
-        >Auto</button>
-        {#each FONT_SIZES as sz}
-          <button
-            class="sopt"
-            class:cur={currentSize() === String(sz)}
-            onclick={() => fromMenu((e) => e.chain().focus().setFontSize(`${sz}px`).run())}
-          >{sz}</button>
-        {/each}
-      </div>
-    {/if}
-  </div>
   <input
     type="file"
     accept="image/*"
@@ -220,9 +203,7 @@
   .toolbar::-webkit-scrollbar {
     display: none;
   }
-  /* The bar's own buttons (not the ones inside its menus). */
-  .toolbar > button,
-  .morewrap > button {
+  .toolbar button {
     font: inherit;
     font-size: 15px;
     color: var(--note-fg);
@@ -239,62 +220,24 @@
     align-items: center;
     justify-content: center;
   }
-  /* Only with a real pointer: a phone keeps :hover on whatever was tapped
-     last, which hid the recording state behind the hover tint. */
+  /* Hover only with a real pointer: a phone keeps :hover on whatever was
+     tapped last. A press shows on every device. */
   @media (hover: hover) {
-    .toolbar > button:hover,
-    .morewrap > button:hover {
+    .toolbar button:hover {
       background: color-mix(in srgb, var(--note-fg) 8%, transparent);
     }
   }
+  .toolbar button:active {
+    background: color-mix(in srgb, var(--note-fg) 16%, transparent);
+  }
   /* Monochrome active state: invert the note's own colors. */
-  .toolbar > button.active,
-  .morewrap > button.active {
+  .toolbar button.active {
     background: var(--note-fg);
     color: var(--note-bg);
   }
-  .morewrap {
+  .sizewrap {
     position: relative;
     display: inline-flex;
-    flex-shrink: 0;
-  }
-  /* The ⋯ menu: a small sticker like the note's own ⋯ menu. */
-  .tmenu {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: var(--edge);
-    background: var(--app-panel);
-    border: 1px solid var(--app-border);
-    border-radius: var(--sticker-radius);
-    box-shadow: var(--sticker-shadow);
-  }
-  .mi {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font: inherit;
-    font-size: 15px;
-    text-align: left;
-    padding: 10px 12px;
-    border: none;
-    border-radius: var(--btn-radius);
-    background: transparent;
-    color: var(--app-fg);
-    cursor: pointer;
-  }
-  .mi:hover {
-    background: var(--app-bg);
-  }
-  /* On (the selection is underlined, …): inverted, like every active state. */
-  .mi.on {
-    background: var(--app-fg);
-    color: var(--app-panel);
-  }
-  .mi .mv {
-    margin-left: auto;
-    font-size: 13px;
-    color: var(--app-muted);
   }
   .sizemenu {
     /* position:fixed via inline popoverStyle — the toolbar's overflow
@@ -335,24 +278,13 @@
     background: color-mix(in srgb, var(--note-fg) 16%, transparent);
     flex-shrink: 0;
   }
-  /* The ⋯ sits at the bar's far end, under the note's own ⋯. */
-  .sep.end {
-    margin-left: auto;
-    background: transparent;
-  }
-  /* Recording state: semantic red dot allowed (functional, not decorative).
-     It also shows the seconds, so it may grow past one button. */
+  /* Recording: the button turns red (functional colour, not decoration),
+     stays one button wide, and stays red under a touch's sticky :hover. */
   .rec.recording,
-  .rec.recording:hover {
-    width: auto;
-    padding: 0 10px;
+  .rec.recording:hover,
+  .rec.recording:active {
     background: var(--app-danger);
     color: #fff;
-  }
-  .rectime {
-    font-size: 14px;
-    margin-left: 6px;
-    font-variant-numeric: tabular-nums;
   }
 
   /* Phones: formatting tools live at the BOTTOM (thumb-reach, and Android's
@@ -363,15 +295,13 @@
     .toolbar {
       padding: var(--edge) var(--edge) calc(var(--edge) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)));
     }
-    /* Groups (B I, lists, things to add, ⋯) spread across the row with
-       the spare room shared between them. */
-    .sep,
-    .sep.end {
-      flex: 1 1 0;
-      min-width: var(--btn-gap);
-      width: auto;
-      margin: 0;
-      background: transparent;
+    /* The buttons spread evenly over the whole row, the last one on the
+       line the note's ⋯ and the header's + share. */
+    .toolbar {
+      justify-content: space-between;
+    }
+    .sep {
+      display: none;
     }
   }
 </style>

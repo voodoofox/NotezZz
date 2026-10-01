@@ -113,6 +113,9 @@
     const flush = () => store.flush();
     window.addEventListener('beforeunload', flush);
     window.addEventListener('pagehide', flush);
+    // Back online (a phone waking, a train leaving a tunnel): sync now
+    // instead of waiting for the next heartbeat.
+    window.addEventListener('online', () => store.backOnline());
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') flush();
     });

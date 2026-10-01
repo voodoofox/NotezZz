@@ -314,15 +314,13 @@
     await winRef.startResizeDragging(corner);
   }
 
-  // Colour picker in the bar, same component as the main window's.
-  let showColors = $state(false);
-  let colorWrap = $state<HTMLElement | null>(null);
-  // Transparency: a slider sticker under its button, in the note's colour.
-  let showOpacity = $state(false);
-  let opacityWrap = $state<HTMLElement | null>(null);
+  // The ⋯ menu, as on the note in the main window: colour and transparency
+  // live behind it (each opens in its place), so the bar keeps the same few
+  // buttons the note's header has.
+  let pop = $state<null | 'menu' | 'color' | 'opacity'>(null);
+  let moreWrap = $state<HTMLElement | null>(null);
   function closeColorsOutside(e: PointerEvent) {
-    if (showColors && colorWrap && !colorWrap.contains(e.target as Node)) showColors = false;
-    if (showOpacity && opacityWrap && !opacityWrap.contains(e.target as Node)) showOpacity = false;
+    if (pop && moreWrap && !moreWrap.contains(e.target as Node)) pop = null;
   }
 
   // Rename without opening the main window: double-click the title (a single
@@ -362,6 +360,7 @@
     style="
       --tilt: {tilt}deg;
       --note-bg: {bgRgba(pal.bg, note.opacity)};
+      --solid-bg: {pal.bg};
       --note-lum: {luminance(pal.bg)};
       --note-header: {bgRgba(pal.header, Math.min(1, note.opacity + 0.08))};
       --note-fg: {pal.fg};
@@ -369,6 +368,7 @@
       --pat-img: {pal.patternImage ?? 'none'};
       --note-accent: {pal.accent};
       --slider-ink: {inkOnWhite(pal.bg, pal.fg)};
+      --own-strip: {pal.dark ? 'var(--note-strip-dark)' : 'var(--note-strip)'};
     "
   >
     <header class="bar {pal.pattern ? `nz-pat-${pal.pattern}` : ''}" data-tauri-drag-region>
@@ -402,46 +402,64 @@
           onkeydown={(e) => (e.key === 'F2' || e.key === 'Enter') && startRename()}
         >{note.title || 'Note'}</span>
       {/if}
+      {#if hasWin && !tucked}
+        <button class="x" data-testid="sticky-add" title="New pinned note" aria-label="New pinned note" onclick={addPinned}>
+          <Icon name="add" />
+        </button>
+      {/if}
+      <!-- Pinned, shown the way every "on" button is (filled); a tap unpins
+           it, which closes this sticky. -->
+      <button
+        class="x on"
+        data-testid="sticky-unpin"
+        title="Pinned to the desktop (click to unpin)"
+        aria-label="Unpin"
+        aria-pressed="true"
+        onclick={unpin}
+      ><Icon name="pin" /></button>
+      {#if hasWin && !(tucked && tuckSide === 'right')}
+        <button
+          class="x"
+          data-testid="sticky-tuck"
+          title={tucked ? 'Bring it back' : 'Tuck away to the screen edge'}
+          aria-label={tucked ? 'Bring it back' : 'Tuck away'}
+          aria-pressed={tucked}
+          onclick={() => void (tucked ? untuck() : tuck())}
+        >
+          <Icon name={tucked ? 'untuck' : 'tuck'} />
+        </button>
+      {/if}
       {#if !tucked}
-        <span class="cwrap" bind:this={colorWrap}>
+        <span class="cwrap" bind:this={moreWrap}>
           <button
             class="x"
-            class:on={showColors}
-            data-testid="sticky-color"
-            title="Note color"
-            aria-label="Note color"
-            aria-expanded={showColors}
-            onclick={() => (showColors = !showColors)}
-          >
-            <Icon name="palette" />
-          </button>
-          {#if showColors}
+            class:on={pop !== null}
+            data-testid="sticky-more"
+            title="More"
+            aria-label="More"
+            aria-expanded={pop !== null}
+            onclick={() => (pop = pop ? null : 'menu')}
+          ><Icon name="more" /></button>
+          {#if pop === 'menu'}
+            <div class="smenu" role="menu">
+              <button class="mi" role="menuitem" data-testid="sticky-color" onclick={() => (pop = 'color')}>
+                <Icon name="palette" /><span>Note color</span>
+              </button>
+              <button class="mi" role="menuitem" data-testid="sticky-opacity" onclick={() => (pop = 'opacity')}>
+                <Icon name="opacity" /><span>Transparency</span><span class="mv">{Math.round(note.opacity * 100)}%</span>
+              </button>
+            </div>
+          {:else if pop === 'color'}
             <div class="cpop">
               <ColorPicker
                 paletteId={note.paletteId}
                 onPick={(id) => {
                   if (noteId) store.update(noteId, { paletteId: id });
-                  if (!id.startsWith('custom:')) showColors = false;
+                  if (!id.startsWith('custom:')) pop = null;
                 }}
               />
             </div>
-          {/if}
-        </span>
-      {/if}
-      {#if !tucked}
-        <span class="cwrap" bind:this={opacityWrap}>
-          <button
-            class="x"
-            class:on={showOpacity}
-            data-testid="sticky-opacity"
-            title="Transparency"
-            aria-label="Transparency"
-            aria-expanded={showOpacity}
-            onclick={() => (showOpacity = !showOpacity)}
-          >
-            <Icon name="opacity" />
-          </button>
-          {#if showOpacity}
+          {:else if pop === 'opacity'}
             <div class="opop">
               <VSlider
                 value={Math.round(note.opacity * 100)}
@@ -457,26 +475,6 @@
           {/if}
         </span>
       {/if}
-      {#if hasWin && !tucked}
-        <button class="x" data-testid="sticky-add" title="New pinned note" aria-label="New pinned note" onclick={addPinned}>
-          <Icon name="add" />
-        </button>
-      {/if}
-      {#if hasWin && !(tucked && tuckSide === 'right')}
-        <button
-          class="x"
-          data-testid="sticky-tuck"
-          title={tucked ? 'Bring it back' : 'Tuck away to the screen edge'}
-          aria-label={tucked ? 'Bring it back' : 'Tuck away'}
-          aria-pressed={tucked}
-          onclick={() => void (tucked ? untuck() : tuck())}
-        >
-          <Icon name={tucked ? 'untuck' : 'tuck'} />
-        </button>
-      {/if}
-      <button class="x" title="Unpin (close sticker)" aria-label="Unpin" onclick={unpin}>
-        <Icon name="close" />
-      </button>
     </header>
     {#if hasWin}
       <!-- Invisible 10px handles on every card corner: the OS resize edges
@@ -567,14 +565,14 @@
     background-color: color-mix(in srgb, var(--note-header) var(--note-header-mix), transparent);
     --pat-base: color-mix(in srgb, var(--note-header) var(--note-header-mix), transparent);
     --pat-ink: color-mix(in srgb, var(--note-ink) var(--note-pat-mix), transparent);
-    box-shadow: var(--note-strip); /* the adhesive tint */
+    box-shadow: var(--own-strip, var(--note-strip)); /* the adhesive tint (lighter on dark notes) */
     cursor: move;
     user-select: none;
   }
   .ttl {
     flex: 1;
     font-weight: 700;
-    font-size: 15px;
+    font-size: 17px; /* a step under the main window's 20px: a sticky is small */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -584,7 +582,7 @@
     min-width: 0;
     font: inherit;
     font-weight: 700;
-    font-size: 15px;
+    font-size: 17px;
     padding: 1px 6px;
     margin: -2px 0;
     border: 1px solid var(--note-fg);
@@ -607,10 +605,58 @@
     justify-content: center;
     flex: none;
   }
+  @media (hover: hover) {
+    .x:hover {
+      background: color-mix(in srgb, var(--note-fg) 8%, transparent);
+    }
+  }
+  .x:active {
+    background: color-mix(in srgb, var(--note-fg) 16%, transparent);
+  }
   .x.on {
     opacity: 1;
     background: var(--note-fg);
-    color: var(--note-bg);
+    color: var(--solid-bg, var(--note-bg));
+  }
+  /* The ⋯ menu: a small sticker, as in the main window. */
+  .smenu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 200px;
+    padding: var(--edge);
+    background: var(--app-panel);
+    border: 1px solid var(--app-border);
+    border-radius: var(--sticker-radius);
+    box-shadow: var(--sticker-shadow);
+  }
+  .mi {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 400;
+    text-align: left;
+    padding: 9px 10px;
+    border: none;
+    border-radius: var(--btn-radius);
+    background: transparent;
+    color: var(--app-fg);
+    cursor: pointer;
+  }
+  .mi:hover,
+  .mi:active {
+    background: var(--app-bg);
+  }
+  .mi .mv {
+    margin-left: auto;
+    font-size: 13px;
+    color: var(--app-muted);
   }
   .cwrap {
     position: relative;

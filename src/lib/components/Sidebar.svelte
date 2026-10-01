@@ -148,6 +148,15 @@
   // their buttons fell off the line the header's and the note's share. It is
   // hidden, and this thin thumb floats over the rows instead.
   let thumb = $state<{ top: number; h: number } | null>(null);
+  // Shown while the list moves, then it fades (as Android's own does); a
+  // mouse over the list brings it back.
+  let thumbAwake = $state(false);
+  let thumbTimer: ReturnType<typeof setTimeout> | undefined;
+  function wakeThumb() {
+    thumbAwake = true;
+    clearTimeout(thumbTimer);
+    thumbTimer = setTimeout(() => (thumbAwake = false), 1200);
+  }
   const syncScroll = () => {
     const el = listEl;
     if (!el) return;
@@ -158,8 +167,49 @@
       return;
     }
     const h = Math.max(24, (clientHeight * clientHeight) / scrollHeight);
-    thumb = { h, top: (scrollTop / (scrollHeight - clientHeight)) * (clientHeight - h) };
+    const top = (scrollTop / (scrollHeight - clientHeight)) * (clientHeight - h);
+    // A plain variable, not `thumb`: this runs inside effects too, and
+    // reading the state it then writes made one re-run itself forever.
+    if (Math.abs(top - lastThumbTop) > 0.5) wakeThumb();
+    lastThumbTop = top;
+    thumb = { h, top };
   };
+  let lastThumbTop = -1;
+
+  /**
+   * A note colour that nearly matches the list's own background (Paper on
+   * the white panel, Graphite or Black on the dark one) gets a little of the
+   * app's ink, so its bar and its selection still show.
+   */
+  function rowTone(c: string): string {
+    const panel = store.settings.appTheme === 'dark' ? [0x1e, 0x21, 0x27] : [0xff, 0xff, 0xff];
+    const m = /^#([0-9a-f]{6})$/i.exec(c);
+    if (!m) return c;
+    const n = parseInt(m[1], 16);
+    const rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    const near = Math.max(...rgb.map((v, i) => Math.abs(v - panel[i]))) < 24;
+    return near ? `color-mix(in srgb, ${c} 88%, var(--app-fg))` : c;
+  }
+
+  // Right-click (or long-press) on a row: what the row's buttons do, plus
+  // archive, without opening the note first.
+  let rowMenu = $state<{ id: string; x: number; y: number } | null>(null);
+  let rowMenuNote = $derived(rowMenu ? store.notes.find((n) => n.id === rowMenu!.id) ?? null : null);
+  function openRowMenu(e: MouseEvent, note: Note) {
+    e.preventDefault();
+    const w = 220;
+    const h = 150;
+    rowMenu = {
+      id: note.id,
+      x: Math.max(6, Math.min(e.clientX, window.innerWidth - w - 6)),
+      y: Math.max(6, Math.min(e.clientY, window.innerHeight - h - 6)),
+    };
+  }
+  function rowAction(run: (n: Note) => void) {
+    const n = rowMenuNote;
+    rowMenu = null;
+    if (n) run(n);
+  }
   /** Mouse drag on the thumb (touch scrolls the list itself). */
   function grabThumb(e: PointerEvent) {
     const el = listEl;
@@ -224,6 +274,13 @@
   });
 </script>
 
+<svelte:window
+  onpointerdown={(e) => {
+    if (rowMenu && !(e.target as HTMLElement).closest?.('.rowmenu')) rowMenu = null;
+  }}
+  onkeydown={(e) => e.key === 'Escape' && (rowMenu = null)}
+/>
+
 <aside class="sidebar">
   <div class="head">
     <span class="brand"><Lockup height={24} /></span>
@@ -275,13 +332,15 @@
     {/if}
     {#each visibleNotes as note (note.id)}
       {@const pal = getPalette(note.paletteId)}
+      {@const tone = rowTone(pal.pattern ? pal.header : pal.bg)}
       <div
         class="item"
         data-testid="note-item"
         role="listitem"
         class:active={note.id === store.activeId}
         class:dragging={dragId === note.id}
-        style="--swatch: {pal.pattern ? pal.header : pal.bg}; --pat-img: {pal.patternImage ?? 'none'}; --row-fg: {pal.fg}"
+        style="--swatch: {tone}; --pat-img: {pal.patternImage ?? 'none'}; --row-fg: {pal.fg}"
+        oncontextmenu={(e) => openRowMenu(e, note)}
       >
         <!-- The note's colour (or pattern) behind the row: as narrow as the
              swatch, and the full row once the note is selected. -->
@@ -289,7 +348,7 @@
           class="fill {pal.pattern ? `nz-pat-${pal.pattern}` : ''}"
           data-testid="note-fill"
           aria-hidden="true"
-          style="background-color: {pal.pattern ? pal.header : pal.bg}; --pat-base: {pal.header}; --pat-ink: {pal.inkStrong ?? pal.fg}"
+          style="background-color: {tone}; --pat-base: {pal.header}; --pat-ink: {pal.inkStrong ?? pal.fg}"
         ></span>
         <span
           class="swatch {pal.pattern ? `nz-pat-${pal.pattern}` : ''}"
@@ -298,7 +357,7 @@
           tabindex="0"
           title="Drag to reorder (keyboard: Alt+Arrow Up/Down)"
           aria-label="Reorder {noteLabel(note)}: drag, or Alt+Arrow Up/Down"
-          style="background-color: {pal.pattern ? pal.header : pal.bg}; --pat-base: {pal.header}; --pat-ink: {pal.inkStrong ?? pal.fg}"
+          style="background-color: {tone}; --pat-base: {pal.header}; --pat-ink: {pal.inkStrong ?? pal.fg}"
           onpointerdown={(e) => startDrag(e, note.id)}
           onkeydown={(e) => keyMove(e, note.id)}
         ></span>
@@ -344,7 +403,13 @@
     {/if}
   </div>
   {#if thumb}
-    <div class="thumb" style="top: {thumb.top}px; height: {thumb.h}px" onpointerdown={grabThumb} aria-hidden="true"></div>
+    <div
+      class="thumb"
+      class:awake={thumbAwake}
+      style="top: {thumb.top}px; height: {thumb.h}px"
+      onpointerdown={grabThumb}
+      aria-hidden="true"
+    ></div>
   {/if}
   </div>
 
@@ -373,6 +438,22 @@
     </div>
   {/if}
 </aside>
+
+{#if rowMenu && rowMenuNote}
+  <div class="rowmenu" role="menu" data-testid="row-menu" style="left: {rowMenu.x}px; top: {rowMenu.y}px">
+    <button class="mi" role="menuitem" data-testid="row-menu-pin" onclick={() => rowAction((n) => store.update(n.id, { pinned: !n.pinned }))}>
+      <Icon name="pin" /><span>{rowMenuNote.pinned ? 'Unpin from the desktop' : 'Pin to the desktop'}</span>
+    </button>
+    {#if rowMenuNote.pinned}
+      <button class="mi" role="menuitem" onclick={() => rowAction((n) => store.update(n.id, { tucked: !n.tucked }))}>
+        <Icon name={rowMenuNote.tucked ? 'untuck' : 'tuck'} /><span>{rowMenuNote.tucked ? 'Bring it back' : 'Tuck away'}</span>
+      </button>
+    {/if}
+    <button class="mi" role="menuitem" data-testid="row-menu-archive" onclick={() => rowAction((n) => store.setArchived(n.id, !n.archived))}>
+      <Icon name={rowMenuNote.archived ? 'unarchive' : 'archive'} /><span>{rowMenuNote.archived ? 'Unarchive' : 'Archive'}</span>
+    </button>
+  </div>
+{/if}
 
 {#if showSettings}
   <Settings onClose={() => (showSettings = false)} />
@@ -428,9 +509,16 @@
   .ico {
     font-size: 15px;
   }
-  .new:hover,
-  .ico:hover {
-    background: color-mix(in srgb, var(--app-fg) 8%, transparent);
+  @media (hover: hover) {
+    .new:hover,
+    .ico:hover {
+      background: color-mix(in srgb, var(--app-fg) 8%, transparent);
+    }
+  }
+  .new:active,
+  .ico:active,
+  .pin:active {
+    background: color-mix(in srgb, var(--app-fg) 16%, transparent);
   }
   .ico.on {
     background: var(--app-fg);
@@ -488,6 +576,11 @@
     justify-content: center;
     pointer-events: none;
     touch-action: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .thumb.awake {
+    opacity: 1;
   }
   .thumb::before {
     content: '';
@@ -498,6 +591,9 @@
   @media (pointer: fine) {
     .thumb {
       pointer-events: auto;
+    }
+    .listbox:hover .thumb {
+      opacity: 1;
     }
     .thumb:hover::before {
       width: 4px;
@@ -522,6 +618,39 @@
       rgb(0 0 0 / calc(var(--list-shade) / 4)) 45%,
       rgb(0 0 0 / var(--list-shade))
     );
+  }
+  /* The row menu (right-click / long-press): a sticker like every menu. */
+  .rowmenu {
+    position: fixed;
+    z-index: 60;
+    width: 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--edge);
+    background: var(--app-panel);
+    border: 1px solid var(--app-border);
+    border-radius: var(--sticker-radius);
+    box-shadow: var(--sticker-shadow);
+  }
+  .rowmenu .mi {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 400;
+    text-align: left;
+    padding: 9px 10px;
+    border: none;
+    border-radius: var(--btn-radius);
+    background: transparent;
+    color: var(--app-fg);
+    cursor: pointer;
+  }
+  .rowmenu .mi:hover,
+  .rowmenu .mi:active {
+    background: var(--app-bg);
   }
   /* Rows are full-bleed: selection and the color block run edge to edge. */
   .item {
@@ -609,7 +738,10 @@
   .title {
     flex: 1;
     min-width: 0;
-    font-size: 16px;
+    /* A touch larger and firmer than it was: a list title shouldn't read
+       smaller than the note's own text. */
+    font-size: 17px;
+    font-weight: 450;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -625,16 +757,43 @@
     flex: none;
     padding: 0;
     border-radius: var(--btn-radius);
-    opacity: 0.3;
+    opacity: 0.45;
     display: inline-flex;
     align-items: center;
     justify-content: center;
   }
+  /* The pin: only on pinned notes, and filled like every "on" button (the
+     note's header shows it the same way). A PC offers it on an unpinned
+     row under the pointer; a phone pins from the note's header. */
+  .pin.on:not(.tuck) {
+    background: var(--app-fg);
+    color: var(--app-panel);
+  }
+  .item.active .pin.on:not(.tuck) {
+    background: var(--row-fg);
+    color: var(--swatch);
+  }
+  .pin:not(.on):not(.tuck) {
+    opacity: 0;
+  }
+  @media (hover: hover) {
+    .item:hover .pin:not(.on):not(.tuck),
+    .pin:not(.on):not(.tuck):focus-visible {
+      opacity: 0.45;
+    }
+  }
+  @media (hover: none) {
+    .pin:not(.on):not(.tuck) {
+      visibility: hidden; /* not a hidden target under a thumb */
+    }
+  }
   .pin:last-child {
     margin-right: var(--edge);
   }
-  .pin:hover {
-    opacity: 0.7;
+  @media (hover: hover) {
+    .pin:hover {
+      opacity: 0.8;
+    }
   }
   .pin.on {
     opacity: 1;

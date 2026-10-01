@@ -79,6 +79,9 @@ const SETTINGS_CACHE_KEY = 'notezzz:cache:settings';
 /** Marks that this launch already retried itself — never reload twice. */
 const REBOOT_KEY = 'notezzz:reboot';
 
+/** What a run of network failures says, instead of the browser's wording. */
+const OFFLINE_MESSAGE = "Can't reach Google Drive. Your notes are kept here and will sync when the connection is back.";
+
 class AppStore {
   notes = $state<Note[]>([]);
   settings = $state<Settings>({ ...DEFAULT_SETTINGS });
@@ -293,10 +296,27 @@ class AppStore {
     }
   }
 
-  #fail(e: unknown) {
-    this.syncStatus = 'error';
-    this.syncError = e instanceof Error ? e.message : String(e);
+  /** Network failures in a row on background work; one is not news. */
+  #offlineStreak = 0;
+
+  /**
+   * Show a sync error. Background work (polls, queued writes) shrugs off a
+   * dropped request or two, since the heartbeat retries anyway; a run of
+   * them, or any refusal, is shown. Network trouble is said in words, not
+   * as the browser's "signal timed out".
+   */
+  #fail(e: unknown, background = false) {
     console.error('[NotezZz sync]', e);
+    const transient = isTransient(e);
+    if (transient && background && ++this.#offlineStreak < 3) return;
+    this.syncStatus = 'error';
+    this.syncError = transient ? OFFLINE_MESSAGE : e instanceof Error ? e.message : String(e);
+  }
+
+  /** The connection is back: send what's owed and catch up, now. */
+  backOnline() {
+    this.#outbox.retryAll();
+    void this.syncNow();
   }
 
   /** User-initiated recovery from a sync error: interactive sign-in (allowed,
@@ -438,7 +458,8 @@ class AppStore {
   }
 
   #settled(ok: boolean, e?: unknown) {
-    if (!ok) return this.#fail(e);
+    if (!ok) return this.#fail(e, true);
+    this.#offlineStreak = 0;
     // One success doesn't clear the error while other writes are still failed;
     // a fully drained queue does.
     if (!this.#outbox.busy && this.#outbox.failedCount === 0 && this.isCloud) {
@@ -731,13 +752,19 @@ class AppStore {
     try {
       await this.#doReload();
       this.#pollFailures = 0;
+      this.#offlineStreak = 0;
+      // Drive answered: a "can't reach" message no longer holds.
+      if (this.syncError === OFFLINE_MESSAGE && !this.#outbox.failedCount) {
+        this.syncError = '';
+        if (this.syncStatus === 'error') this.syncStatus = this.isCloud ? 'synced' : 'local';
+      }
     } catch (e) {
       // Back off doubling from 30s to 5min: a rate limit that is polled
       // through every 6s never clears.
       this.#pollFailures += 1;
       const wait = Math.min(30_000 * 2 ** (this.#pollFailures - 1), 300_000);
       this.#pollBackoffUntil = Date.now() + wait;
-      this.#fail(e);
+      this.#fail(e, true);
     } finally {
       this.#reloading = false;
     }
@@ -830,3 +857,20 @@ class AppStore {
 }
 
 export const store = new AppStore();
+
+/**
+ * The network failing (a timeout, no connection, a dropped request) rather
+ * than Google refusing something. Worth retrying quietly: a phone waking up
+ * often sends its first request before its connection is back.
+ */
+function isTransient(e: unknown): boolean {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+  const name = (e as { name?: string } | null)?.name ?? '';
+  const msg = e instanceof Error ? e.message : String(e);
+  return (
+    name === 'TimeoutError' ||
+    name === 'AbortError' ||
+    name === 'NetworkError' ||
+    /timed out|failed to fetch|network ?error|load failed|connection/i.test(msg)
+  );
+}

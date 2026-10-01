@@ -56,6 +56,9 @@
     })
   );
   let editing = $state<number | null>(null);
+  // The custom-colour sliders stay folded away unless the note already has
+  // a custom colour: most picks are one of the chips.
+  let showCustom = $state(untrack(() => paletteId.startsWith('custom:')));
   function chipStyle(p: CustomPattern): string {
     const t = paletteFromTint(p.tint);
     return `--pat-base: ${t.header}; --pat-ink: ${t.inkStrong}; --pat-img: ${patternSvg(p.px, t.inkStrong)}`;
@@ -140,7 +143,30 @@
     </span>
   {/if}
 </div>
+<!-- Saved colours: the five small chips, and the way into custom colour. -->
+<div class="saved">
+  {#each Array.from({ length: COLOR_SLOTS }) as _, i}
+    {#if saved[i]}
+      <button
+        class="mini"
+        data-testid="saved-color"
+        data-hex={saved[i]}
+        style="background: {saved[i]}"
+        title="Saved colour {i + 1}"
+        aria-label="Saved colour {i + 1}"
+        onclick={() => onPick(`custom:${saved[i]}`)}
+      ></button>
+    {:else}
+      <span class="mini hole" aria-hidden="true"></span>
+    {/if}
+  {/each}
+  <button class="ctoggle" data-testid="custom-toggle" aria-expanded={showCustom} onclick={() => (showCustom = !showCustom)}>
+    Custom colour
+  </button>
+</div>
+{#if showCustom}
 <label class="crow">
+  <span class="clab">Hue</span>
   <input
     class="hue"
     type="range" min="0" max="360" step="1"
@@ -151,6 +177,7 @@
   />
 </label>
 <label class="crow">
+  <span class="clab">Light / deep</span>
   <input
     class="shade"
     type="range" min="30" max="94" step="1"
@@ -161,6 +188,7 @@
   />
 </label>
 <label class="crow">
+  <span class="clab">Soft / vivid</span>
   <input
     class="desat"
     type="range" min="0" max="90" step="1"
@@ -170,30 +198,10 @@
     oninput={applyCustom}
   />
 </label>
-<!-- Saved colours: the five small chips, and Save while the note has a custom
-     colour that isn't kept yet. -->
-<div class="savedrow">
-  <div class="saved">
-    {#each Array.from({ length: COLOR_SLOTS }) as _, i}
-      {#if saved[i]}
-        <button
-          class="mini"
-          data-testid="saved-color"
-          data-hex={saved[i]}
-          style="background: {saved[i]}"
-          title="Saved colour {i + 1}"
-          aria-label="Saved colour {i + 1}"
-          onclick={() => onPick(`custom:${saved[i]}`)}
-        ></button>
-      {:else}
-        <span class="mini hole" aria-hidden="true"></span>
-      {/if}
-    {/each}
-  </div>
-  <button class="save" data-testid="save-color" disabled={!currentHex || alreadySaved} onclick={saveColour}>
-    {alreadySaved ? 'Saved' : 'Save colour'}
-  </button>
-</div>
+<button class="save" data-testid="save-color" disabled={!currentHex || alreadySaved} onclick={saveColour}>
+  {alreadySaved ? 'Saved' : 'Save colour'}
+</button>
+{/if}
 
 {#if editing !== null}
   <PatternEditor slot={editing} initial={slots[editing]} onSave={(p) => savePattern(editing!, p)} onClose={() => (editing = null)} />
@@ -208,8 +216,10 @@
   .pchip {
     width: 34px;
     height: 34px;
-    border-radius: var(--radius-md);
-    border: 1px solid rgba(0, 0, 0, 0.16);
+    border-radius: calc(34px * var(--btn-corner));
+    border: none;
+    /* The faintest edge, for the near-white chips on a white menu. */
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.07);
     cursor: pointer;
     padding: 0;
     position: relative;
@@ -226,14 +236,14 @@
   .pchip.spacer {
     visibility: hidden;
   }
+  /* An empty slot: a faint tile with a +, not a dashed outline. */
   .pchip.empty {
-    background: transparent;
-    border-style: dashed;
-    border-color: var(--app-border);
+    background: color-mix(in srgb, var(--app-fg) 6%, transparent);
+    box-shadow: none;
     color: var(--app-muted);
   }
   .pchip.empty:hover {
-    border-color: var(--app-fg);
+    background: color-mix(in srgb, var(--app-fg) 12%, transparent);
     color: var(--app-fg);
   }
   .slot {
@@ -276,7 +286,13 @@
   }
   /* Custom colour: hue wheel flattened into a slider, plus shade and saturation. */
   .crow {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .clab {
+    font-size: 12px;
+    color: var(--app-muted);
   }
   .crow input[type='range'] {
     width: 100%;
@@ -344,18 +360,35 @@
     transform: scale(1.1);
   }
   .mini.hole {
-    border-style: dashed;
-    border-color: var(--app-border);
-    background: transparent;
+    border: none;
+    background: color-mix(in srgb, var(--app-fg) 6%, transparent);
+  }
+  .ctoggle {
+    margin-left: auto;
+    font: inherit;
+    font-size: 13px;
+    padding: 0 10px;
+    height: 24px;
+    border: none;
+    border-radius: var(--btn-radius);
+    background: color-mix(in srgb, var(--app-fg) 8%, transparent);
+    color: var(--app-fg);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .ctoggle[aria-expanded='true'] {
+    background: var(--app-fg);
+    color: var(--app-panel);
   }
   .save {
     width: 100%;
     font: inherit;
-    font-size: 13px;
-    padding: 6px 10px;
-    border: 1px solid var(--app-border);
-    border-radius: var(--radius-sm);
-    background: transparent;
+    font-size: 14px;
+    min-height: 30px;
+    padding: 0 10px;
+    border: none;
+    border-radius: var(--btn-radius);
+    background: color-mix(in srgb, var(--app-fg) 9%, transparent);
     color: var(--app-fg);
     cursor: pointer;
     white-space: nowrap;

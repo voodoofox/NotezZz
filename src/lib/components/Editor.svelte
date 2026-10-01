@@ -235,6 +235,9 @@
   .content :global(.ProseMirror) {
     outline: none;
     min-height: 100%;
+    /* On a wide window, lines stop at a readable ~70 characters; the rest
+       is padding, so a click there still lands in the note. */
+    padding-right: max(0px, calc(100% - 70ch));
   }
   .content :global(.ProseMirror p) {
     margin: 0 0 0.5em;
@@ -261,30 +264,38 @@
     align-items: center;
     height: 1.45em;
     user-select: none;
+    /* A thumb-sized target around the box, without moving the text. */
+    padding: 0 0.3em;
+    margin: 0 -0.3em;
+    cursor: pointer;
   }
   .content :global(ul[data-type='taskList'] > li > div) {
     flex: 1;
     min-width: 0;
   }
+  /* The box: a rounded square like every button (the logo's corner),
+     tinted rather than outlined, filled with the ink once ticked. Sized by
+     the text (inputs don't inherit font-size: it was 13px at any size). */
   .content :global(ul[data-type='taskList'] > li input[type='checkbox']) {
     appearance: none;
-    width: 1em;
-    height: 1em;
+    font-size: inherit;
+    width: 0.9em;
+    height: 0.9em;
     margin: 0;
-    border: 1.5px solid var(--note-fg);
-    border-radius: 3px;
+    border: none;
+    border-radius: calc(0.9em * var(--btn-corner));
+    background: color-mix(in srgb, var(--note-fg) 16%, transparent);
     cursor: pointer;
     display: grid;
     place-content: center;
-    opacity: 0.8;
   }
   .content :global(ul[data-type='taskList'] > li input[type='checkbox']::after) {
     content: '';
-    width: 0.55em;
-    height: 0.3em;
-    border-left: 2px solid var(--note-bg, #fff);
-    border-bottom: 2px solid var(--note-bg, #fff);
-    transform: translateY(-0.06em) rotate(-45deg);
+    width: 0.45em;
+    height: 0.24em;
+    border-left: max(2px, 0.1em) solid var(--note-bg, #fff);
+    border-bottom: max(2px, 0.1em) solid var(--note-bg, #fff);
+    transform: translateY(-0.05em) rotate(-45deg);
     visibility: hidden;
   }
   .content :global(ul[data-type='taskList'] > li input[type='checkbox']:checked) {
@@ -296,6 +307,16 @@
   .content :global(ul[data-type='taskList'] > li[data-checked='true'] > div) {
     text-decoration: line-through;
     opacity: 0.55;
+  }
+  /* A horizontal line (typed as ---): the note's ink at half strength,
+     a divider rather than a bar. */
+  .content :global(.ProseMirror hr) {
+    border: none;
+    border-top: 1.5px solid color-mix(in srgb, var(--note-fg) 50%, transparent);
+    margin: 0.8em 0;
+  }
+  .content :global(.ProseMirror hr.ProseMirror-selectednode) {
+    border-top-color: var(--note-fg);
   }
   /* Voice memo player — no panel, no chrome: a line of controls in the
      note's own ink, so it reads as part of the note rather than a widget
@@ -325,7 +346,8 @@
     align-items: center;
     justify-content: center;
   }
-  .content :global(.nz-audio-play:hover) {
+  .content :global(.nz-audio-play:hover),
+  .content :global(.nz-audio-play:active) {
     background: color-mix(in srgb, currentColor 18%, transparent);
   }
   .content :global(.nz-audio-track) {

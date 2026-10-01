@@ -340,6 +340,8 @@ export function themeVars(t: ThemeDef): Record<string, string> {
     // Painted as an inset shadow, so it lies over the strip's colour AND any
     // pattern on it (both are background) and under the title and buttons.
     '--note-strip': stripShadow(n.strip),
+    // On a dark note a darkening strip vanishes: the same strength in white.
+    '--note-strip-dark': stripShadow({ color: '#ffffff', strength: n.strip.strength }),
     // Pattern pixels on a faint strip stay a little stronger than the strip.
     '--note-pat-mix': pct(Math.min(1, n.header + 0.25)),
     '--note-chin-mix': pct(n.toolbar),
