@@ -20,13 +20,18 @@ const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
-async function authFetch(url: string, opts: RequestInit = {}): Promise<Response> {
+/** Long enough for a note carrying voice memos and photos (megabytes) to
+ *  arrive over mobile data: the limit covers the whole body, not just the
+ *  first byte, and at 20s such notes failed on every try. */
+const BIG = 120_000;
+
+async function authFetch(url: string, opts: RequestInit = {}, timeoutMs = 20_000): Promise<Response> {
   const tok = await token();
   const withAuth = (t: string): RequestInit => ({
     ...opts,
     headers: { ...(opts.headers ?? {}), Authorization: `Bearer ${t}` },
     // A wedged mobile connection must become an error, not an eternal hang.
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   let res = await fetch(url, withAuth(tok));
   if (res.status === 401) {
@@ -213,7 +218,7 @@ export class DriveBackend implements StorageBackend {
       method: 'POST',
       headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
       body,
-    });
+    }, BIG);
     return (await res.json()) as { id: string; modifiedTime: string };
   }
 
@@ -222,7 +227,7 @@ export class DriveBackend implements StorageBackend {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(content),
-    });
+    }, BIG);
     return ((await res.json()) as { modifiedTime: string }).modifiedTime;
   }
 
@@ -256,12 +261,23 @@ export class DriveBackend implements StorageBackend {
     for (const id of this.#files.keys()) if (!liveIds.has(id)) this.#files.delete(id);
 
     const changed = listed.filter((f) => this.#files.get(f.id)?.modifiedTime !== f.modifiedTime);
-    const results = await Promise.all(changed.map((f) => this.#download(f)));
-    const failed = results.filter((r) => r === 'failed').length;
+    // A few at a time: all at once split a phone's bandwidth until the big
+    // ones couldn't finish.
+    const results: Array<'ok' | 'failed' | 'failed-net' | 'corrupt'> = [];
+    for (let i = 0; i < changed.length; i += 3) {
+      results.push(...(await Promise.all(changed.slice(i, i + 3).map((f) => this.#download(f)))));
+    }
+    const failed = results.filter((r) => r === 'failed' || r === 'failed-net').length;
     // A file that couldn't be downloaded is NOT a file that was deleted. If we
     // returned the partial list, the store would drop the note, close its
     // sticky, and wipe it from the cache until the next successful poll.
-    if (failed) throw new Error(`Couldn't download ${failed} note(s) — will retry`);
+    // Retryable either way (the store retries quietly before saying so);
+    // all-network failures say so, in the store's words.
+    if (failed) {
+      const err = new Error(`Couldn't download ${failed} note(s) — will retry`);
+      err.name = results.every((r) => r !== 'failed') ? 'NetworkError' : 'RetryableError';
+      throw err;
+    }
 
     // Dedupe by note id — a save racing the folder migration can leave
     // "name.json" + "name (1).json" both holding the same note. Duplicate ids
@@ -292,10 +308,11 @@ export class DriveBackend implements StorageBackend {
   }
 
   /** Fetch one file into the cache. Retries once; a corrupt file is skipped. */
-  async #download(f: { id: string; modifiedTime: string }): Promise<'ok' | 'failed' | 'corrupt'> {
+  async #download(f: { id: string; modifiedTime: string }): Promise<'ok' | 'failed' | 'failed-net' | 'corrupt'> {
+    let net = true;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const res = await authFetch(`${API}/files/${f.id}?alt=media`);
+        const res = await authFetch(`${API}/files/${f.id}?alt=media`, {}, BIG);
         const text = await res.text();
         let note: Note | null = null;
         try {
@@ -308,18 +325,21 @@ export class DriveBackend implements StorageBackend {
         if (!note?.id) return 'corrupt';
         this.#files.set(f.id, { modifiedTime: f.modifiedTime, note });
         return 'ok';
-      } catch {
+      } catch (e) {
+        // A timeout or a dropped connection, or something Drive refused?
+        const name = (e as { name?: string } | null)?.name ?? '';
+        net = net && (name === 'TimeoutError' || name === 'AbortError' || e instanceof TypeError);
         /* try once more */
       }
     }
-    return 'failed';
+    return net ? 'failed-net' : 'failed';
   }
 
   async getNote(id: string): Promise<Note | null> {
     const folderId = await this.#notesFolder();
     const fileId = this.#ids.get(id) ?? (await this.#findByName(`${id}.json`, folderId));
     if (!fileId) return null;
-    const res = await authFetch(`${API}/files/${fileId}?alt=media`);
+    const res = await authFetch(`${API}/files/${fileId}?alt=media`, {}, BIG);
     const note = (await res.json()) as Note;
     this.#ids.set(id, fileId);
     return note?.id ? note : null;
@@ -351,7 +371,7 @@ export class DriveBackend implements StorageBackend {
     const id = this.#settingsId ?? (await this.#findByName('settings.json', folderId));
     if (!id) return null;
     this.#settingsId = id;
-    const res = await authFetch(`${API}/files/${id}?alt=media`);
+    const res = await authFetch(`${API}/files/${id}?alt=media`, {}, BIG);
     return (await res.json()) as Settings;
   }
 

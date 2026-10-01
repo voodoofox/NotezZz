@@ -310,7 +310,10 @@ class AppStore {
     const transient = isTransient(e);
     if (transient && background && ++this.#offlineStreak < 3) return;
     this.syncStatus = 'error';
-    this.syncError = transient ? OFFLINE_MESSAGE : e instanceof Error ? e.message : String(e);
+    // A retryable failure that wasn't the network (a few notes Drive would
+    // not hand over) keeps its own words; network trouble gets ours.
+    const own = (e as { name?: string } | null)?.name === 'RetryableError';
+    this.syncError = transient && !own ? OFFLINE_MESSAGE : e instanceof Error ? e.message : String(e);
   }
 
   /** The connection is back: send what's owed and catch up, now. */
@@ -871,6 +874,7 @@ function isTransient(e: unknown): boolean {
     name === 'TimeoutError' ||
     name === 'AbortError' ||
     name === 'NetworkError' ||
+    name === 'RetryableError' ||
     /timed out|failed to fetch|network ?error|load failed|connection/i.test(msg)
   );
 }

@@ -538,6 +538,49 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Link schemes a note may open: the web, mail, phone. Never files or app
+/// schemes: a note's content must not be able to launch anything else.
+fn is_link_scheme(url: &tauri::Url) -> bool {
+    matches!(url.scheme(), "http" | "https" | "mailto" | "tel")
+}
+
+/// A link tapped in a note, opened by the system (browser, mail app, or the
+/// app that owns the site) rather than inside our window. A plain command,
+/// so sticky windows can use it without the whole opener plugin.
+#[tauri::command]
+fn open_link(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let parsed = tauri::Url::parse(&url).map_err(|e| e.to_string())?;
+    if !is_link_scheme(&parsed) {
+        return Err("Only web, mail and phone links open from a note.".into());
+    }
+    app.opener()
+        .open_url(parsed.as_str(), None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
+/// Every window stays on the app's own pages. A navigation anywhere else (a
+/// link the page didn't catch, a stray redirect) is cancelled and handed to
+/// the system instead: on Android a followed link left the web view on an
+/// error page, with the app gone until it was restarted.
+fn nav_guard<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
+    tauri::plugin::Builder::new("nav-guard")
+        .on_navigation(|webview, url| {
+            let own = matches!(url.scheme(), "tauri" | "asset" | "ipc" | "about" | "data" | "blob")
+                || matches!(url.host_str(), Some("tauri.localhost") | Some("localhost"));
+            if own {
+                return true;
+            }
+            if is_link_scheme(url) {
+                use tauri::Manager;
+                use tauri_plugin_opener::OpenerExt;
+                let _ = webview.app_handle().opener().open_url(url.as_str(), None::<&str>);
+            }
+            false
+        })
+        .build()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(desktop)]
@@ -571,7 +614,9 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(nav_guard())
         .invoke_handler(tauri::generate_handler![
+            open_link,
             list_notes,
             save_note,
             delete_note,

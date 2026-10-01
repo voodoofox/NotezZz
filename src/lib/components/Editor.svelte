@@ -132,7 +132,8 @@
     editor = new Editor({
       element,
       extensions: [
-        StarterKit,
+        // Links are opened by the app (see +layout), not by the editor.
+        StarterKit.configure({ link: { openOnClick: false } }),
         TextStyle,
         FontSize,
         AudioNote,

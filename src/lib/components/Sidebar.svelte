@@ -795,6 +795,12 @@
   .pin:last-child {
     margin-right: var(--edge);
   }
+  /* 2px between a row's pin and tuck, as between every pair of buttons:
+     without it the pin sat 2px right of the header's and the note's
+     column of buttons above and below it. */
+  .pin + .pin {
+    margin-left: var(--btn-gap);
+  }
   @media (hover: hover) {
     .pin:hover {
       opacity: 0.8;

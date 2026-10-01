@@ -159,6 +159,35 @@
     }
   });
 
+  // Links open outside the app, never in its own window. On Android the web
+  // view followed a tapped link (the link had already opened in the browser
+  // or the site's app) and was left on an error page in place of the app.
+  // Capture phase, so it runs before the editor sees the click.
+  onMount(() => {
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0) return;
+      const a = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
+      if (!a) return;
+      let url: URL;
+      try {
+        url = new URL(a.href, location.href);
+      } catch {
+        return;
+      }
+      if (url.origin === location.origin) return; // the app's own pages
+      if (!/^(https?|mailto|tel):$/.test(url.protocol)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (isTauri()) {
+        void import('@tauri-apps/api/core').then(({ invoke }) => invoke('open_link', { url: url.href })).catch(() => {});
+      } else {
+        window.open(url.href, '_blank', 'noopener,noreferrer');
+      }
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  });
+
   // Android app: the status-bar icons follow what is under them, the app's
   // top bar (its theme) or, with a note open full screen on a phone, that
   // note (MainActivity's bridge; absent everywhere else).

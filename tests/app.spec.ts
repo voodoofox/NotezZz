@@ -2181,3 +2181,45 @@ test('draw pad swatches are buttons: same size and corner, the chosen one checke
   await expect(dots.nth(2).locator('svg')).toHaveCount(1);
   await expect(page.locator('.pad .dot svg')).toHaveCount(1);
 });
+
+test('a link in a note opens outside the app; the app stays where it was', async ({ page, context }) => {
+  await context.route('https://example.org/**', (r) => r.fulfill({ status: 200, body: 'elsewhere' }));
+  await createNote(page);
+  await page.waitForTimeout(500);
+  await page.evaluate(() => {
+    const k = Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!;
+    const n = JSON.parse(localStorage.getItem(k)!);
+    n.contentHtml = '<p>see <a href="https://example.org/post/1">this post</a></p>';
+    localStorage.setItem(k, JSON.stringify(n));
+  });
+  await page.goto('/?local');
+  const before = page.url();
+  const [popup] = await Promise.all([context.waitForEvent('page'), page.locator('.ProseMirror a').click()]);
+  expect(popup.url()).toContain('example.org/post/1');
+  expect(page.url()).toBe(before); // the app itself never navigated
+  await expect(page.getByTestId('note-pane')).toBeVisible();
+});
+
+
+test.describe('phone: buttons line up in columns', () => {
+  test.use({ viewport: { width: 412, height: 915 } });
+
+  test("header, a pinned row and the note's title bar share their button columns", async ({ page }) => {
+    await createNote(page);
+    await page.getByTestId('pane-pin').click(); // pinned: the row gets pin + tuck, the note pin + tuck + ⋯
+    const cx = async (l: ReturnType<Page['locator']>) => {
+      const b = (await l.boundingBox())!;
+      return b.x + b.width / 2;
+    };
+    const row = page.getByTestId('note-item').first();
+    const cols = {
+      right: [page.getByTestId('new-note'), row.getByTestId('note-tuck'), page.getByTestId('note-more')],
+      second: [page.getByTestId('open-settings'), row.getByTestId('note-pin'), page.getByTestId('pane-tuck')],
+      third: [page.getByTestId('search-toggle'), page.getByTestId('pane-pin')],
+    };
+    for (const [name, list] of Object.entries(cols)) {
+      const xs = await Promise.all(list.map(cx));
+      for (const x of xs) expect(Math.abs(x - xs[0]), name).toBeLessThan(0.5);
+    }
+  });
+});
