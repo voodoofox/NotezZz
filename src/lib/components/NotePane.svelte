@@ -38,6 +38,7 @@
   let openPop = $state<Pop | null>(null);
   let popStyle = $state('');
   let remindWrap = $state<HTMLElement | null>(null);
+  let barEl = $state<HTMLElement | null>(null);
   let moreWrap = $state<HTMLElement | null>(null);
   let popEl = $state<HTMLElement | null>(null);
 
@@ -52,7 +53,7 @@
 
   function togglePop(which: Pop) {
     if (openPop === which) return void (openPop = null);
-    if (moreWrap) popStyle = popoverStyle(moreWrap, popWidth(which, moreWrap), 'end');
+    if (moreWrap) popStyle = popoverStyle(moreWrap, popWidth(which, moreWrap), 'end', barEl);
     openPop = which;
   }
 
@@ -175,7 +176,7 @@
       color-scheme: {pal.dark ? 'dark' : 'light'};
     "
   >
-    <div class="topbar {pal.pattern ? `nz-pat-${pal.pattern}` : ''}">
+    <div class="topbar {pal.pattern ? `nz-pat-${pal.pattern}` : ''}" bind:this={barEl}>
       {#if fullscreen}
         <button
           class="icon mob"

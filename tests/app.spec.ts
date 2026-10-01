@@ -249,6 +249,9 @@ test('the desktop header is the phone header: title, pin, ⋯', async ({ page })
   await page.getByTestId('note-more').click();
   const box = (await page.getByTestId('note-menu').boundingBox())!;
   expect(Math.round(box.x + box.width)).toBe(Math.round(more.x + more.width));
+  // It clears the bar by the same distance the button keeps from the bar's top.
+  const bar = (await page.locator('.topbar').boundingBox())!;
+  expect(Math.abs(box.y - (bar.y + bar.height) - (more.y - bar.y))).toBeLessThan(1);
 });
 
 test('the formatting toolbar sits at the bottom of the note, on the desktop too', async ({ page }) => {
@@ -1460,6 +1463,8 @@ test.describe("phone: the logo's design rules", () => {
     const more = (await page.getByTestId('note-more').boundingBox())!;
     const menu = (await page.getByTestId('note-menu').boundingBox())!;
     expect(Math.round(menu.x + menu.width)).toBe(Math.round(more.x + more.width));
+    const bar = (await page.locator('.topbar').boundingBox())!;
+    expect(Math.abs(menu.y - (bar.y + bar.height) - (more.y - bar.y))).toBeLessThan(1);
     await expect(page.getByTestId('menu-tuck')).toHaveCount(0); // tuck is in the bar, not here
   });
 

@@ -21,11 +21,12 @@
 
   let showSizes = $state(false);
   let sizeWrap = $state<HTMLDivElement | null>(null);
+  let barEl = $state<HTMLElement | null>(null);
   let sizeMenuStyle = $state('');
   let fileInput = $state<HTMLInputElement | null>(null);
 
   function toggleSizes() {
-    if (!showSizes && sizeWrap) sizeMenuStyle = popoverStyle(sizeWrap, 168);
+    if (!showSizes && sizeWrap) sizeMenuStyle = popoverStyle(sizeWrap, 168, 'center', barEl);
     showSizes = !showSizes;
   }
 
@@ -59,7 +60,7 @@
 
 <svelte:window onpointerdown={onGlobalPointerDown} />
 
-<div class="toolbar">
+<div class="toolbar" bind:this={barEl}>
   <button
     data-testid="fmt-bold"
     class:active={isActive('bold')}
