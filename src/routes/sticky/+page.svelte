@@ -516,6 +516,9 @@
     flex-direction: column;
     background-color: var(--note-bg);
     background-image: var(--note-grain), var(--note-shade);
+    background-size: auto, 100% 50%;
+    background-position: 0 0, center top;
+    background-repeat: repeat, no-repeat;
     color: var(--note-fg);
     border-radius: var(--sticky-radius);
     overflow: hidden;
@@ -530,6 +533,9 @@
     z-index: -1;
     pointer-events: none;
     background-image: var(--note-light);
+    background-size: 100% 50%;
+    background-position: center bottom;
+    background-repeat: no-repeat;
     mix-blend-mode: plus-lighter;
   }
   .bar {

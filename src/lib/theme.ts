@@ -11,7 +11,8 @@ export interface Fade {
   color: string;
   /** Opacity at the note's edge, 0..1. */
   strength: number;
-  /** How far up (or down) the note it reaches, as a share of its height. */
+  /** How far in from its edge it reaches, as a share of the note's height
+   *  (at most 0.5: the fade is clear at the note's centre). */
   reach: number;
 }
 
@@ -31,8 +32,8 @@ export interface ThemeDef {
     /** How fast the fades fall off: 0 is a straight fade, higher is a
      *  steeper exponential curve. */
     curve: number;
-    /** The fades are ellipses centred on the bottom and top edges; this is
-     *  their horizontal radius in note widths. Wide = edges that barely
+    /** Light and shade are halves of one ellipse centred on the note; this
+     *  is its horizontal radius in note widths. Wide = contours that barely
      *  curve, like light on a gently bowed sheet. */
     spread: number;
     /** Paper grain over the whole note, 0..0.5 opacity. */
@@ -59,7 +60,7 @@ const FLAT_NOTE: ThemeDef['note'] = {
   light: { color: '#ffffff', strength: 0, reach: 0.4 },
   shade: { color: '#000000', strength: 0, reach: 0.4 },
   curve: 4,
-  spread: 2,
+  spread: 3.5,
   grain: 0,
   header: 1,
   strip: { color: '#000000', strength: 0 },
@@ -73,10 +74,10 @@ export const BUILTIN_THEMES: ThemeDef[] = [
     name: 'Daylight',
     author: 'NotezZz',
     note: {
-      light: { color: '#ffffff', strength: 0.096, reach: 0.6 },
-      shade: { color: '#000000', strength: 0.16, reach: 0.4 },
+      light: { color: '#ffffff', strength: 0.096, reach: 0.5 },
+      shade: { color: '#000000', strength: 0.16, reach: 0.5 },
       curve: 4,
-      spread: 2,
+      spread: 3.5,
       grain: 0.07,
       header: 0.075,
       strip: { color: '#000000', strength: 0.075 },
@@ -133,7 +134,7 @@ function fade(v: unknown, base: Fade): Fade {
   return {
     color: hex(o.color, base.color),
     strength: clamp(o.strength, 0, 1, base.strength),
-    reach: clamp(o.reach, 0, 1, base.reach),
+    reach: clamp(o.reach, 0, 0.5, base.reach),
   };
 }
 
@@ -197,26 +198,39 @@ function rgb(h: string): [number, number, number] {
 }
 
 /**
- * A fade from one edge of the note: `strength` at the edge, nothing at
- * `reach`, falling off along an exponential curve (straight when curve≈0).
- * It's an ellipse centred on that edge, `spread` note-widths wide and
- * `reach` tall, so its contours bow very slightly toward the corners.
+ * One half of the note's light or shade. Both are pieces of one wide
+ * ellipse centred on the middle of the note: clear at the centre, growing
+ * to `strength` at the top or bottom edge, along an exponential curve
+ * (straight when curve≈0). The ellipse is `spread` note-widths across and
+ * reaches the edge, so its contours bow only slightly and the corners come
+ * out a touch stronger than the middle of the edge. `reach` (up to half the
+ * note's height) is how far in from the edge the fade starts.
+ *
+ * The image is drawn for one HALF of the note (see the background-size and
+ * -position next to --note-light / --note-shade): the top half for the
+ * shade, the bottom half for the light, centred on the shared edge.
  * CSS gradients only interpolate in straight lines, so the curve is laid
  * down as a run of stops.
  */
-export function fadeGradient(edge: 'bottom' | 'top', f: Fade, curve: number, spread = 2): string {
+export function fadeGradient(edge: 'bottom' | 'top', f: Fade, curve: number, spread = 3.5): string {
   if (f.strength <= 0 || f.reach <= 0) return 'none';
   const [r, g, b] = rgb(f.color);
   const k = curve;
+  // From the edge (t = 0) inward to where the fade ends (t = 1).
   const at = (t: number) => (k < 0.01 ? 1 - t : (Math.exp(-k * t) - Math.exp(-k)) / (1 - Math.exp(-k)));
+  // Radial position: 0 = the note's centre, 100% = the edge.
+  const start = 1 - Math.min(0.5, f.reach) / 0.5;
   const steps = 12;
-  const stops: string[] = [];
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    stops.push(`rgba(${r}, ${g}, ${b}, ${(f.strength * at(t)).toFixed(4)}) ${(t * 100).toFixed(2)}%`);
+  const stops: string[] = [`rgba(${r}, ${g}, ${b}, 0) 0%`];
+  for (let i = steps; i >= 0; i--) {
+    const t = i / steps; // i = steps: where the fade starts; 0: the edge
+    const u = 1 - t * (1 - start);
+    stops.push(`rgba(${r}, ${g}, ${b}, ${(f.strength * at(t)).toFixed(4)}) ${(u * 100).toFixed(2)}%`);
   }
-  const size = `${+(spread * 100).toFixed(1)}% ${+(f.reach * 100).toFixed(1)}%`;
-  return `radial-gradient(${size} at 50% ${edge === 'bottom' ? '100%' : '0%'}, ${stops.join(', ')})`;
+  const size = `${+(spread * 100).toFixed(1)}% 100%`;
+  // The light's half is the bottom one, so the centre is its top edge; the
+  // shade's half is the top one, centred on its bottom edge.
+  return `radial-gradient(${size} at 50% ${edge === 'bottom' ? '0%' : '100%'}, ${stops.join(', ')})`;
 }
 
 /** Paper grain: a grey noise tile at the given opacity. */

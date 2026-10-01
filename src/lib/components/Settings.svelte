@@ -36,9 +36,13 @@
   /** A little note in the theme's light, on a sunflower page. */
   function themePreview(t: ThemeDef): string {
     const v = themeVars(t);
-    return `background-color: #f0e7c2; background-image: ${v['--note-grain']}, ${v['--note-shade']};`;
+    return (
+      `background-color: #f0e7c2; background-image: ${v['--note-grain']}, ${v['--note-shade']};` +
+      'background-size: auto, 100% 50%; background-position: 0 0, center top; background-repeat: repeat, no-repeat;'
+    );
   }
-  const lightPreview = (t: ThemeDef) => `background-image: ${themeVars(t)['--note-light']};`;
+  const lightPreview = (t: ThemeDef) =>
+    `background-image: ${themeVars(t)['--note-light']}; background-size: 100% 50%; background-position: center bottom; background-repeat: no-repeat;`;
 
   async function copyTheme() {
     const json = exportTheme(activeTheme);

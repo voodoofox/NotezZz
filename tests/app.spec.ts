@@ -1497,7 +1497,8 @@ test.describe('themes', () => {
     await createNote(page);
     const pane = page.getByTestId('note-pane');
     const image = () => pane.evaluate((el) => getComputedStyle(el).backgroundImage);
-    expect(await image()).toContain('radial-gradient(200% 40% at 50% 0%'); // a very wide ellipse
+    // Halves of one very wide ellipse centred on the note: the shade on top…
+    expect(await image()).toContain('radial-gradient(350% 100% at 50% 100%');
     expect(await image()).toContain('data:image/svg+xml');
     // The light from below is ADDED (plus-lighter), on a layer of its own,
     // reaching 60% up the note.
@@ -1506,7 +1507,7 @@ test.describe('themes', () => {
       return { blend: cs.mixBlendMode, image: cs.backgroundImage };
     });
     expect(light.blend).toBe('plus-lighter');
-    expect(light.image).toContain('radial-gradient(200% 60% at 50% 100%');
+    expect(light.image).toContain('radial-gradient(350% 100% at 50% 0%'); // …the light below
     expect(await rootVar(page, '--note-header-mix')).toBe('7.5%');
     expect(await rootVar(page, '--note-chin-mix')).toBe('0%');
     // The adhesive strip under the title darkens it.
