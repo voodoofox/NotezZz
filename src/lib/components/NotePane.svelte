@@ -46,7 +46,8 @@
   const threeButtons = (a: HTMLElement) => {
     // getBoundingClientRect, not offsetWidth: on phones the size is fractional.
     const btn = (a.querySelector('button') ?? a).getBoundingClientRect().width;
-    return btn * 3 + 2 * 2;
+    const gap = parseFloat(getComputedStyle(a).getPropertyValue('--btn-gap')) || 0;
+    return btn * 3 + gap * 2;
   };
   const popWidth = (which: Pop, a: HTMLElement) =>
     which === 'pal' ? 226 : which === 'size' || which === 'opacity' ? threeButtons(a) : which === 'remind' ? 250 : 236;
@@ -378,7 +379,10 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    background: var(--note-bg);
+    /* The note as a surface: the theme's grain, light from below and shade
+       from above, over the note's colour. */
+    background-color: var(--note-bg);
+    background-image: var(--note-grain), var(--note-light), var(--note-shade);
     color: var(--note-fg);
     height: 100%;
   }
@@ -407,8 +411,12 @@
     align-items: center;
     gap: var(--btn-gap);
     padding: var(--edge) var(--edge) var(--edge) 12px; /* left matches the list */
-    /* -color, not the shorthand: the shorthand would wipe a pattern's background-image */
-    background-color: var(--note-header);
+    /* The title strip is the note's adhesive: as solid as the theme says.
+       -color, not the shorthand: the shorthand would wipe a pattern's
+       background-image, which these two variables tone down with it. */
+    background-color: color-mix(in srgb, var(--note-header) var(--note-header-mix), transparent);
+    --pat-base: color-mix(in srgb, var(--note-header) var(--note-header-mix), transparent);
+    --pat-ink: color-mix(in srgb, var(--note-ink) var(--note-pat-mix), transparent);
   }
   .title {
     flex: 1 1 0;

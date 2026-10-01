@@ -29,7 +29,8 @@
      menus) are small stickers, rounded the same way at twice the corner. */
   --btn: 32px;
   --btn-gap: 2px;
-  --btn-radius: calc(var(--btn) * 0.235);
+  --btn-corner: 0.235; /* set by the theme */
+  --btn-radius: calc(var(--btn) * var(--btn-corner));
   /* How far buttons sit from the edge of whatever holds them. Anything
      rounded that holds buttons takes the button's corner PLUS that
      distance, so the two curves run parallel all the way round (concentric
@@ -37,6 +38,16 @@
   --edge: 6px;
   --sticker-radius: calc(var(--btn-radius) + var(--edge));
   --sticky-radius: calc(var(--btn-radius) + var(--edge));
+  /* The note as a surface; the active theme (theme.ts) sets these. Until
+     it does, a note looks flat: no light, shade or grain, a solid title
+     strip and formatting bar. */
+  --note-light: none;
+  --note-shade: none;
+  --note-grain: none;
+  --note-header-mix: 100%;
+  --note-pat-mix: 100%;
+  --note-chin-mix: 100%;
+  --note-chin-line: 10%;
   /* Balloons cast a short, tight shadow, like a sticker lying flat. */
   --sticker-shadow: 0 1px 2px rgba(0, 0, 0, 0.14), 0 3px 8px rgba(0, 0, 0, 0.16);
 }
@@ -46,7 +57,7 @@
 @media (max-width: 700px) {
   :root {
     /* Sticky windows are narrow too, hence the low floor. */
-    --btn: clamp(24px, calc((100vw - 2 * var(--edge) - 20px) / 11), 40px);
+    --btn: clamp(24px, calc((100vw - 2 * var(--edge) - 10 * var(--btn-gap)) / 11), 40px);
   }
 }
 

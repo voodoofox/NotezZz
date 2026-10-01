@@ -1488,3 +1488,89 @@ test.describe("phone: the logo's design rules", () => {
     expect(Math.abs(slider.x + slider.width / 2 - (box.x + box.width / 2))).toBeLessThan(2);
   });
 });
+
+test.describe('themes', () => {
+  const rootVar = (page: Page, name: string) =>
+    page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
+
+  test('Daylight is the default look; Flat takes the light, shade and grain away', async ({ page }) => {
+    await createNote(page);
+    const pane = page.getByTestId('note-pane');
+    const image = () => pane.evaluate((el) => getComputedStyle(el).backgroundImage);
+    expect(await image()).toContain('linear-gradient');
+    expect(await image()).toContain('data:image/svg+xml');
+    expect(await rootVar(page, '--note-header-mix')).toBe('10%');
+    expect(await rootVar(page, '--note-chin-mix')).toBe('0%');
+    await page.getByTestId('open-settings').click();
+    await page.getByTestId('theme-pick').filter({ hasText: 'Flat' }).click();
+    await page.getByTestId('settings-close').click();
+    expect(await image()).toBe('none, none, none');
+    expect(await rootVar(page, '--note-header-mix')).toBe('100%');
+  });
+
+  test('a shared theme comes in as JSON, applies, goes back out, and can be removed', async ({ page }) => {
+    await page.getByTestId('open-settings').click();
+    await page.getByTestId('theme-import-toggle').click();
+    await page.getByTestId('theme-json').fill(
+      JSON.stringify({
+        format: 'notezzz-theme',
+        version: 1,
+        name: 'Dusk',
+        note: { shade: { color: '#203040', strength: 0.3, reach: 0.5 }, header: 0.5, toolbar: 0.2 },
+        buttons: { corner: 0.5, edge: 8, gap: 4 },
+      })
+    );
+    await page.getByTestId('theme-add').click();
+    await expect(page.getByTestId('theme-pick').filter({ hasText: 'Dusk' })).toHaveAttribute('aria-pressed', 'true');
+    expect(await rootVar(page, '--note-header-mix')).toBe('50%');
+    expect(await rootVar(page, '--edge')).toBe('8px');
+    expect(await rootVar(page, '--note-shade')).toContain('rgba(32, 48, 64, 0.3');
+    // It travels with the settings (and so to every device).
+    const saved = await page.evaluate(() => {
+      const key = Object.keys(localStorage).find((k) => k.includes('settings'))!;
+      return JSON.parse(localStorage.getItem(key)!).themes?.map((t: { name: string }) => t.name);
+    });
+    expect(saved).toContain('Dusk');
+    await page.getByTestId('theme-delete').click();
+    await expect(page.getByTestId('theme-pick').filter({ hasText: 'Dusk' })).toHaveCount(0);
+    await expect(page.getByTestId('theme-pick').filter({ hasText: 'Daylight' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('a theme that is not one is refused in plain words', async ({ page }) => {
+    await page.getByTestId('open-settings').click();
+    await page.getByTestId('theme-import-toggle').click();
+    await page.getByTestId('theme-json').fill('not json at all');
+    await page.getByTestId('theme-add').click();
+    await expect(page.getByTestId('theme-error')).toHaveText("That isn't a theme: it isn't valid JSON.");
+    await page.getByTestId('theme-json').fill('{"format":"other-app","note":{}}');
+    await page.getByTestId('theme-add').click();
+    await expect(page.getByTestId('theme-error')).toHaveText("That isn't a NotezZz theme.");
+    await page.getByTestId('theme-json').fill('{"format":"notezzz-theme","version":9,"note":{}}');
+    await page.getByTestId('theme-add').click();
+    await expect(page.getByTestId('theme-error')).toContainText('newer NotezZz');
+  });
+
+  test('a theme can only bring colours and numbers: nothing reaches CSS as text', async ({ page }) => {
+    await page.getByTestId('open-settings').click();
+    await page.getByTestId('theme-import-toggle').click();
+    await page.getByTestId('theme-json').fill(
+      JSON.stringify({
+        name: '<b>Bad</b>',
+        note: {
+          light: { color: 'red;background:url(https://evil.example/x)', strength: 9, reach: -2 },
+          header: 'url(x)',
+          grain: 3,
+        },
+        buttons: { corner: 'calc(1px)', edge: 900 },
+      })
+    );
+    await page.getByTestId('theme-add').click();
+    await expect(page.getByTestId('theme-pick').filter({ hasText: 'bBad/b' })).toHaveCount(1); // tags stripped
+    expect(await rootVar(page, '--note-light')).toBe('none'); // reach clamped to 0
+    expect(await rootVar(page, '--note-header-mix')).toBe('100%'); // not a number: default
+    expect(await rootVar(page, '--edge')).toBe('16px'); // clamped
+    expect(await rootVar(page, '--btn-corner')).toBe('0.235'); // not a number: default
+    const all = await page.evaluate(() => document.documentElement.getAttribute('style') ?? '');
+    expect(all).not.toContain('evil.example');
+  });
+});

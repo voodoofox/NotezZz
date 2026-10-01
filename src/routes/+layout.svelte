@@ -7,6 +7,8 @@
   import { isTauri } from '$lib/storage/backend';
   import { initDiag } from '$lib/diag';
   import { setCustomPatterns } from '$lib/patterns.svelte';
+  import { applyTheme, findTheme } from '$lib/theme';
+  import { isDesktop } from '$lib/storage/backend';
 
   initDiag(); // start capturing errors as early as possible
   // Custom pattern slots live in settings; getPalette() reads them from a
@@ -146,6 +148,25 @@
     );
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', theme === 'dark' ? '#16181d' : '#f4f5f7');
+    // Windows 11: the main window's title bar takes the colour of the app's
+    // own top bar, so the two read as one (older Windows ignores it).
+    if (isDesktop()) {
+      requestAnimationFrame(() => {
+        const cs = getComputedStyle(document.documentElement);
+        const caption = cs.getPropertyValue('--app-panel').trim();
+        const text = cs.getPropertyValue('--app-fg').trim();
+        if (!/^#[0-9a-f]{6}$/i.test(caption) || !/^#[0-9a-f]{6}$/i.test(text)) return;
+        void import('@tauri-apps/api/core')
+          .then(({ invoke }) => invoke('set_titlebar_color', { caption, text }))
+          .catch(() => {});
+      });
+    }
+  });
+
+  // The note theme (light, shade, grain, title strip, buttons): CSS
+  // custom properties on the root, in every window, stickies included.
+  $effect(() => {
+    applyTheme(findTheme(store.settings.themeId, store.settings.themes));
   });
 </script>
 

@@ -514,7 +514,8 @@
     inset: 0;
     display: flex;
     flex-direction: column;
-    background: var(--note-bg);
+    background-color: var(--note-bg);
+    background-image: var(--note-grain), var(--note-light), var(--note-shade);
     color: var(--note-fg);
     border-radius: var(--sticky-radius);
     overflow: hidden;
@@ -527,8 +528,10 @@
     /* Buttons --edge from the top and right, so the corner button's curve
        runs parallel to the window's (whose radius is button + edge). */
     padding: var(--edge) var(--edge) var(--edge) 10px;
-    /* -color, not the shorthand: the shorthand would wipe a pattern's background-image */
-    background-color: var(--note-header);
+    /* The adhesive strip, as solid as the theme says (see NotePane). */
+    background-color: color-mix(in srgb, var(--note-header) var(--note-header-mix), transparent);
+    --pat-base: color-mix(in srgb, var(--note-header) var(--note-header-mix), transparent);
+    --pat-ink: color-mix(in srgb, var(--note-ink) var(--note-pat-mix), transparent);
     cursor: move;
     user-select: none;
   }

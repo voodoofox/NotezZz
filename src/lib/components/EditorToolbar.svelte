@@ -200,13 +200,14 @@
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
-    background: var(--note-header);
+    /* As solid as the theme says (Daylight: none, just the buttons). */
+    background: color-mix(in srgb, var(--note-header) var(--note-chin-mix), transparent);
     /* At the bottom of the note everywhere (phones, stickies and the full
        app alike): within thumb reach, and Android's text-selection bubble,
        which appears above a selection, can never cover it. Tints are mixed
        from the note's own ink so dark palettes get a visible line too. */
     order: 2;
-    border-top: 1px solid color-mix(in srgb, var(--note-fg) 10%, transparent);
+    border-top: 1px solid color-mix(in srgb, var(--note-fg) var(--note-chin-line), transparent);
   }
   .toolbar::-webkit-scrollbar {
     display: none;

@@ -12,8 +12,88 @@
   import { PALETTES } from '$lib/palettes';
   import { hotkey, NEW_NOTE_SHORTCUT_LABEL } from '$lib/hotkey.svelte';
   import { buildExport, downloadBlob, exportFileName } from '$lib/export';
+  import {
+    BUILTIN_THEMES,
+    DEFAULT_THEME_ID,
+    exportTheme,
+    findTheme,
+    parseTheme,
+    themeVars,
+    type ThemeDef,
+  } from '$lib/theme';
 
   let { onClose }: { onClose: () => void } = $props();
+
+  // ---- themes: pick, share as JSON, bring one in ---------------------------
+  const MAX_THEMES = 20;
+  let allThemes = $derived([...BUILTIN_THEMES, ...(store.settings.themes ?? [])]);
+  let activeTheme = $derived(findTheme(store.settings.themeId, store.settings.themes));
+  let importing = $state(false);
+  let themeText = $state('');
+  let themeError = $state('');
+  let copied = $state(false);
+
+  /** A little note in the theme's light, on a sunflower page. */
+  function themePreview(t: ThemeDef): string {
+    const v = themeVars(t);
+    return `background-color: #f0e7c2; background-image: ${v['--note-grain']}, ${v['--note-light']}, ${v['--note-shade']};`;
+  }
+
+  async function copyTheme() {
+    const json = exportTheme(activeTheme);
+    try {
+      await navigator.clipboard.writeText(json);
+      copied = true;
+      setTimeout(() => (copied = false), 1600);
+    } catch {
+      // No clipboard here (some webviews): put it where it can be copied by hand.
+      themeText = json;
+      importing = true;
+      themeError = "This device didn't allow copying. The theme is in the box below.";
+    }
+  }
+
+  function saveThemeFile() {
+    const slug = activeTheme.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'theme';
+    downloadBlob(new Blob([exportTheme(activeTheme)], { type: 'application/json' }), `${slug}.notezzz-theme.json`);
+  }
+
+  function addTheme(json: string) {
+    themeError = '';
+    if ((store.settings.themes ?? []).length >= MAX_THEMES) {
+      themeError = `You already have ${MAX_THEMES} themes. Remove one first.`;
+      return;
+    }
+    try {
+      const t = parseTheme(json);
+      void store.saveSettings({ themes: [...(store.settings.themes ?? []), t], themeId: t.id });
+      themeText = '';
+      importing = false;
+    } catch (e) {
+      themeError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function readThemeFile(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    if (file.size > 64_000) {
+      themeError = "That file is too big to be a theme.";
+      return;
+    }
+    themeText = await file.text();
+    addTheme(themeText);
+  }
+
+  function removeTheme(id: string) {
+    const rest = (store.settings.themes ?? []).filter((t) => t.id !== id);
+    void store.saveSettings({
+      themes: rest,
+      ...(store.settings.themeId === id ? { themeId: DEFAULT_THEME_ID } : {}),
+    });
+  }
 
   let syncFolder = $state<string | null>(null);
   let autostartOn = $state(false);
@@ -232,6 +312,64 @@
           onchange={(e) => store.saveSettings({ defaultFontSize: +(e.currentTarget as HTMLInputElement).value })}
         />
       </label>
+    </section>
+
+    <section data-testid="theme-section">
+      <h3>Theme</h3>
+      <div class="themes">
+        {#each allThemes as t (t.id)}
+          <div class="theme" class:cur={t.id === activeTheme.id}>
+            <button
+              class="tpick"
+              data-testid="theme-pick"
+              aria-pressed={t.id === activeTheme.id}
+              onclick={() => store.saveSettings({ themeId: t.id })}
+            >
+              <span class="tprev" style={themePreview(t)}>
+                <span class="tstrip" style="opacity: {t.note.header}"></span>
+              </span>
+              <span class="tname">{t.name}</span>
+            </button>
+            {#if t.id.startsWith('custom:')}
+              <button
+                class="tdel"
+                data-testid="theme-delete"
+                title="Remove {t.name}"
+                aria-label="Remove {t.name}"
+                onclick={() => removeTheme(t.id)}
+              ><Icon name="close" size={14} /></button>
+            {/if}
+          </div>
+        {/each}
+      </div>
+      <div class="row">
+        <span>Share this theme</span>
+        <span class="btns">
+          <button data-testid="theme-copy" onclick={copyTheme}>{copied ? 'Copied' : 'Copy'}</button>
+          <button data-testid="theme-save" onclick={saveThemeFile}>Save file</button>
+          <button data-testid="theme-import-toggle" onclick={() => (importing = !importing)}>Import…</button>
+        </span>
+      </div>
+      {#if importing}
+        <div class="timport">
+          <textarea
+            data-testid="theme-json"
+            rows="6"
+            spellcheck="false"
+            placeholder="Paste a theme someone shared, or choose its file"
+            bind:value={themeText}
+          ></textarea>
+          <span class="btns">
+            <label class="tfile">
+              Choose file
+              <input type="file" accept=".json,application/json" onchange={readThemeFile} />
+            </label>
+            <button data-testid="theme-add" onclick={() => addTheme(themeText)} disabled={!themeText.trim()}>Add theme</button>
+          </span>
+          {#if themeError}<p class="hint warn" data-testid="theme-error">{themeError}</p>{/if}
+        </div>
+      {/if}
+      <p class="hint">A theme is how a note looks: light and shade, grain, the title strip and the buttons. It's a small text file you can share.</p>
     </section>
 
     {#if tauri}
@@ -502,6 +640,95 @@
     cursor: pointer;
   }
   .folder button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .themes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .theme {
+    position: relative;
+  }
+  .panel button.tpick {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 8px 6px;
+    background: transparent;
+    color: var(--app-fg);
+    border-radius: var(--radius-md);
+    font-size: 13px;
+  }
+  .theme.cur .tpick {
+    background: color-mix(in srgb, var(--app-fg) 10%, transparent);
+  }
+  .tprev {
+    position: relative;
+    display: block;
+    width: 56px;
+    height: 56px;
+    border-radius: var(--sticker-radius);
+    overflow: hidden;
+    box-shadow: var(--sticker-shadow);
+  }
+  .tstrip {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 12px;
+    background: #e6d9a8;
+  }
+  .panel button.tdel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--app-bg);
+    color: var(--app-fg);
+  }
+  .timport {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 4px 0 8px;
+  }
+  .timport textarea {
+    font: 13px/1.4 ui-monospace, Consolas, monospace;
+    color: var(--app-fg);
+    background: var(--app-bg);
+    border: 1px solid var(--app-border);
+    border-radius: var(--radius-sm);
+    padding: 8px;
+    resize: vertical;
+  }
+  .tfile {
+    position: relative;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    padding: 7px 13px;
+    font-size: 15px;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--app-fg) 12%, transparent);
+    cursor: pointer;
+  }
+  .tfile input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .panel button:disabled {
     opacity: 0.5;
     cursor: default;
   }

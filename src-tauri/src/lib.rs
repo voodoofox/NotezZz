@@ -358,6 +358,39 @@ fn google_sign_out(app: tauri::AppHandle) -> Result<(), String> {
 /// Move the calling window to (x, y) over `ms` with an ease-in-out quart
 /// curve. Done here rather than per-frame from JS: each JS frame was an IPC
 /// round-trip, which throttled the motion until it read as linear.
+/// Colour the main window's title bar like the app's own top bar, so the
+/// two read as one. Windows 11 only (DWM caption/text colours); elsewhere,
+/// and on older Windows, this quietly does nothing. Colours are #rrggbb.
+#[tauri::command]
+fn set_titlebar_color(window: tauri::Window, caption: String, text: String) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR};
+        // COLORREF is 0x00BBGGRR.
+        fn colorref(hex: &str) -> Option<u32> {
+            let h = hex.strip_prefix('#')?;
+            if h.len() != 6 {
+                return None;
+            }
+            let v = u32::from_str_radix(h, 16).ok()?;
+            Some(((v >> 16) & 0xff) | (v & 0xff00) | ((v & 0xff) << 16))
+        }
+        if window.label() != "main" {
+            return Ok(()); // stickies have no title bar
+        }
+        let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+        for (attr, hex) in [(DWMWA_CAPTION_COLOR, &caption), (DWMWA_TEXT_COLOR, &text)] {
+            let c = colorref(hex).ok_or_else(|| format!("not a colour: {hex}"))?;
+            unsafe {
+                DwmSetWindowAttribute(hwnd.0 as _, attr as u32, &c as *const u32 as *const core::ffi::c_void, 4);
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = (window, caption, text);
+    Ok(())
+}
+
 #[cfg(desktop)]
 #[tauri::command]
 async fn slide_window(window: tauri::Window, x: i32, y: i32, ms: u32) -> Result<(), String> {
@@ -557,6 +590,7 @@ pub fn run() {
             take_pending_share,
             take_pending_action,
             write_widget_snapshot,
+            set_titlebar_color,
         ])
         .setup(|app| {
             // Daily copy of the notes folder into the local app dir (see backup.rs).

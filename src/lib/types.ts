@@ -47,7 +47,13 @@ export interface Note {
   remindAt?: number;
 }
 
+import type { ThemeDef } from './theme';
+
 export interface Settings {
+  /** The active theme (theme.ts): a built-in id, or 'custom:…' from `themes`. */
+  themeId?: string;
+  /** Themes the user imported; the built-ins aren't stored. */
+  themes?: ThemeDef[];
   /** Default palette for new notes. */
   defaultPaletteId: string;
   /** Default font size for new notes. */
