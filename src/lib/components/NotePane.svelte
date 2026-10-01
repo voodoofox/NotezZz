@@ -11,7 +11,7 @@
 
   import { popoverStyle } from '$lib/popover';
   import VSlider from './VSlider.svelte';
-  import { luminance } from '$lib/theme';
+  import { inkOnWhite, luminance } from '$lib/theme';
 
   let note = $derived(store.active);
   let pal = $derived(getPalette(note?.paletteId ?? ''));
@@ -175,6 +175,7 @@
       --note-header: {pal.header};
       --note-fg: {pal.fg};
       --note-ink: {pal.ink ?? pal.fg};
+      --slider-ink: {inkOnWhite(pal.bg, pal.fg)};
       --pat-img: {pal.patternImage ?? 'none'};
       color-scheme: {pal.dark ? 'dark' : 'light'};
     "
@@ -523,6 +524,10 @@
     .topbar {
       padding: var(--edge);
     }
+    /* Full screen: the title bar reaches up under Android's status bar. */
+    :global(.app.note-open) > .pane .topbar {
+      padding-top: calc(var(--edge) + var(--safe-top, 0px));
+    }
     .pane {
       flex: 1;
       min-height: 0;
@@ -617,15 +622,18 @@
   /* The text-size sticker is cut from the note itself: same colour, no
      edge, no shadow, so only the slider shows. Three buttons wide (set
      inline), 30% shorter than it was. */
+  /* The text size (and opacity) balloon: a white sticker, the slider and
+     its numbers in the note's colour (deepened on pale notes, see
+     inkOnWhite), with room above and below the slider. */
   .sizepanel {
     flex-direction: row;
     justify-content: center;
     gap: 6px;
-    padding: 10px 0 8px;
-    background: var(--note-bg);
-    color: var(--note-fg);
+    padding: 20px 0 18px;
+    background: #fff;
+    --note-fg: var(--slider-ink);
+    color: var(--slider-ink);
     border: none;
-    box-shadow: none;
   }
   /* The ⋯ menu. */
   .menu {

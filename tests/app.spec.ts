@@ -91,6 +91,7 @@ test('italic and underline apply', async ({ page }) => {
   await typeInEditor(page, 'styled');
   await page.locator('.ProseMirror').press('ControlOrMeta+a');
   await page.getByTestId('fmt-italic').click();
+  await page.getByTestId('fmt-more').click(); // underline lives in the toolbar's ⋯
   await page.getByTestId('fmt-underline').click();
   await expect(page.locator('.ProseMirror em')).toHaveCount(1);
   await expect(page.locator('.ProseMirror u')).toHaveCount(1);
@@ -663,6 +664,9 @@ test('a first run leaves welcome notes, and only once', async ({ page }) => {
 
   await expect(page.getByTestId('note-item')).toHaveCount(3);
   await expect(page.getByTestId('note-title').first()).toHaveText('Start here');
+  // In the logo's colours, in its order: blue, yellow, pink.
+  const fills = await page.getByTestId('note-fill').evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor));
+  expect(fills).toEqual(['rgb(155, 235, 255)', 'rgb(255, 246, 168)', 'rgb(255, 106, 213)']);
 
   // Seeding again on every launch would be the app nagging. (Local mode is
   // not remembered on web, so the gate is part of the relaunch.)
@@ -1434,7 +1438,7 @@ test.describe("phone: the logo's design rules", () => {
   test('every button is the same rounded square, 2px from its neighbour', async ({ page }) => {
     await page.getByTestId('new-note').click();
     await page.getByTestId('pane-pin').click(); // brings the tuck button into the bar
-    const ids = ['pane-pin', 'pane-tuck', 'note-more', 'fmt-bold', 'fmt-record', 'new-note', 'search-toggle'];
+    const ids = ['pane-pin', 'pane-tuck', 'note-more', 'fmt-bold', 'fmt-record', 'new-note', 'search-toggle', 'fmt-more'];
     const boxes = await Promise.all(ids.map((id) => page.getByTestId(id).boundingBox()));
     const w = Math.round(boxes[0]!.width);
     for (const [i, b] of boxes.entries()) {
@@ -1449,10 +1453,10 @@ test.describe("phone: the logo's design rules", () => {
     const radius = await page.getByTestId('pane-pin').evaluate((el) => parseFloat(getComputedStyle(el).borderTopLeftRadius));
     expect(radius / w).toBeGreaterThan(0.2);
     expect(radius / w).toBeLessThan(0.27);
-    // The formatting toolbar's 11 buttons fit the screen exactly.
-    const mic = boxes[4]!;
-    expect(mic.x + mic.width).toBeLessThanOrEqual(400);
-    expect(mic.x + mic.width).toBeGreaterThan(390);
+    // The toolbar's ⋯ ends the edge (6px) in from the screen's right, like
+    // the note's ⋯ and the header's + above it.
+    const tmore = boxes[7]!;
+    expect(Math.round(400 - (tmore.x + tmore.width))).toBe(6);
   });
 
   test('the ⋯ menu lines up with the right edge of its button', async ({ page }) => {
@@ -1466,7 +1470,7 @@ test.describe("phone: the logo's design rules", () => {
     await expect(page.getByTestId('menu-tuck')).toHaveCount(0); // tuck is in the bar, not here
   });
 
-  test("the text-size sticker is three buttons wide, in the note's own colour", async ({ page }) => {
+  test("the text-size sticker is three buttons wide: white, the slider in the note's colour", async ({ page }) => {
     await page.getByTestId('new-note').click();
     await page.getByTestId('note-more').click();
     await page.getByTestId('menu-size').click();
@@ -1475,12 +1479,19 @@ test.describe("phone: the logo's design rules", () => {
     const btn = (await page.getByTestId('note-more').boundingBox())!;
     expect(Math.round(box.width)).toBe(Math.round(btn.width * 3 + 4));
     expect(Math.round(box.x + box.width)).toBe(Math.round(btn.x + btn.width));
-    expect(box.height).toBeLessThan(190); // 30% shorter than the 264px it was
-    const [panelBg, noteBg] = await Promise.all([
-      panel.evaluate((el) => getComputedStyle(el).backgroundColor),
-      page.getByTestId('note-pane').evaluate((el) => getComputedStyle(el).backgroundColor),
-    ]);
-    expect(panelBg).toBe(noteBg);
+    expect(box.height).toBeLessThan(200);
+    expect(await panel.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(255, 255, 255)');
+    // The number and the slider in the note's colour, deep enough to read on
+    // white (Paper is near white, so it is deepened towards its ink).
+    const ink = await page.getByTestId('size-value').evaluate((el) => getComputedStyle(el).color);
+    const lum = await page.evaluate((c) => {
+      const [r, g, b] = c.match(/\d+/g)!.map(Number).map((v) => {
+        const x = v / 255;
+        return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    }, ink);
+    expect(lum).toBeLessThanOrEqual(0.31);
     // The slider sits in the middle of it.
     const slider = (await page.getByTestId('size-slider').boundingBox())!;
     expect(Math.abs(slider.x + slider.width / 2 - (box.x + box.width / 2))).toBeLessThan(2);
@@ -1691,12 +1702,12 @@ test('list above the note: fits its notes, at least three rows, at most 30% of t
   const listH = () => page.locator('.list').evaluate((el) => el.getBoundingClientRect().height);
 
   // One note: three rows' worth, not 30%.
-  expect(Math.abs((await listH()) - (3 * rowH + 8))).toBeLessThan(2);
+  expect(Math.abs((await listH()) - 3 * rowH)).toBeLessThan(2);
   expect(await share()).toBeLessThan(0.28);
 
   // It grows with the notes…
   for (let i = 0; i < 3; i++) await createNote(page);
-  expect(Math.abs((await listH()) - (4 * rowH + 8))).toBeLessThan(2);
+  expect(Math.abs((await listH()) - 4 * rowH)).toBeLessThan(2);
 
   // …up to 30% of the height; past that it scrolls. The note takes the rest.
   for (let i = 0; i < 4; i++) await createNote(page);
@@ -1710,7 +1721,7 @@ test('list above the note: fits its notes, at least three rows, at most 30% of t
 
   // A short window still shows three rows.
   await page.setViewportSize({ width: 1000, height: 400 });
-  expect((await listH()) + 1).toBeGreaterThan(3 * rowH + 8);
+  expect((await listH()) + 1).toBeGreaterThan(3 * rowH);
 });
 
 test('list above the note, auto columns: grows taller first, then adds columns', async ({ page }) => {
@@ -1722,7 +1733,7 @@ test('list above the note, auto columns: grows taller first, then adds columns',
   const listH = () => page.locator('.list').evaluate((el) => el.getBoundingClientRect().height);
   for (let i = 0; i < 3; i++) await createNote(page);
   expect(await cols()).toBe('1'); // five toolbar-tall rows fit under the 30% cap
-  expect(Math.abs((await listH()) - (4 * rowH + 8))).toBeLessThan(2);
+  expect(Math.abs((await listH()) - 4 * rowH)).toBeLessThan(2);
   for (let i = 0; i < 7; i++) await createNote(page);
   expect(await cols()).toBe('3');
 });
@@ -1796,4 +1807,96 @@ test('the selected row fills with its note colour, grown out of the colour bar',
   expect(f.bg).toBe('rgb(240, 231, 194)'); // Sunflower
   expect(await other.evaluate((el) => getComputedStyle(el).color)).toBe('rgb(69, 62, 33)'); // its ink
   expect((await fill(selected)).w).toBe(10);
+});
+
+test.describe('phone: one line of buttons down the right', () => {
+  test.use({ viewport: { width: 412, height: 915 } });
+
+  test("the header's +, each row's last button, the note's ⋯ and the toolbar's ⋯ share a centre", async ({ page }) => {
+    for (let i = 0; i < 8; i++) await createNote(page); // enough to scroll the list
+    await page.getByTestId('note-item').first().getByTestId('note-pin').click(); // a row with a tuck button too
+    const cx = async (l: ReturnType<Page['locator']>) => {
+      const b = (await l.boundingBox())!;
+      return b.x + b.width / 2;
+    };
+    const line = await cx(page.getByTestId('new-note'));
+    expect(Math.abs((await cx(page.getByTestId('note-more'))) - line)).toBeLessThan(0.5);
+    expect(Math.abs((await cx(page.getByTestId('fmt-more'))) - line)).toBeLessThan(0.5);
+    const rows = page.getByTestId('note-item');
+    for (let i = 0; i < 3; i++) {
+      const last = rows.nth(i).locator('button').last();
+      expect(Math.abs((await cx(last)) - line)).toBeLessThan(0.5);
+    }
+    // The list's scrollbar floats over the rows instead of taking width.
+    const [row, box] = await Promise.all([rows.first().boundingBox(), page.locator('.listbox').boundingBox()]);
+    expect(Math.abs(row!.x + row!.width - (box!.x + box!.width))).toBeLessThan(0.5);
+    await expect(page.locator('.thumb')).toHaveCount(1);
+  });
+
+  test('the list starts right under the header, which is as tall as the toolbar', async ({ page }) => {
+    await createNote(page);
+    const [head, row, bar] = await Promise.all([
+      page.locator('.head').boundingBox(),
+      page.getByTestId('note-item').first().boundingBox(),
+      page.locator('.toolbar').boundingBox(),
+    ]);
+    expect(Math.abs(row!.y - (head!.y + head!.height))).toBeLessThan(0.5);
+    expect(Math.abs(head!.height - bar!.height)).toBeLessThan(0.5);
+  });
+
+  test("under Android's status bar: the header's colour, or a full-screen note's own", async ({ page }) => {
+    await page.evaluate(() => document.documentElement.style.setProperty('--safe-top', '24px'));
+    await createNote(page);
+    const [appBg, panel] = await Promise.all([
+      page.locator('main.app').evaluate((el) => getComputedStyle(el).backgroundColor),
+      page.locator('.sidebar').evaluate((el) => getComputedStyle(el).backgroundColor),
+    ]);
+    expect(appBg).toBe(panel);
+    await page.getByTestId('note-fullscreen').click();
+    await expect(page.locator('main.app')).toHaveClass(/note-open/);
+    const pane = (await page.getByTestId('note-pane').boundingBox())!;
+    expect(pane.y).toBe(0); // the note itself runs up under the status bar
+    const pad = await page.locator('.topbar').evaluate((el) => parseFloat(getComputedStyle(el).paddingTop));
+    expect(pad).toBe(30); // the edge plus the status bar
+  });
+});
+
+test("the toolbar's ⋯ holds underline, strikethrough, numbered list and the selection's size", async ({ page }) => {
+  await createNote(page);
+  await typeInEditor(page, 'sized');
+  await page.locator('.ProseMirror').press('ControlOrMeta+a');
+  await page.getByTestId('fmt-more').click();
+  await expect(page.getByTestId('fmt-menu')).toBeVisible();
+  for (const id of ['fmt-underline', 'fmt-strike', 'fmt-ordered', 'fmt-size']) await expect(page.getByTestId(id)).toBeVisible();
+  await page.getByTestId('fmt-strike').click();
+  await expect(page.getByTestId('fmt-menu')).toHaveCount(0); // a pick closes it
+  await expect(page.locator('.ProseMirror s')).toHaveCount(1);
+  await page.getByTestId('fmt-more').click();
+  await expect(page.getByTestId('fmt-strike')).toHaveAttribute('aria-checked', 'true');
+  await page.getByTestId('fmt-size').click();
+  await page.getByTestId('size-menu').getByText('24', { exact: true }).click();
+  // Stored relative to the note's own size (24px on an 18px note: 1.3333em).
+  await expect(page.locator('.ProseMirror span[style*="font-size"]')).toHaveCount(1);
+});
+
+
+test('while recording, the mic button stays red even under the pointer (a phone keeps :hover after a tap)', async ({ page }) => {
+  await createNote(page);
+  const rec = page.getByTestId('fmt-record');
+  await rec.click();
+  await expect(rec).toHaveAttribute('aria-pressed', 'true');
+  await rec.hover();
+  const [bg, danger] = await Promise.all([
+    rec.evaluate((el) => getComputedStyle(el).backgroundColor),
+    page.evaluate(() => {
+      const d = document.createElement('div');
+      d.style.color = 'var(--app-danger)';
+      document.body.append(d);
+      const c = getComputedStyle(d).color;
+      d.remove();
+      return c;
+    }),
+  ]);
+  expect(bg).toBe(danger);
+  await rec.click(); // stop
 });

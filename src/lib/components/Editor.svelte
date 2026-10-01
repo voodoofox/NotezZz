@@ -307,15 +307,18 @@
     max-width: 420px;
     margin: 10px 0;
     color: var(--note-fg);
+    border-radius: var(--btn-radius);
   }
+  /* Play: the same rounded square as every button, lightly filled so it
+     reads as one away from a bar. */
   .content :global(.nz-audio-play) {
     flex: none;
-    width: 34px;
-    height: 34px;
+    width: var(--btn);
+    height: var(--btn);
     padding: 0;
-    border: 1.5px solid currentColor;
-    border-radius: 50%;
-    background: transparent;
+    border: none;
+    border-radius: var(--btn-radius);
+    background: color-mix(in srgb, currentColor 10%, transparent);
     color: inherit;
     cursor: pointer;
     display: inline-flex;
@@ -323,7 +326,7 @@
     justify-content: center;
   }
   .content :global(.nz-audio-play:hover) {
-    background: color-mix(in srgb, currentColor 12%, transparent);
+    background: color-mix(in srgb, currentColor 18%, transparent);
   }
   .content :global(.nz-audio-track) {
     flex: 1;
@@ -346,14 +349,16 @@
   }
   .content :global(.nz-audio-time) {
     flex: none;
+    margin-left: 6px; /* room after the track: 18px, not 12 */
+    padding-right: 4px;
     font-size: 13px;
     opacity: 0.7;
     font-variant-numeric: tabular-nums;
   }
+  /* Selected (to move or delete it): a faint ring, not a frame. */
   .content :global(.nz-audio.ProseMirror-selectednode) {
-    outline: 2px solid var(--note-fg);
+    outline: 1.5px solid color-mix(in srgb, var(--note-fg) 14%, transparent);
     outline-offset: 4px;
-    border-radius: var(--radius-sm);
   }
 
   /* Links stay ink-colored — just underlined, no browser blue. */

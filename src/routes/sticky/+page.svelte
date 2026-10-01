@@ -5,7 +5,7 @@
   import Editor from '$lib/components/Editor.svelte';
   import Icon from '$lib/components/Icon.svelte';
   import VSlider from '$lib/components/VSlider.svelte';
-  import { luminance } from '$lib/theme';
+  import { inkOnWhite, luminance } from '$lib/theme';
   import ColorPicker from '$lib/components/ColorPicker.svelte';
 
   let noteId = $state<string | null>(null);
@@ -368,6 +368,7 @@
       --note-ink: {pal.ink ?? pal.fg};
       --pat-img: {pal.patternImage ?? 'none'};
       --note-accent: {pal.accent};
+      --slider-ink: {inkOnWhite(pal.bg, pal.fg)};
     "
   >
     <header class="bar {pal.pattern ? `nz-pat-${pal.pattern}` : ''}" data-tauri-drag-region>
@@ -627,9 +628,13 @@
     display: flex;
     justify-content: center;
     width: calc(var(--btn) * 3 + 4px);
-    padding: 10px 0 8px;
-    background: var(--note-bg);
+    /* White, the slider in the note's colour (as in the app's balloon). */
+    padding: 20px 0 18px;
+    background: #fff;
+    --note-fg: var(--slider-ink);
+    color: var(--slider-ink);
     border-radius: var(--sticker-radius);
+    box-shadow: var(--sticker-shadow);
   }
   .cpop {
     position: absolute;

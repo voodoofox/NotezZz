@@ -8,6 +8,7 @@
   import { initDiag } from '$lib/diag';
   import { setCustomPatterns } from '$lib/patterns.svelte';
   import { applyTheme, findTheme } from '$lib/theme';
+  import { getPalette } from '$lib/palettes';
   import { isDesktop } from '$lib/storage/backend';
 
   initDiag(); // start capturing errors as early as possible
@@ -141,11 +142,6 @@
   $effect(() => {
     const theme = store.settings.appTheme;
     document.documentElement.dataset.theme = theme;
-    // Android app: status-bar icons follow the app theme, not the system's
-    // (MainActivity's bridge; absent everywhere else).
-    (window as unknown as { NotezzzAndroid?: { setDarkTheme(d: boolean): void } }).NotezzzAndroid?.setDarkTheme(
-      theme === 'dark'
-    );
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', theme === 'dark' ? '#16181d' : '#f4f5f7');
     // Windows 11: the main window's title bar takes the colour of the app's
@@ -161,6 +157,17 @@
           .catch(() => {});
       });
     }
+  });
+
+  // Android app: the status-bar icons follow what is under them, the app's
+  // top bar (its theme) or, with a note open full screen on a phone, that
+  // note (MainActivity's bridge; absent everywhere else).
+  $effect(() => {
+    const bridge = (window as unknown as { NotezzzAndroid?: { setDarkTheme(d: boolean): void } }).NotezzzAndroid;
+    const dark = store.settings.appTheme === 'dark';
+    const open = store.mobileOpen && matchMedia('(max-width: 700px)').matches;
+    const note = open ? store.notes.find((n) => n.id === store.activeId) : undefined;
+    bridge?.setDarkTheme(note ? !!getPalette(note.paletteId).dark : dark);
   });
 
   // The note theme (light, shade, grain, title strip, buttons): CSS

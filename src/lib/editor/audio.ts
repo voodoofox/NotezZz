@@ -67,7 +67,7 @@ export const AudioNote = Node.create({
       button.type = 'button';
       button.className = 'nz-audio-play';
       button.setAttribute('aria-label', 'Play');
-      button.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${PLAY}"/></svg>`;
+      button.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="${PLAY}"/></svg>`;
 
       const track = document.createElement('div');
       track.className = 'nz-audio-track';

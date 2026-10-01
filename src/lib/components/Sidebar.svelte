@@ -59,6 +59,10 @@
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     dragId = id;
     dragOrder = [...visibleNotes];
+    // The handle's row moves in the page as the order changes, which can
+    // drop the capture: a release anywhere still ends (and saves) the drag.
+    window.addEventListener('pointerup', endDrag, { once: true });
+    window.addEventListener('pointercancel', endDrag, { once: true });
   }
 
   function moveDrag(e: PointerEvent) {
@@ -140,10 +144,42 @@
   let rowH = $state(0);
   // More notes below the visible part: the list's bottom edge fades out.
   let moreBelow = $state(false);
-  const checkMore = () => {
+  // The list's own scrollbar took width: rows stopped short of the edge and
+  // their buttons fell off the line the header's and the note's share. It is
+  // hidden, and this thin thumb floats over the rows instead.
+  let thumb = $state<{ top: number; h: number } | null>(null);
+  const syncScroll = () => {
     const el = listEl;
-    if (el) moreBelow = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+    if (!el) return;
+    const { scrollTop, clientHeight, scrollHeight } = el;
+    moreBelow = scrollTop + clientHeight < scrollHeight - 1;
+    if (scrollHeight <= clientHeight + 1) {
+      thumb = null;
+      return;
+    }
+    const h = Math.max(24, (clientHeight * clientHeight) / scrollHeight);
+    thumb = { h, top: (scrollTop / (scrollHeight - clientHeight)) * (clientHeight - h) };
   };
+  /** Mouse drag on the thumb (touch scrolls the list itself). */
+  function grabThumb(e: PointerEvent) {
+    const el = listEl;
+    if (!el || !thumb) return;
+    e.preventDefault();
+    const bar = e.currentTarget as HTMLElement;
+    bar.setPointerCapture(e.pointerId);
+    const y0 = e.clientY;
+    const s0 = el.scrollTop;
+    const ratio = (el.scrollHeight - el.clientHeight) / Math.max(1, el.clientHeight - thumb.h);
+    const move = (ev: PointerEvent) => (el.scrollTop = s0 + (ev.clientY - y0) * ratio);
+    const up = () => {
+      bar.removeEventListener('pointermove', move);
+      bar.removeEventListener('pointerup', up);
+      bar.removeEventListener('pointercancel', up);
+    };
+    bar.addEventListener('pointermove', move);
+    bar.addEventListener('pointerup', up);
+    bar.addEventListener('pointercancel', up);
+  }
 
   $effect(() => {
     const el = listEl;
@@ -152,7 +188,7 @@
       listH = el.clientHeight;
       listW = el.clientWidth;
       listMaxH = parseFloat(getComputedStyle(el).maxHeight) || 0; // 'none' beside the note
-      checkMore();
+      syncScroll();
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -171,14 +207,14 @@
     void columns;
     const row = listEl?.querySelector<HTMLElement>('[data-testid="note-item"]');
     if (row && row.offsetHeight) rowH = row.offsetHeight;
-    checkMore(); // rows came or went, or moved into columns: the box may not have resized
+    syncScroll(); // rows came or went, or moved into columns: the box may not have resized
   });
 
   let columns = $derived.by(() => {
     if ((store.settings.layout ?? 'top') !== 'top') return 1;
     const set = store.settings.listColumns ?? 'auto';
     if (set !== 'auto') return set;
-    const fit = Math.max(1, Math.floor((Math.max(listH, listMaxH) - 8) / (rowH || 40)));
+    const fit = Math.max(1, Math.floor(Math.max(listH, listMaxH) / (rowH || 40)));
     const byWidth = Math.max(1, Math.floor(listW / MIN_COL_PX));
     return Math.min(3, byWidth, Math.max(1, Math.ceil(visibleNotes.length / fit)));
   });
@@ -227,7 +263,7 @@
     class="list cols-{columns}"
     role="list"
     bind:this={listEl}
-    onscroll={checkMore}
+    onscroll={syncScroll}
     onpointermove={moveDrag}
     onpointerup={endDrag}
     onpointercancel={endDrag}
@@ -277,7 +313,7 @@
           title={note.pinned ? 'Pinned to desktop (click to unpin)' : 'Pin to desktop as always-on-top sticker'}
           aria-label="Pin note"
           onclick={() => store.update(note.id, { pinned: !note.pinned })}
-        ><Icon name="pin" size={16} /></button>
+        ><Icon name="pin" /></button>
         <!-- The sticky lives on the PC, but the flag is on the note: tucking
              from the phone slides the PC's sticky away (or brings it back). -->
         {#if note.pinned}
@@ -289,7 +325,7 @@
             title={tuckTitle(note.tucked)}
             aria-label={tuckTitle(note.tucked)}
             onclick={() => store.update(note.id, { tucked: !note.tucked })}
-          ><Icon name={note.tucked ? 'untuck' : 'tuck'} size={16} /></button>
+          ><Icon name={note.tucked ? 'untuck' : 'tuck'} /></button>
         {/if}
       </div>
     {/each}
@@ -307,6 +343,9 @@
       </button>
     {/if}
   </div>
+  {#if thumb}
+    <div class="thumb" style="top: {thumb.top}px; height: {thumb.h}px" onpointerdown={grabThumb} aria-hidden="true"></div>
+  {/if}
   </div>
 
   <!-- Sync is invisible when healthy; only problems earn screen space
@@ -356,7 +395,10 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 12px;
+    /* A bar like the note's: the buttons sit the edge in from its top,
+       bottom and right, so the last one shares a centre line with each
+       row's last button and the note's ⋯ below. As tall as --bar-h. */
+    padding: var(--edge) var(--edge) var(--edge) 12px;
     border-bottom: 1px solid var(--app-border);
   }
   .brand {
@@ -375,7 +417,7 @@
     font-size: 18px;
     border: none;
     border-radius: var(--btn-radius);
-    background: var(--app-bg);
+    background: transparent; /* the note's buttons: ink only, until hovered or on */
     color: var(--app-fg);
     cursor: pointer;
     display: flex;
@@ -388,7 +430,7 @@
   }
   .new:hover,
   .ico:hover {
-    background: color-mix(in srgb, var(--app-fg) 10%, var(--app-bg));
+    background: color-mix(in srgb, var(--app-fg) 8%, transparent);
   }
   .ico.on {
     background: var(--app-fg);
@@ -424,10 +466,43 @@
     display: flex;
     flex-direction: column;
   }
+  /* Rows start right under the header and run to the edge: no padding,
+     and no scrollbar of its own (the floating .thumb stands in). */
   .list {
     flex: 1;
     overflow-y: auto;
-    padding: 4px 0;
+    padding: 0;
+    scrollbar-width: none;
+  }
+  .list::-webkit-scrollbar {
+    display: none;
+  }
+  /* The floating scrollbar: a thin pill in the app's ink, in the edge strip
+     right of each row's last button. A mouse can drag it. */
+  .thumb {
+    position: absolute;
+    right: 0;
+    z-index: 2;
+    width: var(--edge);
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+    touch-action: none;
+  }
+  .thumb::before {
+    content: '';
+    width: 3px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--app-fg) 30%, transparent);
+  }
+  @media (pointer: fine) {
+    .thumb {
+      pointer-events: auto;
+    }
+    .thumb:hover::before {
+      width: 4px;
+      background: color-mix(in srgb, var(--app-fg) 50%, transparent);
+    }
   }
   /* There is more below: a soft shade over the last half row, as if the
      list ran on under the edge, so a cut-off row reads as "scroll" rather
@@ -678,11 +753,11 @@
   :global(.app.stacked) > .sidebar .list {
     flex: none;
     /* The header and the list together: at most 30% of the app's height
-       (header = button + 2 x 10px padding + 1px line; 2px line below),
+       (the header is a bar, --bar-h tall; a 2px line below),
        never under three rows. A search box or a sync/update banner adds
        to that rather than being squeezed out of sight. */
-    max-height: calc(0.3 * (100dvh - var(--safe-top, 0px)) - var(--btn) - 23px);
-    min-height: calc(3 * var(--bar-h) + 8px);
+    max-height: calc(0.3 * (100dvh - var(--safe-top, 0px)) - var(--bar-h) - 2px);
+    min-height: calc(3 * var(--bar-h));
   }
   /* While the list has more below (see .more-below), the line under it
      takes the shade's darkest tone, so the shade runs right into the note.
@@ -723,11 +798,11 @@
     .list {
       flex: none;
       /* The header and the list together: at most 30% of the app's height
-         (header = button + 2 x 10px padding + 1px line; 2px line below),
+         (the header is a bar, --bar-h tall; a 2px line below),
          never under three rows. A search box or a sync/update banner adds
          to that rather than being squeezed out of sight. */
-      max-height: calc(0.3 * (100dvh - var(--safe-top, 0px)) - var(--btn) - 23px);
-      min-height: calc(3 * var(--bar-h) + 8px);
+      max-height: calc(0.3 * (100dvh - var(--safe-top, 0px)) - var(--bar-h) - 2px);
+      min-height: calc(3 * var(--bar-h));
     }
     :global(.note-open) > .sidebar {
       display: none;

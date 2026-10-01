@@ -291,6 +291,24 @@ const pct = (v: number) => `${+(v * 100).toFixed(1)}%`;
 
 /** Relative luminance of #rrggbb, 0 (black) .. 1 (white): how light a note
  *  is, for easing the theme's light off on darker ones. */
+/**
+ * The note's colour as ink on a white balloon: the colour itself when it
+ * reads there (3:1 against white), otherwise mixed towards the note's own
+ * text colour just until it does, so a pale note gets a deeper shade of
+ * its own hue instead of a slider that vanishes.
+ */
+export function inkOnWhite(bg: string, fg: string): string {
+  if (!/^#[0-9a-f]{6}$/i.test(bg) || !/^#[0-9a-f]{6}$/i.test(fg)) return fg;
+  const a = rgb(bg);
+  const b = rgb(fg);
+  for (let i = 0; i <= 20; i++) {
+    const t = i / 20;
+    const hex = `#${a.map((v, k) => Math.round(v + (b[k] - v) * t).toString(16).padStart(2, '0')).join('')}`;
+    if (luminance(hex) <= 0.3) return hex;
+  }
+  return fg;
+}
+
 export function luminance(h: string): number {
   if (!/^#[0-9a-f]{6}$/i.test(h)) return 0.5;
   const lin = (c: number) => {

@@ -341,12 +341,20 @@
     /* Android app only: room for the status bar (see +layout). 0 elsewhere. */
     padding-top: var(--safe-top, 0px);
     box-sizing: border-box;
+    /* Seen only in that strip: the colour of the app's top bar, so the
+       status bar and the header read as one. */
+    background: var(--app-panel);
   }
   /* Phone: stacked split — list on top, note below; .note-open expands the
      note fullscreen. The panels size themselves (Sidebar/NotePane @media). */
   @media (max-width: 700px) {
     .app {
       flex-direction: column;
+    }
+    /* A note open full screen runs up under the status bar itself (its
+       title bar takes the room, see NotePane): the strip is the note's. */
+    .app.note-open {
+      padding-top: 0;
     }
   }
   /* Settings -> "Note list above the note": the phone arrangement at any

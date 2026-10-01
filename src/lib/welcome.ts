@@ -25,7 +25,8 @@ const welcome = (cloud: boolean): Array<Pick<Note, 'id' | 'title' | 'contentHtml
   {
     id: 'welcome-start',
     title: 'Start here',
-    paletteId: 'sunflower',
+    // The logo's three colours, in its order: blue, yellow, pink.
+    paletteId: 'custom:#9bebff',
     contentHtml: [
       '<p>This is a note. Type in it — there is no save button, it saves as you go.</p>',
       '<p><strong>+</strong> at the top makes a new one. The coloured bar down the left of each row in the list is its handle: <strong>drag it</strong> to reorder.</p>',
@@ -35,7 +36,7 @@ const welcome = (cloud: boolean): Array<Pick<Note, 'id' | 'title' | 'contentHtml
   {
     id: 'welcome-pin',
     title: 'Pin it to your desktop',
-    paletteId: 'teal',
+    paletteId: 'custom:#fff6a8',
     contentHtml: [
       '<p>Tap the <strong>pin</strong> on any note in the list and it becomes a sticker on your PC desktop — always on top, out of the way of everything else.</p>',
       '<p>The good part: pin it <strong>from your phone</strong> and it appears on your PC. Share something to NotezZz from any Android app, tick <em>Pin it to my desktop</em>, and it is waiting on your screen when you sit down.</p>',
@@ -45,7 +46,7 @@ const welcome = (cloud: boolean): Array<Pick<Note, 'id' | 'title' | 'contentHtml
   {
     id: 'welcome-tools',
     title: 'More than typing',
-    paletteId: 'sky',
+    paletteId: 'custom:#ff6ad5',
     contentHtml: [
       '<p>The toolbar under a note does more than <strong>bold</strong> and <em>italic</em>:</p>',
       '<ul>',
