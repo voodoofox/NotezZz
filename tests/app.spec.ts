@@ -1497,7 +1497,7 @@ test.describe('themes', () => {
     await createNote(page);
     const pane = page.getByTestId('note-pane');
     const image = () => pane.evaluate((el) => getComputedStyle(el).backgroundImage);
-    expect(await image()).toContain('linear-gradient');
+    expect(await image()).toContain('radial-gradient(200% 40% at 50% 0%'); // a very wide ellipse
     expect(await image()).toContain('data:image/svg+xml');
     // The light from below is ADDED (plus-lighter), on a layer of its own,
     // reaching 60% up the note.
@@ -1506,7 +1506,7 @@ test.describe('themes', () => {
       return { blend: cs.mixBlendMode, image: cs.backgroundImage };
     });
     expect(light.blend).toBe('plus-lighter');
-    expect(light.image).toContain('60%');
+    expect(light.image).toContain('radial-gradient(200% 60% at 50% 100%');
     expect(await rootVar(page, '--note-header-mix')).toBe('7.5%');
     expect(await rootVar(page, '--note-chin-mix')).toBe('0%');
     // The adhesive strip under the title darkens it.
@@ -1620,4 +1620,15 @@ test("a note's title, text and first toolbar glyph share one left edge", async (
   });
   expect(Math.abs(titleInput - (await textLeft()))).toBeLessThan(1);
   expect(Math.abs((await glyphLeft()) - (await textLeft()))).toBeLessThan(1);
+});
+
+test('the colour picker offers a completely black note', async ({ page }) => {
+  await createNote(page);
+  await menu(page, 'color');
+  await page.locator('[data-testid="palette-chip"][data-palette="black"]').click();
+  const pane = page.getByTestId('note-pane');
+  await expect(pane).toHaveAttribute('data-palette', 'black');
+  expect(await pane.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(0, 0, 0)');
+  // Light text on it.
+  expect(await page.getByTestId('title-input').evaluate((el) => getComputedStyle(el).color)).toBe('rgb(230, 232, 235)');
 });

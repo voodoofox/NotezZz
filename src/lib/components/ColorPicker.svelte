@@ -85,9 +85,7 @@
       {/if}
     </button>
   {/each}
-  <!-- Nine colours in a five-wide grid: this holds the tenth slot so the
-       patterns are the whole third row, not a wrapped tail. -->
-  <span class="pchip spacer" aria-hidden="true"></span>
+
   {#each PATTERNS as p}
     <button
       class="pchip nz-pat-{p.pattern}"

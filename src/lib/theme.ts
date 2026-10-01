@@ -31,6 +31,10 @@ export interface ThemeDef {
     /** How fast the fades fall off: 0 is a straight fade, higher is a
      *  steeper exponential curve. */
     curve: number;
+    /** The fades are ellipses centred on the bottom and top edges; this is
+     *  their horizontal radius in note widths. Wide = edges that barely
+     *  curve, like light on a gently bowed sheet. */
+    spread: number;
     /** Paper grain over the whole note, 0..0.5 opacity. */
     grain: number;
     /** The title strip's opacity, 0..1 (1 = a solid band of the header colour). */
@@ -55,6 +59,7 @@ const FLAT_NOTE: ThemeDef['note'] = {
   light: { color: '#ffffff', strength: 0, reach: 0.4 },
   shade: { color: '#000000', strength: 0, reach: 0.4 },
   curve: 4,
+  spread: 2,
   grain: 0,
   header: 1,
   strip: { color: '#000000', strength: 0 },
@@ -68,9 +73,10 @@ export const BUILTIN_THEMES: ThemeDef[] = [
     name: 'Daylight',
     author: 'NotezZz',
     note: {
-      light: { color: '#ffffff', strength: 0.12, reach: 0.6 },
+      light: { color: '#ffffff', strength: 0.096, reach: 0.6 },
       shade: { color: '#000000', strength: 0.16, reach: 0.4 },
       curve: 4,
+      spread: 2,
       grain: 0.07,
       header: 0.075,
       strip: { color: '#000000', strength: 0.075 },
@@ -166,6 +172,7 @@ export function normalizeTheme(raw: unknown, id: string): ThemeDef {
       light: fade(n.light, FLAT_NOTE.light),
       shade: fade(n.shade, FLAT_NOTE.shade),
       curve: clamp(n.curve, 0, 8, FLAT_NOTE.curve),
+      spread: clamp(n.spread, 0.5, 20, FLAT_NOTE.spread),
       grain: clamp(n.grain, 0, 0.5, FLAT_NOTE.grain),
       header: clamp(n.header, 0, 1, FLAT_NOTE.header),
       strip: {
@@ -192,10 +199,12 @@ function rgb(h: string): [number, number, number] {
 /**
  * A fade from one edge of the note: `strength` at the edge, nothing at
  * `reach`, falling off along an exponential curve (straight when curve≈0).
+ * It's an ellipse centred on that edge, `spread` note-widths wide and
+ * `reach` tall, so its contours bow very slightly toward the corners.
  * CSS gradients only interpolate in straight lines, so the curve is laid
  * down as a run of stops.
  */
-export function fadeGradient(direction: 'to top' | 'to bottom', f: Fade, curve: number): string {
+export function fadeGradient(edge: 'bottom' | 'top', f: Fade, curve: number, spread = 2): string {
   if (f.strength <= 0 || f.reach <= 0) return 'none';
   const [r, g, b] = rgb(f.color);
   const k = curve;
@@ -204,9 +213,10 @@ export function fadeGradient(direction: 'to top' | 'to bottom', f: Fade, curve: 
   const stops: string[] = [];
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
-    stops.push(`rgba(${r}, ${g}, ${b}, ${(f.strength * at(t)).toFixed(4)}) ${(t * f.reach * 100).toFixed(2)}%`);
+    stops.push(`rgba(${r}, ${g}, ${b}, ${(f.strength * at(t)).toFixed(4)}) ${(t * 100).toFixed(2)}%`);
   }
-  return `linear-gradient(${direction}, ${stops.join(', ')})`;
+  const size = `${+(spread * 100).toFixed(1)}% ${+(f.reach * 100).toFixed(1)}%`;
+  return `radial-gradient(${size} at 50% ${edge === 'bottom' ? '100%' : '0%'}, ${stops.join(', ')})`;
 }
 
 /** Paper grain: a grey noise tile at the given opacity. */
@@ -232,8 +242,8 @@ function stripShadow(s: { color: string; strength: number }): string {
 export function themeVars(t: ThemeDef): Record<string, string> {
   const n = t.note;
   return {
-    '--note-light': fadeGradient('to top', n.light, n.curve),
-    '--note-shade': fadeGradient('to bottom', n.shade, n.curve),
+    '--note-light': fadeGradient('bottom', n.light, n.curve, n.spread),
+    '--note-shade': fadeGradient('top', n.shade, n.curve, n.spread),
     '--note-grain': grainImage(n.grain),
     '--note-header-mix': pct(n.header),
     // Painted as an inset shadow, so it lies over the strip's colour AND any

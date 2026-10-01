@@ -31,8 +31,8 @@ export type PatternId = 'checker' | 'stripes' | 'dots' | 'stairs' | 'bricks' | '
 
 // The seven hues are evenly stepped around the color wheel (15° → 330°) with
 // IDENTICAL saturation/lightness (hsl S60 L85 bg, S55 L78 header, S35 L20
-// hue-matched text) — a color-theory-consistent set. Paper and Graphite
-// bookend it as the neutral light/dark options.
+// hue-matched text) — a color-theory-consistent set. Paper, Graphite and
+// Black bookend it as the neutral options.
 export const PALETTES: Palette[] = [
   { id: 'paper',     name: 'Paper',     bg: '#FBFAF6', header: '#F1EFE8', fg: '#2A2C2E', accent: '#5B7CFA' },
   { id: 'coral',     name: 'Coral',     bg: '#F0CDC2', header: '#E6B7A8', fg: '#452A21', accent: '#A64E30' },
@@ -43,6 +43,8 @@ export const PALETTES: Palette[] = [
   { id: 'lavender',  name: 'Lavender',  bg: '#D3C2F0', header: '#BFA8E6', fg: '#2E2145', accent: '#5B30A6' },
   { id: 'rose',      name: 'Rose',      bg: '#F0C2D9', header: '#E6A8C7', fg: '#452133', accent: '#A6306B' },
   { id: 'graphite',  name: 'Graphite',  bg: '#292C31', header: '#32363C', fg: '#E6E8EB', accent: '#82A9F2', dark: true },
+  // All the way down: a black page (the theme's light still lifts its lower part).
+  { id: 'black',     name: 'Black',     bg: '#000000', header: '#141518', fg: '#E6E8EB', accent: '#82A9F2', dark: true },
 ];
 
 export const PALETTE_MAP = new Map(PALETTES.map((p) => [p.id, p]));
