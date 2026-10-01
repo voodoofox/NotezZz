@@ -11,6 +11,7 @@
 
   import { popoverStyle } from '$lib/popover';
   import VSlider from './VSlider.svelte';
+  import { luminance } from '$lib/theme';
 
   let note = $derived(store.active);
   let pal = $derived(getPalette(note?.paletteId ?? ''));
@@ -170,6 +171,7 @@
     data-palette={note.paletteId}
     style="
       --note-bg: {pal.bg};
+      --note-lum: {luminance(pal.bg)};
       --note-header: {pal.header};
       --note-fg: {pal.fg};
       --note-ink: {pal.ink ?? pal.fg};
@@ -405,6 +407,8 @@
     background-size: 100% 50%; /* the bottom half of the note's ellipse */
     background-position: center bottom;
     background-repeat: no-repeat;
+    /* Full on a white note, lightOnDark of it on a black one. */
+    opacity: calc(var(--note-light-on-dark) + (1 - var(--note-light-on-dark)) * var(--note-lum, 1));
     mix-blend-mode: plus-lighter;
   }
   .pane.empty::before {

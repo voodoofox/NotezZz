@@ -5,6 +5,7 @@
   import Editor from '$lib/components/Editor.svelte';
   import Icon from '$lib/components/Icon.svelte';
   import VSlider from '$lib/components/VSlider.svelte';
+  import { luminance } from '$lib/theme';
   import ColorPicker from '$lib/components/ColorPicker.svelte';
 
   let noteId = $state<string | null>(null);
@@ -361,6 +362,7 @@
     style="
       --tilt: {tilt}deg;
       --note-bg: {bgRgba(pal.bg, note.opacity)};
+      --note-lum: {luminance(pal.bg)};
       --note-header: {bgRgba(pal.header, Math.min(1, note.opacity + 0.08))};
       --note-fg: {pal.fg};
       --note-ink: {pal.ink ?? pal.fg};
@@ -536,6 +538,8 @@
     background-size: 100% 50%;
     background-position: center bottom;
     background-repeat: no-repeat;
+    /* Full on a white note, lightOnDark of it on a black one. */
+    opacity: calc(var(--note-light-on-dark) + (1 - var(--note-light-on-dark)) * var(--note-lum, 1));
     mix-blend-mode: plus-lighter;
   }
   .bar {

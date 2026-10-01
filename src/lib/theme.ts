@@ -32,6 +32,11 @@ export interface ThemeDef {
     /** How fast the fades fall off: 0 is a straight fade, higher is a
      *  steeper exponential curve. */
     curve: number;
+    /** How much of the light a black note gets, relative to a white one
+     *  (0..1). The light is added evenly to every colour; below 1 it eases
+     *  off on darker notes, so light ones can glow without dark ones going
+     *  milky. 1 = the same amount everywhere. */
+    lightOnDark: number;
     /** Light and shade are halves of one ellipse centred on the note; this
      *  is its horizontal radius in note widths. Wide = contours that barely
      *  curve, like light on a gently bowed sheet. */
@@ -61,6 +66,7 @@ const FLAT_NOTE: ThemeDef['note'] = {
   shade: { color: '#000000', strength: 0, reach: 0.4 },
   curve: 4,
   spread: 3.5,
+  lightOnDark: 1,
   grain: 0,
   header: 1,
   strip: { color: '#000000', strength: 0 },
@@ -74,10 +80,11 @@ export const BUILTIN_THEMES: ThemeDef[] = [
     name: 'Daylight',
     author: 'NotezZz',
     note: {
-      light: { color: '#ffffff', strength: 0.096, reach: 0.5 },
+      light: { color: '#ffffff', strength: 0.15, reach: 0.5 },
       shade: { color: '#000000', strength: 0.16, reach: 0.5 },
-      curve: 4,
+      curve: 2.5,
       spread: 3.5,
+      lightOnDark: 0.5,
       grain: 0.07,
       header: 0.075,
       strip: { color: '#000000', strength: 0.075 },
@@ -174,6 +181,7 @@ export function normalizeTheme(raw: unknown, id: string): ThemeDef {
       shade: fade(n.shade, FLAT_NOTE.shade),
       curve: clamp(n.curve, 0, 8, FLAT_NOTE.curve),
       spread: clamp(n.spread, 0.5, 20, FLAT_NOTE.spread),
+      lightOnDark: clamp(n.lightOnDark, 0, 1, FLAT_NOTE.lightOnDark),
       grain: clamp(n.grain, 0, 0.5, FLAT_NOTE.grain),
       header: clamp(n.header, 0, 1, FLAT_NOTE.header),
       strip: {
@@ -246,6 +254,18 @@ export function grainImage(opacity: number): string {
 
 const pct = (v: number) => `${+(v * 100).toFixed(1)}%`;
 
+/** Relative luminance of #rrggbb, 0 (black) .. 1 (white): how light a note
+ *  is, for easing the theme's light off on darker ones. */
+export function luminance(h: string): number {
+  if (!/^#[0-9a-f]{6}$/i.test(h)) return 0.5;
+  const lin = (c: number) => {
+    const v = c / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  const [r, g, b] = rgb(h);
+  return +(0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)).toFixed(3);
+}
+
 function stripShadow(s: { color: string; strength: number }): string {
   if (s.strength <= 0) return 'none';
   const [r, g, b] = rgb(s.color);
@@ -259,6 +279,7 @@ export function themeVars(t: ThemeDef): Record<string, string> {
     '--note-light': fadeGradient('bottom', n.light, n.curve, n.spread),
     '--note-shade': fadeGradient('top', n.shade, n.curve, n.spread),
     '--note-grain': grainImage(n.grain),
+    '--note-light-on-dark': String(n.lightOnDark),
     '--note-header-mix': pct(n.header),
     // Painted as an inset shadow, so it lies over the strip's colour AND any
     // pattern on it (both are background) and under the title and buttons.

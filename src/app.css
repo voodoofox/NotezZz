@@ -46,6 +46,7 @@
      it does, a note looks flat: no light, shade or grain, a solid title
      strip and formatting bar. */
   --note-light: none;
+  --note-light-on-dark: 1;
   --note-shade: none;
   --note-grain: none;
   --note-header-mix: 100%;

@@ -1633,3 +1633,17 @@ test('the colour picker offers a completely black note', async ({ page }) => {
   // Light text on it.
   expect(await page.getByTestId('title-input').evaluate((el) => getComputedStyle(el).color)).toBe('rgb(230, 232, 235)');
 });
+
+test('Daylight lights light notes more than dark ones', async ({ page }) => {
+  await createNote(page);
+  const lightOpacity = () =>
+    page.getByTestId('note-pane').evaluate((el) => +getComputedStyle(el, '::before').opacity);
+  await menu(page, 'color');
+  await page.locator('[data-testid="palette-chip"][data-palette="sunflower"]').click();
+  const light = await lightOpacity();
+  await menu(page, 'color');
+  await page.locator('[data-testid="palette-chip"][data-palette="black"]').click();
+  const dark = await lightOpacity();
+  expect(dark).toBeCloseTo(0.5, 2); // lightOnDark
+  expect(light).toBeGreaterThan(0.85);
+});
