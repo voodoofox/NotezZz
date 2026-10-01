@@ -1677,7 +1677,7 @@ async function listLayout(page: Page, layout: 'top' | 'side', columns?: 'auto' |
 }
 
 test('list above the note: fits its notes, at least three rows, at most 30% of the height', async ({ page }) => {
-  await page.setViewportSize({ width: 1000, height: 800 });
+  await page.setViewportSize({ width: 1000, height: 1000 });
   await createNote(page);
   await listLayout(page, 'top', '1');
   const app = page.locator('main.app');
@@ -1713,16 +1713,16 @@ test('list above the note: fits its notes, at least three rows, at most 30% of t
 });
 
 test('list above the note, auto columns: grows taller first, then adds columns', async ({ page }) => {
-  await page.setViewportSize({ width: 1000, height: 800 });
+  await page.setViewportSize({ width: 1000, height: 1000 });
   await createNote(page);
   await listLayout(page, 'top', 'auto');
   const cols = () => page.locator('.list').evaluate((el) => (el.className.match(/cols-(\d)/) ?? [])[1]);
   const rowH = await page.getByTestId('note-item').first().evaluate((el) => el.getBoundingClientRect().height);
   const listH = () => page.locator('.list').evaluate((el) => el.getBoundingClientRect().height);
   for (let i = 0; i < 3; i++) await createNote(page);
-  expect(await cols()).toBe('1'); // four rows still fit under the 30% cap
+  expect(await cols()).toBe('1'); // five toolbar-tall rows fit under the 30% cap
   expect(Math.abs((await listH()) - (4 * rowH + 8))).toBeLessThan(2);
-  for (let i = 0; i < 6; i++) await createNote(page);
+  for (let i = 0; i < 7; i++) await createNote(page);
   expect(await cols()).toBe('3');
 });
 
@@ -1738,4 +1738,18 @@ test('list beside the note: 30% of the window width, following it', async ({ pag
   expect(Math.abs((await share()) - 0.3)).toBeLessThan(0.01);
   await page.setViewportSize({ width: 900, height: 800 });
   expect(Math.abs((await share()) - 0.3)).toBeLessThan(0.01);
+});
+
+test('a list row is as tall as the formatting toolbar, on a phone and on a PC', async ({ page }) => {
+  await createNote(page);
+  const heights = () =>
+    page.evaluate(() => ({
+      row: document.querySelector('[data-testid="note-item"]')!.getBoundingClientRect().height,
+      bar: document.querySelector('.toolbar')!.getBoundingClientRect().height,
+    }));
+  for (const vp of [{ width: 412, height: 915 }, { width: 1280, height: 800 }]) {
+    await page.setViewportSize(vp);
+    const h = await heights();
+    expect(Math.abs(h.row - h.bar)).toBeLessThan(0.5);
+  }
 });

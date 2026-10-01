@@ -446,7 +446,7 @@
   .swatch {
     width: 10px;
     align-self: stretch;
-    min-height: 38px;
+    min-height: var(--bar-h); /* rows are as tall as the toolbar */
     flex-shrink: 0;
     background-color: var(--swatch);
     cursor: grab;
@@ -488,7 +488,7 @@
     justify-content: center;
   }
   .pin:last-child {
-    margin-right: 4px;
+    margin-right: var(--edge);
   }
   .pin:hover {
     opacity: 0.7;
@@ -613,7 +613,7 @@
        never under three rows. A search box or a sync/update banner adds
        to that rather than being squeezed out of sight. */
     max-height: calc(0.3 * (100dvh - var(--safe-top, 0px)) - var(--btn) - 23px);
-    min-height: calc(3 * 38px + 8px);
+    min-height: calc(3 * var(--bar-h) + 8px);
   }
   /* Columns only make sense in the wide strip. Rows keep their full-bleed
      look inside each column; the grid supplies the columns. */
@@ -651,7 +651,7 @@
          never under three rows. A search box or a sync/update banner adds
          to that rather than being squeezed out of sight. */
       max-height: calc(0.3 * (100dvh - var(--safe-top, 0px)) - var(--btn) - 23px);
-      min-height: calc(3 * 38px + 8px);
+      min-height: calc(3 * var(--bar-h) + 8px);
     }
     :global(.note-open) > .sidebar {
       display: none;

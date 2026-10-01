@@ -36,6 +36,10 @@
      distance, so the two curves run parallel all the way round (concentric
      corners) — a sticky's corner hugs its corner button. */
   --edge: 6px;
+  /* A bar of buttons: one button, the edge above and below, and its 1px
+     line. The formatting toolbar is this tall, and so is a row of the note
+     list, so the two read as one family. */
+  --bar-h: calc(var(--btn) + 2 * var(--edge) + 1px);
   --sticker-radius: calc(var(--btn-radius) + var(--edge));
   /* Where text starts inside a note: the left edge of the first toolbar
      glyph (a 20px icon centred in its button; the B's stem sits 4.17px left
