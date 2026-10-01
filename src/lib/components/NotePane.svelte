@@ -379,12 +379,29 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    /* The note as a surface: the theme's grain, light from below and shade
-       from above, over the note's colour. */
+    /* The note as a surface: the theme's grain and shade from above over
+       the note's colour; the light from below is added by ::before. */
+    position: relative;
+    isolation: isolate;
     background-color: var(--note-bg);
-    background-image: var(--note-grain), var(--note-light), var(--note-shade);
+    background-image: var(--note-grain), var(--note-shade);
     color: var(--note-fg);
     height: 100%;
+  }
+  /* The theme's light from below, ADDED to the note's colour (plus-lighter):
+     the same lift on every colour, where a plain white overlay brightened
+     dark notes far more than light ones. Under the note's contents. */
+  .pane::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: var(--note-light);
+    mix-blend-mode: plus-lighter;
+  }
+  .pane.empty::before {
+    display: none;
   }
   .pane.empty {
     gap: 14px;

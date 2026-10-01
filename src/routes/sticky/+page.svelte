@@ -515,11 +515,22 @@
     display: flex;
     flex-direction: column;
     background-color: var(--note-bg);
-    background-image: var(--note-grain), var(--note-light), var(--note-shade);
+    background-image: var(--note-grain), var(--note-shade);
     color: var(--note-fg);
     border-radius: var(--sticky-radius);
     overflow: hidden;
     box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28);
+    isolation: isolate;
+  }
+  /* The light from below, added to the note's colour (see NotePane). */
+  .sticky::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: var(--note-light);
+    mix-blend-mode: plus-lighter;
   }
   .bar {
     display: flex;

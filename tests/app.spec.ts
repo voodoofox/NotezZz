@@ -1499,6 +1499,14 @@ test.describe('themes', () => {
     const image = () => pane.evaluate((el) => getComputedStyle(el).backgroundImage);
     expect(await image()).toContain('linear-gradient');
     expect(await image()).toContain('data:image/svg+xml');
+    // The light from below is ADDED (plus-lighter), on a layer of its own,
+    // reaching 60% up the note.
+    const light = await pane.evaluate((el) => {
+      const cs = getComputedStyle(el, '::before');
+      return { blend: cs.mixBlendMode, image: cs.backgroundImage };
+    });
+    expect(light.blend).toBe('plus-lighter');
+    expect(light.image).toContain('60%');
     expect(await rootVar(page, '--note-header-mix')).toBe('7.5%');
     expect(await rootVar(page, '--note-chin-mix')).toBe('0%');
     // The adhesive strip under the title darkens it.
@@ -1507,7 +1515,7 @@ test.describe('themes', () => {
     await page.getByTestId('open-settings').click();
     await page.getByTestId('theme-pick').filter({ hasText: 'Flat' }).click();
     await page.getByTestId('settings-close').click();
-    expect(await image()).toBe('none, none, none');
+    expect(await image()).toBe('none, none');
     expect(await rootVar(page, '--note-header-mix')).toBe('100%');
   });
 

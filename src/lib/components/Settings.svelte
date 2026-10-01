@@ -36,8 +36,9 @@
   /** A little note in the theme's light, on a sunflower page. */
   function themePreview(t: ThemeDef): string {
     const v = themeVars(t);
-    return `background-color: #f0e7c2; background-image: ${v['--note-grain']}, ${v['--note-light']}, ${v['--note-shade']};`;
+    return `background-color: #f0e7c2; background-image: ${v['--note-grain']}, ${v['--note-shade']};`;
   }
+  const lightPreview = (t: ThemeDef) => `background-image: ${themeVars(t)['--note-light']};`;
 
   async function copyTheme() {
     const json = exportTheme(activeTheme);
@@ -326,6 +327,7 @@
               onclick={() => store.saveSettings({ themeId: t.id })}
             >
               <span class="tprev" style={themePreview(t)}>
+                <span class="tlight" style={lightPreview(t)}></span>
                 <span class="tstrip" style="opacity: {t.note.header}"></span>
               </span>
               <span class="tname">{t.name}</span>
@@ -674,6 +676,14 @@
     border-radius: var(--sticker-radius);
     overflow: hidden;
     box-shadow: var(--sticker-shadow);
+  }
+  .tprev {
+    isolation: isolate;
+  }
+  .tlight {
+    position: absolute;
+    inset: 0;
+    mix-blend-mode: plus-lighter;
   }
   .tstrip {
     position: absolute;

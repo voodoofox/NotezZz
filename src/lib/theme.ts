@@ -21,7 +21,10 @@ export interface ThemeDef {
   name: string;
   author?: string;
   note: {
-    /** From the bottom edge: the lower part catching more light. */
+    /** From the bottom edge: the lower part catching more light. ADDED to
+     *  the note's colour (strength x white), so every colour brightens by
+     *  the same amount: a plain overlay lifted dark notes far more than
+     *  light ones. */
     light: Fade;
     /** From the top edge: the upper part curling away from it. */
     shade: Fade;
@@ -65,7 +68,7 @@ export const BUILTIN_THEMES: ThemeDef[] = [
     name: 'Daylight',
     author: 'NotezZz',
     note: {
-      light: { color: '#ffffff', strength: 0.5, reach: 0.4 },
+      light: { color: '#ffffff', strength: 0.12, reach: 0.6 },
       shade: { color: '#000000', strength: 0.16, reach: 0.4 },
       curve: 4,
       grain: 0.07,
