@@ -37,7 +37,7 @@
      corners) — a sticky's corner hugs its corner button. */
   --edge: 6px;
   /* How dark a list gets at its bottom edge while more of it is below. */
-  --list-shade: 16%;
+  --list-shade: 9.6%;
   /* A bar of buttons: one button, the edge above and below, and its 1px
      line. The formatting toolbar is this tall, and so is a row of the note
      list, so the two read as one family. */
@@ -76,7 +76,7 @@
 }
 
 :root[data-theme='dark'] {
-  --list-shade: 50%; /* a shadow needs more weight to show on a dark panel */
+  --list-shade: 30%; /* a shadow needs more weight to show on a dark panel */
   --app-bg: #16181d;
   --app-panel: #1e2127;
   --app-fg: #e8eaed;

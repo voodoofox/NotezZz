@@ -1057,10 +1057,11 @@ test('a pixel pattern paints the title bar and the selected row', async ({ page 
   await expect(topbar).toHaveClass(/nz-pat-checker/);
   expect(await topbar.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('conic-gradient');
   expect(await topbar.evaluate((el) => getComputedStyle(el).animationName)).toBe('nz-drift-diag');
-  // ...and on the note's row in the list, which is selected right now.
+  // ...and on the note's row in the list, which is selected right now: its
+  // fill (the full row while selected) is the pattern.
   const row = page.getByTestId('note-item').first();
   await expect(row).toHaveClass(/active/);
-  expect(await row.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('conic-gradient');
+  expect(await row.getByTestId('note-fill').evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('conic-gradient');
   // Retired palette ids still open (they fall back to Paper).
   await page.waitForTimeout(500); // let the debounced save land before rewriting storage
   await page.evaluate(() => {
@@ -1756,16 +1757,43 @@ test('a list row is as tall as the formatting toolbar, on a phone and on a PC', 
 
 test('a list with more below shades its bottom edge into the note; at the end it stops', async ({ page }) => {
   await page.setViewportSize({ width: 412, height: 915 });
-  const list = page.locator('.list');
+  const list = page.locator('.listbox');
   const line = () => page.locator('.sidebar').evaluate((el) => getComputedStyle(el).borderBottomColor);
   await createNote(page);
   await expect(list).not.toHaveClass(/more-below/); // one note: nothing to scroll
   const plain = await line();
   for (let i = 0; i < 7; i++) await createNote(page);
   await expect(list).toHaveClass(/more-below/);
-  expect(await list.evaluate((el) => getComputedStyle(el, '::after').position)).toBe('sticky');
+  // Across the whole width, the scrollbar included.
+  const shade = await list.evaluate((el) => {
+    const a = getComputedStyle(el, '::after');
+    return { position: a.position, width: parseFloat(a.width), box: el.getBoundingClientRect().width };
+  });
+  expect(shade.position).toBe('absolute');
+  expect(Math.abs(shade.width - shade.box)).toBeLessThan(0.5);
   expect(await line()).not.toBe(plain); // the line under the list joins the shade
-  await list.evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await page.locator('.list').evaluate((el) => (el.scrollTop = el.scrollHeight));
   await expect(list).not.toHaveClass(/more-below/);
   expect(await line()).toBe(plain);
+});
+
+test('the selected row fills with its note colour, grown out of the colour bar', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' }); // no growth animation to wait for
+  await createNote(page);
+  await menu(page, 'color');
+  await page.locator('[data-testid="palette-chip"][data-palette="sunflower"]').click();
+  await createNote(page); // selected now; the sunflower note is not
+  const [selected, other] = [page.getByTestId('note-item').nth(0), page.getByTestId('note-item').nth(1)];
+  const fill = (row: typeof selected) =>
+    row.evaluate((el) => {
+      const f = el.querySelector('[data-testid="note-fill"]')!;
+      return { w: f.getBoundingClientRect().width, row: el.getBoundingClientRect().width, bg: getComputedStyle(f).backgroundColor };
+    });
+  expect((await fill(other)).w).toBe(10); // just the bar
+  await other.getByTestId('note-pick').click();
+  const f = await fill(other);
+  expect(Math.abs(f.w - f.row)).toBeLessThan(0.5);
+  expect(f.bg).toBe('rgb(240, 231, 194)'); // Sunflower
+  expect(await other.evaluate((el) => getComputedStyle(el).color)).toBe('rgb(69, 62, 33)'); // its ink
+  expect((await fill(selected)).w).toBe(10);
 });

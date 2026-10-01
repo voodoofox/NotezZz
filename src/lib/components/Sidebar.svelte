@@ -222,9 +222,9 @@
     </div>
   {/if}
 
+  <div class="listbox" class:more-below={moreBelow}>
   <div
     class="list cols-{columns}"
-    class:more-below={moreBelow}
     role="list"
     bind:this={listEl}
     onscroll={checkMore}
@@ -240,13 +240,21 @@
     {#each visibleNotes as note (note.id)}
       {@const pal = getPalette(note.paletteId)}
       <div
-        class="item {note.id === store.activeId && pal.pattern ? `nz-pat-${pal.pattern}` : ''}"
+        class="item"
         data-testid="note-item"
         role="listitem"
         class:active={note.id === store.activeId}
         class:dragging={dragId === note.id}
-        style="--swatch: {pal.pattern ? pal.header : pal.bg}; --pat-img: {pal.patternImage ?? 'none'}"
+        style="--swatch: {pal.pattern ? pal.header : pal.bg}; --pat-img: {pal.patternImage ?? 'none'}; --row-fg: {pal.fg}"
       >
+        <!-- The note's colour (or pattern) behind the row: as narrow as the
+             swatch, and the full row once the note is selected. -->
+        <span
+          class="fill {pal.pattern ? `nz-pat-${pal.pattern}` : ''}"
+          data-testid="note-fill"
+          aria-hidden="true"
+          style="background-color: {pal.pattern ? pal.header : pal.bg}; --pat-base: {pal.header}; --pat-ink: {pal.inkStrong ?? pal.fg}"
+        ></span>
         <span
           class="swatch {pal.pattern ? `nz-pat-${pal.pattern}` : ''}"
           data-testid="note-swatch"
@@ -298,6 +306,7 @@
         {showArchive ? 'Back to notes' : `Archive (${archivedCount})`}
       </button>
     {/if}
+  </div>
   </div>
 
   <!-- Sync is invisible when healthy; only problems earn screen space
@@ -405,6 +414,16 @@
   .search:focus {
     border-color: var(--app-fg);
   }
+  /* The list and, over its bottom edge, the shade below. A box of its own
+     so the shade spans the scrollbar too (inside the scrolling list it
+     would stop short of it). */
+  .listbox {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
   .list {
     flex: 1;
     overflow-y: auto;
@@ -412,17 +431,15 @@
   }
   /* There is more below: a soft shade over the last half row, as if the
      list ran on under the edge, so a cut-off row reads as "scroll" rather
-     than as a clipped layout. Gone once the end is in view. It sticks to
-     the bottom of what is visible and takes no room of its own; -4px
-     reaches through the list's bottom padding, so it meets the edge. */
-  .list.more-below::after {
+     than as a clipped layout. Gone once the end is in view. */
+  .listbox.more-below::after {
     content: '';
-    display: block;
-    grid-column: 1 / -1;
-    position: sticky;
-    bottom: -4px;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
     height: calc(var(--bar-h) / 2);
-    margin-top: calc(var(--bar-h) / -2);
     pointer-events: none;
     background: linear-gradient(
       to bottom,
@@ -433,30 +450,49 @@
   }
   /* Rows are full-bleed: selection and the color block run edge to edge. */
   .item {
+    position: relative;
+    isolation: isolate; /* the fill sits behind the row's contents */
     display: flex;
     align-items: stretch;
     width: 100%;
     color: var(--app-fg);
+    transition: color 0.28s;
   }
   .item:hover {
     background-color: var(--app-bg);
   }
-  /* Monochrome selection: full inversion — light theme gets a dark card,
-     dark theme gets a white card with dark text. */
-  .item.active {
-    /* -color, not the shorthand: a selected pattern note paints its texture
-       here through the global .nz-pat-* rules, in these two tones. */
-    background-color: var(--app-fg);
-    color: var(--app-bg);
-    --pat-base: var(--app-fg);
-    --pat-ink: var(--app-pat-ink);
+  /* Selection in the note's own colour: the fill grows out of the swatch
+     on the left to the full row, and the text takes the note's ink. A
+     pattern note's fill is its pattern, like the swatch. */
+  .fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 10px; /* the swatch's width: at rest the fill is the colour bar */
+    z-index: -1;
+    pointer-events: none;
+    transition: width 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
+  .item.active .fill {
+    width: 100%;
+  }
+  .item.active,
   .item.active .pick,
   .item.active .pin {
-    color: var(--app-bg);
+    color: var(--row-fg);
   }
-  .item.active:hover {
-    background-color: var(--app-fg);
+  .pick,
+  .pin {
+    transition: color 0.28s;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .item,
+    .fill,
+    .pick,
+    .pin {
+      transition: none;
+    }
   }
   .pick {
     display: flex;
@@ -638,6 +674,7 @@
     border-right: none;
     border-bottom: 2px solid var(--app-border);
   }
+  :global(.app.stacked) > .sidebar .listbox,
   :global(.app.stacked) > .sidebar .list {
     flex: none;
     /* The header and the list together: at most 30% of the app's height
@@ -650,7 +687,7 @@
   /* While the list has more below (see .more-below), the line under it
      takes the shade's darkest tone, so the shade runs right into the note.
      After the rules above that draw the line, so it wins over them. */
-  .sidebar:has(> .list.more-below) {
+  .sidebar:has(> .listbox.more-below) {
     border-bottom-color: color-mix(in srgb, #000 var(--list-shade), var(--app-panel));
   }
   /* Columns only make sense in the wide strip. Rows keep their full-bleed
@@ -682,6 +719,7 @@
       border-right: none;
       border-bottom: 2px solid var(--app-border);
     }
+    .listbox,
     .list {
       flex: none;
       /* The header and the list together: at most 30% of the app's height
