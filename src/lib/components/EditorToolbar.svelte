@@ -200,9 +200,12 @@
     overflow-x: auto;
     scrollbar-width: none;
     background: var(--note-header);
-    /* Tints are mixed from the note's own ink so dark palettes get a visible
-       line/hover too — a fixed black tint vanished on Graphite. */
-    border-bottom: 1px solid color-mix(in srgb, var(--note-fg) 10%, transparent);
+    /* At the bottom of the note everywhere (phones, stickies and the full
+       app alike): within thumb reach, and Android's text-selection bubble,
+       which appears above a selection, can never cover it. Tints are mixed
+       from the note's own ink so dark palettes get a visible line too. */
+    order: 2;
+    border-top: 1px solid color-mix(in srgb, var(--note-fg) 10%, transparent);
   }
   .toolbar::-webkit-scrollbar {
     display: none;
@@ -294,9 +297,6 @@
      Material-style. */
   @media (max-width: 700px) {
     .toolbar {
-      order: 2;
-      border-bottom: none;
-      border-top: 1px solid color-mix(in srgb, var(--note-fg) 10%, transparent);
       padding: 4px 4px calc(4px + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)));
     }
     .sep {

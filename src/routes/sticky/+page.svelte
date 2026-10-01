@@ -4,6 +4,7 @@
   import { getPalette } from '$lib/palettes';
   import Editor from '$lib/components/Editor.svelte';
   import Icon from '$lib/components/Icon.svelte';
+  import VSlider from '$lib/components/VSlider.svelte';
   import ColorPicker from '$lib/components/ColorPicker.svelte';
 
   let noteId = $state<string | null>(null);
@@ -315,8 +316,12 @@
   // Colour picker in the bar, same component as the main window's.
   let showColors = $state(false);
   let colorWrap = $state<HTMLElement | null>(null);
+  // Transparency: a slider sticker under its button, in the note's colour.
+  let showOpacity = $state(false);
+  let opacityWrap = $state<HTMLElement | null>(null);
   function closeColorsOutside(e: PointerEvent) {
     if (showColors && colorWrap && !colorWrap.contains(e.target as Node)) showColors = false;
+    if (showOpacity && opacityWrap && !opacityWrap.contains(e.target as Node)) showOpacity = false;
   }
 
   // Rename without opening the main window: double-click the title (a single
@@ -368,7 +373,7 @@
         <!-- Tucked to the right edge, only the left of the bar shows: the
              way back has to live there. -->
         <button class="x" data-testid="sticky-tuck" title="Bring it back" aria-label="Bring it back" aria-pressed="true" onclick={() => void untuck()}>
-          <Icon name="untuck" size={15} />
+          <Icon name="untuck" />
         </button>
       {/if}
       {#if editingTitle}
@@ -405,7 +410,7 @@
             aria-expanded={showColors}
             onclick={() => (showColors = !showColors)}
           >
-            <Icon name="palette" size={15} />
+            <Icon name="palette" />
           </button>
           {#if showColors}
             <div class="cpop">
@@ -420,9 +425,38 @@
           {/if}
         </span>
       {/if}
+      {#if !tucked}
+        <span class="cwrap" bind:this={opacityWrap}>
+          <button
+            class="x"
+            class:on={showOpacity}
+            data-testid="sticky-opacity"
+            title="Transparency"
+            aria-label="Transparency"
+            aria-expanded={showOpacity}
+            onclick={() => (showOpacity = !showOpacity)}
+          >
+            <Icon name="opacity" />
+          </button>
+          {#if showOpacity}
+            <div class="opop">
+              <VSlider
+                value={Math.round(note.opacity * 100)}
+                min={20}
+                max={100}
+                step={5}
+                label="Opacity"
+                testid="sticky-opacity-slider"
+                display="{Math.round(note.opacity * 100)}%"
+                onInput={(v) => noteId && store.update(noteId, { opacity: v / 100 })}
+              />
+            </div>
+          {/if}
+        </span>
+      {/if}
       {#if hasWin && !tucked}
         <button class="x" data-testid="sticky-add" title="New pinned note" aria-label="New pinned note" onclick={addPinned}>
-          <Icon name="add" size={15} />
+          <Icon name="add" />
         </button>
       {/if}
       {#if hasWin && !(tucked && tuckSide === 'right')}
@@ -434,11 +468,11 @@
           aria-pressed={tucked}
           onclick={() => void (tucked ? untuck() : tuck())}
         >
-          <Icon name={tucked ? 'untuck' : 'tuck'} size={15} />
+          <Icon name={tucked ? 'untuck' : 'tuck'} />
         </button>
       {/if}
       <button class="x" title="Unpin (close sticker)" aria-label="Unpin" onclick={unpin}>
-        <Icon name="close" size={15} />
+        <Icon name="close" />
       </button>
     </header>
     {#if hasWin}
@@ -482,7 +516,7 @@
     flex-direction: column;
     background: var(--note-bg);
     color: var(--note-fg);
-    border-radius: var(--radius-lg);
+    border-radius: var(--sticky-radius);
     overflow: hidden;
     box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28);
   }
@@ -543,6 +577,20 @@
   }
   /* Hangs under the bar, right-aligned to its button; scrolls if the sticky
      is shorter than the picker. */
+  /* The transparency sticker: cut from the note (its colour, no edge), three
+     buttons wide, hanging under its button. */
+  .opop {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 5;
+    display: flex;
+    justify-content: center;
+    width: calc(var(--btn) * 3 + 4px);
+    padding: 10px 0 8px;
+    background: var(--note-bg);
+    border-radius: var(--sticker-radius);
+  }
   .cpop {
     position: absolute;
     top: calc(100% + 6px);
@@ -558,7 +606,7 @@
     background: var(--app-panel);
     color: var(--app-fg);
     border: 1px solid var(--app-border);
-    border-radius: var(--radius-lg);
+    border-radius: var(--sticker-radius);
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
     cursor: default;
   }

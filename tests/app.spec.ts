@@ -22,13 +22,19 @@ async function createNote(page: Page) {
   return page.locator('.ProseMirror');
 }
 
+/** Open an entry of the note's ⋯ menu (the same on every screen). */
+async function menu(page: Page, item: 'color' | 'size' | 'opacity' | 'remind' | 'archive' | 'delete') {
+  await page.getByTestId('note-more').click();
+  await page.getByTestId(`menu-${item}`).click();
+}
+
 /** Delete the open note the way the app offers it: archive it, open it
  *  from the archive, delete it forever there. */
 async function archiveAndDelete(page: Page) {
-  await page.getByTestId('note-archive').click();
+  await menu(page, 'archive');
   await page.getByTestId('archive-toggle').click();
   await page.getByTestId('note-pick').first().click();
-  await page.getByTestId('note-delete').click();
+  await menu(page, 'delete');
 }
 
 async function typeInEditor(page: Page, text: string) {
@@ -101,7 +107,7 @@ test('changing palette updates the note color live (the frozen-UI bug)', async (
   await createNote(page);
   const pane = page.getByTestId('note-pane');
   await expect(pane).toHaveAttribute('data-palette', 'paper');
-  await page.getByTestId('note-color').click(); // open the color popover
+  await menu(page, 'color'); // open the color popover
   await page.locator('[data-testid="palette-chip"][data-palette="sky"]').click();
   await expect(pane).toHaveAttribute('data-palette', 'sky');
   // Sky bg (#C2D9F0) actually paints:
@@ -129,7 +135,7 @@ test('image import inserts a picture into the note', async ({ page }) => {
 
 test('custom color sliders recolor the note', async ({ page }) => {
   await createNote(page);
-  await page.getByTestId('note-color').click();
+  await menu(page, 'color');
   await page.getByTestId('custom-hue').fill('200');
   await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', /custom:#/);
 });
@@ -194,14 +200,15 @@ test('search filters the note list live', async ({ page }) => {
 
 test('base font-size slider (in tools popover) updates its readout', async ({ page }) => {
   await createNote(page);
-  await page.getByTestId('tools-toggle').click();
+  await menu(page, 'size');
   // A new note starts at 22, on a slider that stands upright.
   await expect(page.getByTestId('size-value')).toHaveText('22');
   const box = (await page.getByTestId('size-slider').boundingBox())!;
   expect(box.height).toBeGreaterThan(box.width * 3);
   await page.getByTestId('size-slider').fill('28');
   await expect(page.getByTestId('size-value')).toHaveText('28');
-  await expect(page.getByTestId('tools-toggle')).toHaveAttribute('title', /28/);
+  await page.getByTestId('note-more').click();
+  await expect(page.getByTestId('menu-size')).toContainText('28');
 });
 
 test('an account still on the old default text size moves to 22, once', async ({ page }) => {
@@ -223,13 +230,53 @@ test('an account still on the old default text size moves to 22, once', async ({
 
 test('delete is only offered in the archive', async ({ page }) => {
   await createNote(page);
-  await expect(page.getByTestId('note-archive')).toBeVisible();
-  await expect(page.getByTestId('note-delete')).toHaveCount(0);
-  await page.getByTestId('note-archive').click();
+  await page.getByTestId('note-more').click();
+  await expect(page.getByTestId('menu-archive')).toBeVisible();
+  await expect(page.getByTestId('menu-delete')).toHaveCount(0);
+  await page.getByTestId('menu-archive').click();
   await page.getByTestId('archive-toggle').click();
   await page.getByTestId('note-pick').first().click();
-  await expect(page.getByTestId('note-delete')).toBeVisible();
-  await expect(page.getByTestId('note-delete')).toHaveAttribute('title', 'Delete forever');
+  await page.getByTestId('note-more').click();
+  await expect(page.getByTestId('menu-delete')).toHaveText('Delete forever');
+});
+
+test('the desktop header is the phone header: title, pin, ⋯', async ({ page }) => {
+  await createNote(page);
+  for (const gone of ['note-color', 'tools-toggle', 'note-archive', 'note-delete', 'note-remind']) {
+    await expect(page.getByTestId(gone)).toHaveCount(0);
+  }
+  const more = (await page.getByTestId('note-more').boundingBox())!;
+  await page.getByTestId('note-more').click();
+  const box = (await page.getByTestId('note-menu').boundingBox())!;
+  expect(Math.round(box.x + box.width)).toBe(Math.round(more.x + more.width));
+});
+
+test('the formatting toolbar sits at the bottom of the note, on the desktop too', async ({ page }) => {
+  await createNote(page);
+  const bar = (await page.getByTestId('fmt-bold').boundingBox())!;
+  const text = (await page.locator('.ProseMirror').boundingBox())!;
+  expect(bar.y).toBeGreaterThan(text.y);
+});
+
+test('a pinned note on the desktop has its own transparency control', async ({ page }) => {
+  await createNote(page);
+  await page.waitForTimeout(500); // per-note save debounce
+  const id = await page.evaluate(
+    () => Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!.slice('notezzz:note:'.length)
+  );
+  await page.goto(`/sticky?id=${id}`);
+  await page.getByTestId('sticky-opacity').click();
+  const slider = page.getByTestId('sticky-opacity-slider');
+  await expect(slider).toBeVisible();
+  const b = (await slider.boundingBox())!;
+  expect(b.height).toBeGreaterThan(b.width * 3); // upright
+  await slider.fill('50');
+  await page.waitForTimeout(600);
+  const saved = await page.evaluate((k) => JSON.parse(localStorage.getItem(`notezzz:note:${k}`)!).opacity, id);
+  expect(saved).toBe(0.5);
+  // Sticky windows are rounder now.
+  const r = await page.locator('.sticky').evaluate((el) => parseFloat(getComputedStyle(el).borderTopLeftRadius));
+  expect(r).toBeGreaterThanOrEqual(16);
 });
 
 test('the note header buttons match the formatting toolbar', async ({ page }) => {
@@ -238,6 +285,8 @@ test('the note header buttons match the formatting toolbar', async ({ page }) =>
   const bottom = page.getByTestId('fmt-bold');
   const [t, b] = await Promise.all([top.boundingBox(), bottom.boundingBox()]);
   expect(Math.round(t!.height)).toBe(Math.round(b!.height));
+  expect(Math.round(t!.width)).toBe(Math.round(t!.height)); // square, not a rectangle
+  expect(Math.round(b!.width)).toBe(Math.round(b!.height));
   const look = (l: typeof top) => l.evaluate((el) => {
     const cs = getComputedStyle(el);
     return `${cs.opacity} ${cs.color}`;
@@ -247,9 +296,12 @@ test('the note header buttons match the formatting toolbar', async ({ page }) =>
 
 test('opacity control is desktop-only (hidden on web)', async ({ page }) => {
   await createNote(page);
-  await page.getByTestId('tools-toggle').click();
+  await page.getByTestId('pane-pin').click();
+  await menu(page, 'size');
   await expect(page.getByTestId('size-slider')).toBeVisible();
   await expect(page.getByTestId('opacity-slider')).toHaveCount(0);
+  await page.getByTestId('note-more').click();
+  await expect(page.getByTestId('menu-opacity')).toHaveCount(0);
 });
 
 test('share intake: shared text goes into a new note', async ({ page }) => {
@@ -952,7 +1004,7 @@ test('an append queued while storage is down lands when it recovers', async ({ p
 
 test('a pixel pattern paints the title bar and the selected row', async ({ page }) => {
   await createNote(page);
-  await page.getByTestId('note-color').click();
+  await menu(page, 'color');
   await expect(page.locator('[data-testid="palette-chip"][data-palette^="pattern:"]')).toHaveCount(5);
   await page.locator('[data-testid="palette-chip"][data-palette="pattern:checker"]').click();
 
@@ -1108,7 +1160,7 @@ test('a sticky can be renamed in place with a double-click on its title', async 
 
 test('a custom colour can be saved to a slot and reset from Settings', async ({ page }) => {
   await createNote(page);
-  await page.getByTestId('note-color').click();
+  await menu(page, 'color');
   await page.getByTestId('custom-hue').fill('120');
   await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', /custom:#/);
   await page.getByTestId('save-color').click();
@@ -1119,14 +1171,14 @@ test('a custom colour can be saved to a slot and reset from Settings', async ({ 
   await page.getByTestId('open-settings').click();
   await page.getByTestId('reset-colors').click();
   await page.getByTestId('settings-close').click();
-  await page.getByTestId('note-color').click();
+  await menu(page, 'color');
   await expect(page.getByTestId('saved-color')).toHaveCount(0);
 });
 
 test('a painted pattern lands in a slot, styles the note, and survives a reload', async ({ page }) => {
   await createNote(page);
   await page.getByTestId('title-input').fill('Painted');
-  await page.getByTestId('note-color').click();
+  await menu(page, 'color');
   await expect(page.getByTestId('pattern-empty')).toHaveCount(5);
   await page.getByTestId('pattern-empty').first().click();
   await expect(page.getByTestId('pattern-editor')).toBeVisible();
@@ -1147,7 +1199,7 @@ test('a painted pattern lands in a slot, styles the note, and survives a reload'
   await page.waitForTimeout(500); // per-note save debounce
   await page.goto('/?local');
   await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', 'upat:0');
-  await page.getByTestId('note-color').click();
+  await menu(page, 'color');
   await expect(page.getByTestId('pattern-empty')).toHaveCount(4);
 });
 
@@ -1209,7 +1261,7 @@ test('archive: a note leaves the list, waits in the archive, and comes back', as
   await page.getByTestId('title-input').fill('Keep');
   await page.getByTestId('new-note').click();
   await page.getByTestId('title-input').fill('Old idea');
-  await page.getByTestId('note-archive').click();
+  await menu(page, 'archive');
 
   await expect(page.getByTestId('note-item')).toHaveCount(1);
   await expect(page.getByTestId('note-title')).toHaveText('Keep');
@@ -1224,7 +1276,7 @@ test('archive: a note leaves the list, waits in the archive, and comes back', as
   await page.getByTestId('archive-toggle').click();
   await expect(page.getByTestId('note-title')).toHaveText('Old idea');
   await page.getByTestId('note-pick').click();
-  await page.getByTestId('note-archive').click();
+  await menu(page, 'archive');
 
   // Last one restored: back in the list, the archive entry gone.
   await expect(page.getByTestId('note-item')).toHaveCount(2);
@@ -1268,7 +1320,7 @@ test('share intake: a shared photo lands in the new note', async ({ page }) => {
 
 test('reminders: set one from the note, see when, clear it', async ({ page }) => {
   await createNote(page);
-  await page.getByTestId('note-remind').click();
+  await menu(page, 'remind');
   await expect(page.getByTestId('remind-pop')).toBeVisible();
   await page.getByTestId('remind-quick').filter({ hasText: 'Tomorrow 9:00' }).click();
   await expect(page.getByTestId('remind-pop')).toHaveCount(0);
@@ -1277,7 +1329,7 @@ test('reminders: set one from the note, see when, clear it', async ({ page }) =>
   await page.getByTestId('note-remind').click();
   await expect(page.getByTestId('remind-when')).toContainText(/9:00|09:00/);
   await page.getByTestId('remind-clear').click();
-  await expect(page.getByTestId('note-remind')).not.toHaveClass(/(^|\s)on(\s|$)/);
+  await expect(page.getByTestId('note-remind')).toHaveCount(0);
 });
 
 test('reminders: a due reminder pins its note once and clears itself', async ({ page }) => {
@@ -1295,7 +1347,7 @@ test('reminders: a due reminder pins its note once and clears itself', async ({ 
   await expect(page.getByTestId('note-remind')).toHaveClass(/(^|\s)on(\s|$)/);
   await page.evaluate(() => (window as unknown as { __nzFireReminders: () => void }).__nzFireReminders());
   await expect(page.getByTestId('note-pin')).toHaveClass(/(^|\s)on(\s|$)/);
-  await expect(page.getByTestId('note-remind')).not.toHaveClass(/(^|\s)on(\s|$)/);
+  await expect(page.getByTestId('note-remind')).toHaveCount(0);
 });
 
 test('archive: Undo on the floating button brings the note straight back', async ({ page }) => {
@@ -1303,7 +1355,7 @@ test('archive: Undo on the floating button brings the note straight back', async
   await page.getByTestId('title-input').fill('Keep');
   await page.getByTestId('new-note').click();
   await page.getByTestId('title-input').fill('Oops');
-  await page.getByTestId('note-archive').click();
+  await menu(page, 'archive');
   await expect(page.getByTestId('undo-toast')).toContainText('Oops');
   await expect(page.getByTestId('note-item')).toHaveCount(1);
   await page.getByTestId('undo-archive').click();

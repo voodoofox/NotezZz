@@ -10,7 +10,7 @@
   import Icon from './Icon.svelte';
 
   import { popoverStyle } from '$lib/popover';
-  import { MediaQuery } from 'svelte/reactivity';
+  import VSlider from './VSlider.svelte';
 
   let note = $derived(store.active);
   let pal = $derived(getPalette(note?.paletteId ?? ''));
@@ -27,18 +27,16 @@
       ? on ? 'Bring the sticky back' : 'Tuck the sticky to the screen edge'
       : on ? 'Bring the sticky back on your PC' : 'Tuck the sticky away on your PC';
 
-  // Phones: the title gets the room. The pin stays in the bar (and the
-  // reminder, while one is set); everything else moves into the ⋯ menu.
-  // Rendered either/or, not hidden with CSS, so each control exists once.
-  const narrow = new MediaQuery('max-width: 700px', false);
+  // The bar is the same on every screen: the title gets the room; the pin,
+  // tuck (while pinned) and reminder (while one is set) stay in it, and
+  // everything else lives in the ⋯ menu.
 
-  // Header popovers (colour, text size, reminder, the ⋯ menu), fixed-
-  // positioned so nothing clips them; any outside tap closes them.
-  type Pop = 'pal' | 'size' | 'remind' | 'more';
+  // Header popovers (colour, text size, transparency, reminder, the ⋯
+  // menu), fixed-positioned so nothing clips them; any outside tap closes
+  // them. All of them hang from the ⋯ button, right edges lined up.
+  type Pop = 'pal' | 'size' | 'opacity' | 'remind' | 'more';
   let openPop = $state<Pop | null>(null);
   let popStyle = $state('');
-  let palWrap = $state<HTMLElement | null>(null);
-  let sizeWrapEl = $state<HTMLElement | null>(null);
   let remindWrap = $state<HTMLElement | null>(null);
   let moreWrap = $state<HTMLElement | null>(null);
   let popEl = $state<HTMLElement | null>(null);
@@ -50,21 +48,18 @@
     return btn * 3 + 2 * 2;
   };
   const popWidth = (which: Pop, a: HTMLElement) =>
-    which === 'pal' ? 226 : which === 'size' ? threeButtons(a) : which === 'remind' ? 250 : 236;
+    which === 'pal' ? 226 : which === 'size' || which === 'opacity' ? threeButtons(a) : which === 'remind' ? 250 : 236;
 
-  function togglePop(which: Pop, anchor?: HTMLElement | null) {
+  function togglePop(which: Pop) {
     if (openPop === which) return void (openPop = null);
-    const a =
-      anchor ?? (which === 'pal' ? palWrap : which === 'size' ? sizeWrapEl : which === 'remind' ? remindWrap : moreWrap);
-    // Whatever opens from the ⋯ button (the bar's last) lines up with its right edge.
-    if (a) popStyle = popoverStyle(a, popWidth(which, a), a === moreWrap ? 'end' : 'center');
+    if (moreWrap) popStyle = popoverStyle(moreWrap, popWidth(which, moreWrap), 'end');
     openPop = which;
   }
 
   /** A ⋯ menu entry that opens a panel: the panel takes the menu's place. */
-  function fromMenu(which: 'pal' | 'size' | 'remind') {
+  function fromMenu(which: 'pal' | 'size' | 'opacity' | 'remind') {
     openPop = null;
-    togglePop(which, moreWrap);
+    togglePop(which);
   }
 
   // ---- reminders --------------------------------------------------------
@@ -114,7 +109,7 @@
   function closePopsOutside(e: PointerEvent) {
     if (!openPop) return;
     const t = e.target as Node;
-    if ([palWrap, sizeWrapEl, remindWrap, moreWrap, popEl].some((el) => el?.contains(t))) return;
+    if ([remindWrap, moreWrap, popEl].some((el) => el?.contains(t))) return;
     openPop = null;
   }
 
@@ -206,35 +201,12 @@
         value={note.title}
         oninput={(e) => store.update(note!.id, { title: (e.currentTarget as HTMLInputElement).value })}
       />
-{#if !narrow.current}
-        <span class="twrap" bind:this={palWrap}>
-          <button
-            class="icon"
-            class:on={openPop === 'pal'}
-            data-testid="note-color"
-            title="Note color"
-            aria-label="Note color"
-            onclick={() => togglePop('pal')}
-          ><Icon name="palette" /></button>
-        </span>
-        <span class="twrap" bind:this={sizeWrapEl}>
-          <button
-            class="icon"
-            class:on={openPop === 'size'}
-            data-testid="tools-toggle"
-            title="Text size {note.fontSize}{desktop ? ' · sticker opacity' : ''}"
-            aria-label="Text size"
-            onclick={() => togglePop('size')}
-          ><Icon name="noteSize" /></button>
-        </span>
-      {/if}
-      {#if !narrow.current || note.remindAt}
+{#if note.remindAt}
         <span class="twrap" bind:this={remindWrap}>
           <button
-            class="icon"
-            class:on={openPop === 'remind' || !!note.remindAt}
+            class="icon on"
             data-testid="note-remind"
-            title={note.remindAt ? `Reminder: ${fmtWhen(note.remindAt)}` : 'Remind me'}
+            title={`Reminder: ${fmtWhen(note.remindAt)}`}
             aria-label="Reminder"
             onclick={() => togglePop('remind')}
           ><Icon name="alarm" /></button>
@@ -263,37 +235,18 @@
         ><Icon name={note.tucked ? 'untuck' : 'tuck'} /></button>
       {/if}
 
-      {#if !narrow.current}
+      <span class="twrap" bind:this={moreWrap}>
         <button
           class="icon"
-          data-testid="note-archive"
-          title={note.archived ? 'Move back to notes' : 'Archive note'}
-          aria-label={note.archived ? 'Move back to notes' : 'Archive note'}
-          onclick={toggleArchive}
-        ><Icon name={note.archived ? 'unarchive' : 'archive'} /></button>
-        {#if note.archived}
-          <button
-            class="icon"
-            data-testid="note-delete"
-            title="Delete forever"
-            aria-label="Delete forever"
-            onclick={deleteNote}
-          ><Icon name="deleteForever" /></button>
-        {/if}
-      {:else}
-        <span class="twrap" bind:this={moreWrap}>
-          <button
-            class="icon"
-            class:on={openPop === 'more'}
-            data-testid="note-more"
-            title="More"
-            aria-label="More actions"
-            aria-haspopup="menu"
-            aria-expanded={openPop === 'more'}
-            onclick={() => togglePop('more')}
-          ><Icon name="more" /></button>
-        </span>
-      {/if}
+          class:on={openPop === 'more'}
+          data-testid="note-more"
+          title="More"
+          aria-label="More actions"
+          aria-haspopup="menu"
+          aria-expanded={openPop === 'more'}
+          onclick={() => togglePop('more')}
+        ><Icon name="more" /></button>
+      </span>
 
       <!-- One popover at a time, outside the buttons' wrappers: a panel
            opened from the ⋯ menu belongs to no visible button. -->
@@ -312,32 +265,29 @@
             </div>
           {:else if openPop === 'size'}
             <div class="pop panel sizepanel" style={popStyle}>
-              <label class="vctl">
-                <span class="vval" data-testid="size-value">{note.fontSize}</span>
-                <input
-                  class="vrange"
-                  type="range" min="12" max="40" step="1"
-                  data-testid="size-slider"
-                  aria-label="Text size"
-                  value={note.fontSize}
-                  oninput={(e) => store.update(note!.id, { fontSize: +(e.currentTarget as HTMLInputElement).value })}
-                />
-                <span class="vlab">Text size</span>
-              </label>
-              {#if desktop}
-                <label class="vctl">
-                  <span class="vval" data-testid="opacity-value">{Math.round(note.opacity * 100)}%</span>
-                  <input
-                    class="vrange"
-                    type="range" min="0.2" max="1" step="0.05"
-                    data-testid="opacity-slider"
-                    aria-label="Sticker opacity"
-                    value={note.opacity}
-                    oninput={(e) => store.update(note!.id, { opacity: +(e.currentTarget as HTMLInputElement).value })}
-                  />
-                  <span class="vlab">Opacity</span>
-                </label>
-              {/if}
+              <VSlider
+                value={note.fontSize}
+                min={12}
+                max={40}
+                label="Text size"
+                testid="size-slider"
+                valueTestid="size-value"
+                onInput={(v) => store.update(note!.id, { fontSize: v })}
+              />
+            </div>
+          {:else if openPop === 'opacity'}
+            <div class="pop panel sizepanel" style={popStyle}>
+              <VSlider
+                value={Math.round(note.opacity * 100)}
+                min={20}
+                max={100}
+                step={5}
+                label="Opacity"
+                testid="opacity-slider"
+                valueTestid="opacity-value"
+                display="{Math.round(note.opacity * 100)}%"
+                onInput={(v) => store.update(note!.id, { opacity: v / 100 })}
+              />
             </div>
           {:else if openPop === 'remind'}
             <div class="pop panel remind" style={popStyle} data-testid="remind-pop">
@@ -380,6 +330,12 @@
                 <Icon name="alarm" /><span>{note.remindAt ? 'Reminder' : 'Remind me'}</span>
                 {#if note.remindAt}<span class="mv">{fmtWhen(note.remindAt)}</span>{/if}
               </button>
+              {#if desktop && note.pinned}
+                <button class="mi" role="menuitem" data-testid="menu-opacity" onclick={() => fromMenu('opacity')}>
+                  <Icon name="opacity" /><span>Transparency</span>
+                  <span class="mv">{Math.round(note.opacity * 100)}%</span>
+                </button>
+              {/if}
               <button class="mi" role="menuitem" data-testid="menu-archive" onclick={toggleArchive}>
                 <Icon name={note.archived ? 'unarchive' : 'archive'} />
                 <span>{note.archived ? 'Move back to notes' : 'Archive'}</span>
@@ -618,28 +574,7 @@
     border: none;
     box-shadow: none;
   }
-  .vctl {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    font-size: 11px;
-    color: color-mix(in srgb, var(--note-fg) 70%, transparent);
-  }
-  .vval {
-    font-size: 16px;
-    color: var(--note-fg);
-    font-variant-numeric: tabular-nums;
-  }
-  .vrange {
-    writing-mode: vertical-lr;
-    direction: rtl;
-    width: 28px;
-    height: 100px;
-    margin: 0;
-    accent-color: var(--note-fg);
-  }
-  /* The ⋯ menu on phones. */
+  /* The ⋯ menu. */
   .menu {
     display: flex;
     flex-direction: column;

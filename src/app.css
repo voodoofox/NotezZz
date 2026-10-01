@@ -20,9 +20,10 @@
   --app-muted: #6b7280;
   --app-border: #e2e4e8;
   --app-danger: #e0245e; /* semantic error color (text only) */
-  --radius-sm: 4px; /* buttons, inputs, chips */
-  --radius-md: 5px; /* larger buttons, pills, sliders */
-  --radius-lg: 6px; /* cards, panels, sticky windows */
+  --radius-sm: 7px; /* inputs, chips */
+  --radius-md: 10px; /* pills, larger inputs */
+  --radius-lg: 14px; /* cards, panels, dialogs */
+  --sticky-radius: 18px; /* a pinned note's window on the desktop */
   /* Buttons follow the logo: one size everywhere, corners rounded like the
      logo's squares (23.5% of the side), 2px apart. Balloons (popovers and
      menus) are small stickers, rounded the same way at twice the corner. */
@@ -36,7 +37,8 @@
    (4px padding each side, 2px between), and every other button matches it. */
 @media (max-width: 700px) {
   :root {
-    --btn: clamp(30px, calc((100vw - 28px) / 11), 40px);
+    /* Sticky windows are narrow too, hence the low floor. */
+    --btn: clamp(24px, calc((100vw - 28px) / 11), 40px);
   }
 }
 
