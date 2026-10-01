@@ -386,13 +386,11 @@
     position: relative;
     isolation: isolate;
     background-color: var(--note-bg);
-    background-image: var(--note-grain), var(--note-shade);
-    /* Grain tiles (hard-light: it lightens and darkens the colour around
-       neutral); the shade is the ellipse's part above its centre. */
-    background-size: auto, var(--note-shade-size);
-    background-position: 0 0, center top;
-    background-repeat: repeat, no-repeat;
-    background-blend-mode: hard-light, normal;
+    /* The shade: the ellipse's part above its centre. */
+    background-image: var(--note-shade);
+    background-size: var(--note-shade-size);
+    background-position: center top;
+    background-repeat: no-repeat;
     color: var(--note-fg);
     height: 100%;
   }
@@ -413,7 +411,21 @@
     opacity: calc(var(--note-light-on-dark) + (1 - var(--note-light-on-dark)) * var(--note-lum, 1));
     mix-blend-mode: plus-lighter;
   }
-  .pane.empty::before {
+  /* The grain, on top of the shade AND the light, so it dithers both (a
+     faint gradient across a big note otherwise steps in visible bands).
+     hard-light around neutral grey: it lightens and darkens the colour
+     without greying it. Under the note's contents, like the light. */
+  .pane::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: var(--note-grain);
+    mix-blend-mode: hard-light;
+  }
+  .pane.empty::before,
+  .pane.empty::after {
     display: none;
   }
   .pane.empty {
@@ -500,8 +512,8 @@
   /* Phone: the pane is the lower 70% of the stacked split, or all of it in
      fullscreen (.note-open on the page's <main>). */
   :global(.app.stacked) > .pane {
-    height: 70%;
-    flex: none;
+    flex: 1;
+    min-height: 0;
     width: 100%;
   }
   @media (max-width: 700px) {
@@ -512,8 +524,8 @@
       padding: var(--edge);
     }
     .pane {
-      height: 70%;
-      flex: none;
+      flex: 1;
+      min-height: 0;
       width: 100%;
     }
     /* .app.note-open, not just .note-open: the stacked rule above is as

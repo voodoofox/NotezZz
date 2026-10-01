@@ -37,11 +37,11 @@
   function themePreview(t: ThemeDef): string {
     const v = themeVars(t);
     return (
-      `background-color: #f0e7c2; background-image: ${v['--note-grain']}, ${v['--note-shade']};` +
-      `background-size: auto, ${v['--note-shade-size']}; background-position: 0 0, center top;` +
-      'background-repeat: repeat, no-repeat; background-blend-mode: hard-light, normal;'
+      `background-color: #f0e7c2; background-image: ${v['--note-shade']};` +
+      `background-size: ${v['--note-shade-size']}; background-position: center top; background-repeat: no-repeat;`
     );
   }
+  const grainPreview = (t: ThemeDef) => `background-image: ${themeVars(t)['--note-grain']};`;
   const lightPreview = (t: ThemeDef) =>
     `background-image: ${themeVars(t)['--note-light']}; background-size: ${themeVars(t)['--note-light-size']}; background-position: center bottom; background-repeat: no-repeat;`;
 
@@ -333,6 +333,7 @@
             >
               <span class="tprev" style={themePreview(t)}>
                 <span class="tlight" style={lightPreview(t)}></span>
+                <span class="tgrain" style={grainPreview(t)}></span>
                 <span class="tstrip" style="opacity: {t.note.header}"></span>
               </span>
               <span class="tname">{t.name}</span>
@@ -689,6 +690,11 @@
     position: absolute;
     inset: 0;
     mix-blend-mode: plus-lighter;
+  }
+  .tgrain {
+    position: absolute;
+    inset: 0;
+    mix-blend-mode: hard-light;
   }
   .tstrip {
     position: absolute;

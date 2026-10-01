@@ -130,9 +130,12 @@
   // ---- list columns ----------------------------------------------------
   // With the list above the note, 'auto' starts at one column and adds one
   // each time the rows stop fitting the strip, up to three; a column is never
-  // narrower than MIN_COL_PX, so a phone-width list stays single.
+  // narrower than MIN_COL_PX, so a phone-width list stays single. The strip
+  // fits its rows up to a cap (see the CSS), so "fitting" is measured against
+  // that cap: the list grows taller first, then wider.
   const MIN_COL_PX = 220;
   let listH = $state(0);
+  let listMaxH = $state(0);
   let listW = $state(0);
   let rowH = $state(0);
 
@@ -142,11 +145,17 @@
     const measure = () => {
       listH = el.clientHeight;
       listW = el.clientWidth;
+      listMaxH = parseFloat(getComputedStyle(el).maxHeight) || 0; // 'none' beside the note
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
-    return () => ro.disconnect();
+    // The cap follows the window even while the list itself keeps its size.
+    window.addEventListener('resize', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
   });
 
   // Row height, re-read when rows appear (the observer only sees the list box).
@@ -160,7 +169,7 @@
     if ((store.settings.layout ?? 'top') !== 'top') return 1;
     const set = store.settings.listColumns ?? 'auto';
     if (set !== 'auto') return set;
-    const fit = Math.max(1, Math.floor((listH - 8) / (rowH || 40)));
+    const fit = Math.max(1, Math.floor((Math.max(listH, listMaxH) - 8) / (rowH || 40)));
     const byWidth = Math.max(1, Math.floor(listW / MIN_COL_PX));
     return Math.min(3, byWidth, Math.max(1, Math.ceil(visibleNotes.length / fit)));
   });
@@ -312,7 +321,10 @@
 
 <style>
   .sidebar {
-    width: 230px;
+    /* Beside the note: 30% of the window's width, the same share the
+       list gets of the height when it sits above the note. */
+    width: 30%;
+    min-width: 200px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
@@ -584,12 +596,24 @@
   .pin.tuck {
     padding-left: 0;
   }
-  /* "List above the note" at any width: the same 30% strip the phone gets. */
+  /* "List above the note" at any width: the list fits its notes, growing
+     with them up to 30% of the window's height (then it scrolls), and
+     never shorter than three rows; the note takes the rest. */
   :global(.app.stacked) > .sidebar {
     width: 100%;
-    height: 30%;
+    height: auto;
+    flex: none;
     border-right: none;
     border-bottom: 2px solid var(--app-border);
+  }
+  :global(.app.stacked) > .sidebar .list {
+    flex: none;
+    /* The header and the list together: at most 30% of the app's height
+       (header = button + 2 x 10px padding + 1px line; 2px line below),
+       never under three rows. A search box or a sync/update banner adds
+       to that rather than being squeezed out of sight. */
+    max-height: calc(0.3 * (100dvh - var(--safe-top, 0px)) - var(--btn) - 23px);
+    min-height: calc(3 * 38px + 8px);
   }
   /* Columns only make sense in the wide strip. Rows keep their full-bleed
      look inside each column; the grid supplies the columns. */
@@ -614,9 +638,20 @@
   @media (max-width: 700px) {
     .sidebar {
       width: 100%;
-      height: 30%;
+      min-width: 0;
+      height: auto;
+      flex: none;
       border-right: none;
       border-bottom: 2px solid var(--app-border);
+    }
+    .list {
+      flex: none;
+      /* The header and the list together: at most 30% of the app's height
+         (header = button + 2 x 10px padding + 1px line; 2px line below),
+         never under three rows. A search box or a sync/update banner adds
+         to that rather than being squeezed out of sight. */
+      max-height: calc(0.3 * (100dvh - var(--safe-top, 0px)) - var(--btn) - 23px);
+      min-height: calc(3 * 38px + 8px);
     }
     :global(.note-open) > .sidebar {
       display: none;

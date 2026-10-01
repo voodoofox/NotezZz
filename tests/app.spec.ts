@@ -1171,9 +1171,6 @@ test('settings: the note list can move above the note, in columns', async ({ pag
 
   const app = page.locator('main.app');
   await expect(app).toHaveClass(/stacked/);
-  // Same split as the phone: the list strip is 30% of the app's height.
-  const [appBox, sideBox] = await Promise.all([app.boundingBox(), page.locator('.sidebar').boundingBox()]);
-  expect(Math.abs(sideBox!.height / appBox!.height - 0.3)).toBeLessThan(0.02);
   expect(await page.locator('.list').evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length)).toBe(3);
 
   // It is a setting: back to the side layout and it stays.
@@ -1499,7 +1496,9 @@ test.describe('themes', () => {
     const image = () => pane.evaluate((el) => getComputedStyle(el).backgroundImage);
     // Halves of one very wide ellipse centred on the note: the shade on top…
     expect(await image()).toContain('radial-gradient(350% 100% at 50% 100%');
-    expect(await image()).toContain('data:image/svg+xml');
+    // The grain is a layer of its own above both, so it dithers them.
+    const grain = () => pane.evaluate((el) => getComputedStyle(el, '::after').backgroundImage);
+    expect(await grain()).toContain('data:image/svg+xml');
     // The light from below is ADDED (plus-lighter), on a layer of its own,
     // reaching 60% up the note.
     const light = await pane.evaluate((el) => {
@@ -1516,7 +1515,8 @@ test.describe('themes', () => {
     await page.getByTestId('open-settings').click();
     await page.getByTestId('theme-pick').filter({ hasText: 'Flat' }).click();
     await page.getByTestId('settings-close').click();
-    expect(await image()).toBe('none, none');
+    expect(await image()).toBe('none');
+    expect(await grain()).toBe('none');
     expect(await rootVar(page, '--note-header-mix')).toBe('100%');
   });
 
@@ -1655,14 +1655,87 @@ test('Daylight lights every note the same; a theme can ease it off on dark ones'
   expect(await lightOpacity()).toBeCloseTo(0.5, 2);
 });
 
-test('Daylight: light and shade meet three quarters down; paper grain blended around neutral', async ({ page }) => {
+test('Daylight: light and shade meet three quarters down; grain on top, blended around neutral', async ({ page }) => {
   await createNote(page);
   const cs = await page.getByTestId('note-pane').evaluate((el) => {
     const s = getComputedStyle(el);
     const b = getComputedStyle(el, '::before');
-    return { size: s.backgroundSize, blend: s.backgroundBlendMode, lightSize: b.backgroundSize };
+    const a = getComputedStyle(el, '::after');
+    return { size: s.backgroundSize, lightSize: b.backgroundSize, grainBlend: a.mixBlendMode };
   });
   expect(cs.size).toContain('75%'); // the shade, top to centre
   expect(cs.lightSize).toContain('25%'); // the light, centre to bottom
-  expect(cs.blend.startsWith('hard-light')).toBe(true);
+  expect(cs.grainBlend).toBe('hard-light');
+});
+
+/** Settings -> where the list sits, and how many columns it gets. */
+async function listLayout(page: Page, layout: 'top' | 'side', columns?: 'auto' | '1' | '2' | '3') {
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('set-layout').selectOption(layout);
+  if (columns) await page.getByTestId('set-columns').selectOption(columns);
+  await page.getByTestId('settings-close').click();
+}
+
+test('list above the note: fits its notes, at least three rows, at most 30% of the height', async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await createNote(page);
+  await listLayout(page, 'top', '1');
+  const app = page.locator('main.app');
+  await expect(app).toHaveClass(/stacked/);
+  const share = async () => {
+    const [a, s] = await Promise.all([app.boundingBox(), page.locator('.sidebar').boundingBox()]);
+    return s!.height / a!.height;
+  };
+  const rowH = await page.getByTestId('note-item').first().evaluate((el) => el.getBoundingClientRect().height);
+  const listH = () => page.locator('.list').evaluate((el) => el.getBoundingClientRect().height);
+
+  // One note: three rows' worth, not 30%.
+  expect(Math.abs((await listH()) - (3 * rowH + 8))).toBeLessThan(2);
+  expect(await share()).toBeLessThan(0.28);
+
+  // It grows with the notes…
+  for (let i = 0; i < 3; i++) await createNote(page);
+  expect(Math.abs((await listH()) - (4 * rowH + 8))).toBeLessThan(2);
+
+  // …up to 30% of the height; past that it scrolls. The note takes the rest.
+  for (let i = 0; i < 4; i++) await createNote(page);
+  expect(Math.abs((await share()) - 0.3)).toBeLessThan(0.01);
+  const [sideBox, paneBox, appBox] = await Promise.all([
+    page.locator('.sidebar').boundingBox(),
+    page.getByTestId('note-pane').boundingBox(),
+    app.boundingBox(),
+  ]);
+  expect(Math.abs(sideBox!.height + paneBox!.height - appBox!.height)).toBeLessThan(1);
+
+  // A short window still shows three rows.
+  await page.setViewportSize({ width: 1000, height: 400 });
+  expect((await listH()) + 1).toBeGreaterThan(3 * rowH + 8);
+});
+
+test('list above the note, auto columns: grows taller first, then adds columns', async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await createNote(page);
+  await listLayout(page, 'top', 'auto');
+  const cols = () => page.locator('.list').evaluate((el) => (el.className.match(/cols-(\d)/) ?? [])[1]);
+  const rowH = await page.getByTestId('note-item').first().evaluate((el) => el.getBoundingClientRect().height);
+  const listH = () => page.locator('.list').evaluate((el) => el.getBoundingClientRect().height);
+  for (let i = 0; i < 3; i++) await createNote(page);
+  expect(await cols()).toBe('1'); // four rows still fit under the 30% cap
+  expect(Math.abs((await listH()) - (4 * rowH + 8))).toBeLessThan(2);
+  for (let i = 0; i < 6; i++) await createNote(page);
+  expect(await cols()).toBe('3');
+});
+
+test('list beside the note: 30% of the window width, following it', async ({ page }) => {
+  await createNote(page);
+  await listLayout(page, 'side');
+  await expect(page.locator('main.app')).not.toHaveClass(/stacked/);
+  const share = async () => {
+    const [a, s] = await Promise.all([page.locator('main.app').boundingBox(), page.locator('.sidebar').boundingBox()]);
+    return s!.width / a!.width;
+  };
+  await page.setViewportSize({ width: 1400, height: 800 });
+  expect(Math.abs((await share()) - 0.3)).toBeLessThan(0.01);
+  await page.setViewportSize({ width: 900, height: 800 });
+  expect(Math.abs((await share()) - 0.3)).toBeLessThan(0.01);
 });

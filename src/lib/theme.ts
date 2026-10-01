@@ -226,6 +226,12 @@ function rgb(h: string): [number, number, number] {
  * shade, the bottom half for the light, centred on the shared edge.
  * CSS gradients only interpolate in straight lines, so the curve is laid
  * down as a run of stops.
+ *
+ * Along the line where the halves meet, the ellipse is only clear at the
+ * very centre: towards the sides the shade above and the light below both
+ * show a little, which drew a straight seam across the note. So the curve
+ * is lowered by its value at the ends of that line (and rescaled to keep
+ * full strength at the edge): both halves are clear along all of it.
  */
 export function fadeGradient(edge: 'bottom' | 'top', f: Fade, curve: number, spread = 3.5): string {
   if (f.strength <= 0 || f.reach <= 0) return 'none';
@@ -235,12 +241,19 @@ export function fadeGradient(edge: 'bottom' | 'top', f: Fade, curve: number, spr
   const at = (t: number) => (k < 0.01 ? 1 - t : (Math.exp(-k * t) - Math.exp(-k)) / (1 - Math.exp(-k)));
   // Radial position: 0 = the note's centre, 100% = the edge.
   const start = 1 - Math.min(1, f.reach);
-  const steps = 12;
+  // The ends of the line where the halves meet: half a note-width out on
+  // an ellipse `spread` widths wide. Clear from there in.
+  const seam = Math.min(0.5 / spread, 0.99);
+  const clearTo = Math.max(start, seam);
+  const atSeam = seam > start ? at((1 - seam) / (1 - start)) : 0;
+  const alpha = (u: number) => Math.max(0, at((1 - u) / (1 - start)) - atSeam) / (1 - atSeam);
+  // Many short straight runs: with a dozen, their joins showed as faint
+  // lines (Mach bands) on the larger notes.
+  const steps = 32;
   const stops: string[] = [`rgba(${r}, ${g}, ${b}, 0) 0%`];
   for (let i = steps; i >= 0; i--) {
-    const t = i / steps; // i = steps: where the fade starts; 0: the edge
-    const u = 1 - t * (1 - start);
-    stops.push(`rgba(${r}, ${g}, ${b}, ${(f.strength * at(t)).toFixed(4)}) ${(u * 100).toFixed(2)}%`);
+    const u = 1 - (i / steps) * (1 - clearTo); // i = steps: clear; 0: the edge
+    stops.push(`rgba(${r}, ${g}, ${b}, ${(f.strength * alpha(u)).toFixed(4)}) ${(u * 100).toFixed(2)}%`);
   }
   const size = `${+(spread * 100).toFixed(1)}% 100%`;
   // The light's half is the bottom one, so the centre is its top edge; the

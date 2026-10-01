@@ -517,16 +517,28 @@
     display: flex;
     flex-direction: column;
     background-color: var(--note-bg);
-    background-image: var(--note-grain), var(--note-shade);
-    background-size: auto, var(--note-shade-size);
-    background-position: 0 0, center top;
-    background-repeat: repeat, no-repeat;
-    background-blend-mode: hard-light, normal;
+    background-image: var(--note-shade);
+    background-size: var(--note-shade-size);
+    background-position: center top;
+    background-repeat: no-repeat;
     color: var(--note-fg);
     border-radius: var(--sticky-radius);
     overflow: hidden;
     box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28);
     isolation: isolate;
+  }
+  /* The grain, on top of the shade AND the light, so it dithers both (a
+     faint gradient across a big note otherwise steps in visible bands).
+     hard-light around neutral grey: it lightens and darkens the colour
+     without greying it. Under the note's contents, like the light. */
+  .sticky::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: var(--note-grain);
+    mix-blend-mode: hard-light;
   }
   /* The light from below, added to the note's colour (see NotePane). */
   .sticky::before {
