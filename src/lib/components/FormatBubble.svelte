@@ -58,11 +58,11 @@
     display: flex;
     align-items: center;
     gap: var(--btn-gap);
-    padding: 4px;
+    padding: var(--edge);
     border-radius: var(--sticker-radius); /* a small sticker, like every balloon */
     background: var(--app-fg);
     color: var(--app-bg);
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--sticker-shadow);
   }
   .bubble button {
     border: none;

@@ -274,9 +274,48 @@ test('a pinned note on the desktop has its own transparency control', async ({ p
   await page.waitForTimeout(600);
   const saved = await page.evaluate((k) => JSON.parse(localStorage.getItem(`notezzz:note:${k}`)!).opacity, id);
   expect(saved).toBe(0.5);
-  // Sticky windows are rounder now.
-  const r = await page.locator('.sticky').evaluate((el) => parseFloat(getComputedStyle(el).borderTopLeftRadius));
-  expect(r).toBeGreaterThanOrEqual(16);
+});
+
+test('corners are concentric: a sticky hugs its corner buttons, the ⋯ menu its items', async ({ page }) => {
+  await createNote(page);
+  await page.waitForTimeout(500);
+  const id = await page.evaluate(
+    () => Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!.slice('notezzz:note:'.length)
+  );
+  const radius = (sel: string) =>
+    page.locator(sel).first().evaluate((el) => parseFloat(getComputedStyle(el).borderBottomLeftRadius));
+  for (const width of [300, 420]) {
+    await page.setViewportSize({ width, height: 400 });
+    await page.goto(`/sticky?id=${id}`);
+    const card = (await page.locator('.sticky').boundingBox())!;
+    const btn = (await page.getByTestId('fmt-bold').boundingBox())!;
+    const side = btn.x - card.x;
+    const bottom = card.y + card.height - (btn.y + btn.height);
+    expect(Math.abs(side - bottom), `width ${width}`).toBeLessThan(1);
+    expect(Math.abs((await radius('.sticky')) - ((await radius('[data-testid="fmt-bold"]')) + side))).toBeLessThan(1);
+  }
+  // The same rule for a balloon that holds buttons.
+  await page.setViewportSize({ width: 1100, height: 700 });
+  await page.goto('/?local');
+  await page.getByTestId('note-item').first().click();
+  await page.getByTestId('note-more').click();
+  const menu = (await page.getByTestId('note-menu').boundingBox())!;
+  const item = (await page.getByTestId('menu-color').boundingBox())!;
+  const inset = item.x - menu.x - 1; // inside the 1px border
+  const outer = await radius('[data-testid="note-menu"]');
+  const inner = await radius('[data-testid="menu-color"]');
+  expect(Math.abs(outer - (inner + inset + 1))).toBeLessThan(1.5);
+  // Balloons: a short, tight shadow (no blur over 8px).
+  const shadow = await page.getByTestId('note-menu').evaluate((el) => getComputedStyle(el).boxShadow);
+  const blurs = [...shadow.matchAll(/(-?\d+(?:\.\d+)?)px (-?\d+(?:\.\d+)?)px (\d+(?:\.\d+)?)px/g)].map((m) => +m[3]);
+  expect(Math.max(...blurs)).toBeLessThanOrEqual(8);
+});
+
+test('buttons have no outline', async ({ page }) => {
+  for (const id of ['search-toggle', 'open-settings', 'new-note']) {
+    const w = await page.getByTestId(id).evaluate((el) => getComputedStyle(el).borderTopWidth);
+    expect(w, id).toBe('0px');
+  }
 });
 
 test('the note header buttons match the formatting toolbar', async ({ page }) => {

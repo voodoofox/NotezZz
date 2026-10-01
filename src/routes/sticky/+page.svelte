@@ -524,7 +524,9 @@
     display: flex;
     align-items: center;
     gap: var(--btn-gap);
-    padding: 4px 6px 4px 10px;
+    /* Buttons --edge from the top and right, so the corner button's curve
+       runs parallel to the window's (whose radius is button + edge). */
+    padding: var(--edge) var(--edge) var(--edge) 10px;
     /* -color, not the shorthand: the shorthand would wipe a pattern's background-image */
     background-color: var(--note-header);
     cursor: move;
@@ -607,7 +609,7 @@
     color: var(--app-fg);
     border: 1px solid var(--app-border);
     border-radius: var(--sticker-radius);
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+    box-shadow: var(--sticker-shadow);
     cursor: default;
   }
   .x:hover {

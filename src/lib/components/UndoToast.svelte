@@ -41,7 +41,7 @@
     border-radius: var(--radius-lg);
     background: var(--app-fg);
     color: var(--app-panel);
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+    box-shadow: var(--sticker-shadow);
     font-size: 15px;
     animation: rise 180ms ease-out;
   }

@@ -195,7 +195,7 @@
     display: flex;
     align-items: center;
     gap: var(--btn-gap);
-    padding: 5px 8px;
+    padding: var(--edge);
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
@@ -246,11 +246,11 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 6px;
-    padding: 10px;
+    padding: var(--edge);
     background: var(--app-panel);
     border: 1px solid var(--app-border);
     border-radius: var(--sticker-radius);
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
+    box-shadow: var(--sticker-shadow);
   }
   .sopt {
     font: inherit;
@@ -258,7 +258,7 @@
     min-width: 0;
     padding: 10px 6px;
     border: none;
-    border-radius: var(--radius-sm);
+    border-radius: var(--btn-radius);
     background: transparent;
     color: var(--app-fg);
     cursor: pointer;
@@ -297,7 +297,7 @@
      Material-style. */
   @media (max-width: 700px) {
     .toolbar {
-      padding: 4px 4px calc(4px + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)));
+      padding: var(--edge) var(--edge) calc(var(--edge) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)));
     }
     .sep {
       display: none;

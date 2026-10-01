@@ -405,7 +405,7 @@
     display: flex;
     align-items: center;
     gap: var(--btn-gap);
-    padding: 5px 8px 5px 12px; /* left matches the list */
+    padding: var(--edge) var(--edge) var(--edge) 12px; /* left matches the list */
     /* -color, not the shorthand: the shorthand would wipe a pattern's background-image */
     background-color: var(--note-header);
   }
@@ -468,7 +468,7 @@
       display: inline-flex;
     }
     .topbar {
-      padding: 4px;
+      padding: var(--edge);
     }
     .pane {
       height: 70%;
@@ -496,7 +496,7 @@
     color: var(--app-fg);
     border: 1px solid var(--app-border);
     border-radius: var(--sticker-radius);
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+    box-shadow: var(--sticker-shadow);
   }
   .remind {
     display: flex;
@@ -579,7 +579,7 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: 6px;
+    padding: var(--edge);
   }
   .mi {
     display: flex;

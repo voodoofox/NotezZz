@@ -341,7 +341,7 @@
     width: var(--btn);
     height: var(--btn);
     font-size: 18px;
-    border: 1px solid var(--app-border);
+    border: none;
     border-radius: var(--btn-radius);
     background: var(--app-bg);
     color: var(--app-fg);
@@ -356,12 +356,11 @@
   }
   .new:hover,
   .ico:hover {
-    border-color: var(--app-fg);
+    background: color-mix(in srgb, var(--app-fg) 10%, var(--app-bg));
   }
   .ico.on {
     background: var(--app-fg);
     color: var(--app-panel);
-    border-color: var(--app-fg);
   }
   .ico.busy :global(svg) {
     animation: spin 0.8s linear infinite;

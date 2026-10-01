@@ -343,7 +343,7 @@
   .sz {
     width: var(--btn);
     height: var(--btn);
-    border: 1px solid var(--app-border);
+    border: none;
     border-radius: var(--btn-radius);
     background: var(--app-bg);
     display: inline-flex;
@@ -353,8 +353,7 @@
     padding: 0;
   }
   .sz.sel {
-    border-color: var(--app-fg);
-    border-width: 2px;
+    background: color-mix(in srgb, var(--app-fg) 16%, var(--app-bg));
   }
   .sz span {
     border-radius: 50%;
@@ -368,7 +367,7 @@
   .op {
     width: var(--btn);
     height: var(--btn);
-    border: 1px solid var(--app-border);
+    border: none;
     border-radius: var(--btn-radius);
     background: var(--app-bg);
     color: var(--app-fg);

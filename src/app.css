@@ -23,22 +23,30 @@
   --radius-sm: 7px; /* inputs, chips */
   --radius-md: 10px; /* pills, larger inputs */
   --radius-lg: 14px; /* cards, panels, dialogs */
-  --sticky-radius: 18px; /* a pinned note's window on the desktop */
+
   /* Buttons follow the logo: one size everywhere, corners rounded like the
      logo's squares (23.5% of the side), 2px apart. Balloons (popovers and
      menus) are small stickers, rounded the same way at twice the corner. */
   --btn: 32px;
   --btn-gap: 2px;
   --btn-radius: calc(var(--btn) * 0.235);
-  --sticker-radius: calc(var(--btn) * 0.47);
+  /* How far buttons sit from the edge of whatever holds them. Anything
+     rounded that holds buttons takes the button's corner PLUS that
+     distance, so the two curves run parallel all the way round (concentric
+     corners) — a sticky's corner hugs its corner button. */
+  --edge: 6px;
+  --sticker-radius: calc(var(--btn-radius) + var(--edge));
+  --sticky-radius: calc(var(--btn-radius) + var(--edge));
+  /* Balloons cast a short, tight shadow, like a sticker lying flat. */
+  --sticker-shadow: 0 1px 2px rgba(0, 0, 0, 0.14), 0 3px 8px rgba(0, 0, 0, 0.16);
 }
 
 /* Phones: sized so the 11-button formatting toolbar spans the screen exactly
-   (4px padding each side, 2px between), and every other button matches it. */
+   (--edge each side, 2px between), and every other button matches it. */
 @media (max-width: 700px) {
   :root {
     /* Sticky windows are narrow too, hence the low floor. */
-    --btn: clamp(24px, calc((100vw - 28px) / 11), 40px);
+    --btn: clamp(24px, calc((100vw - 2 * var(--edge) - 20px) / 11), 40px);
   }
 }
 
