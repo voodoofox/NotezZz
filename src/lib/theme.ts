@@ -249,27 +249,28 @@ export function fadeGradient(edge: 'bottom' | 'top', f: Fade, curve: number, spr
 }
 
 /**
- * Paper grain: fine, slightly stretched speckle over soft larger mottling,
- * as a neutral grey tile laid on with hard-light (see the note's
- * background-blend-mode): 50% grey changes nothing, lighter specks lighten
- * the note's colour and darker ones darken it, so the grain never greys the
- * colour out and shows on black too. `opacity` is the layer's strength.
- * Each turbulence is reduced to one opaque grey channel first: its own
- * alpha would otherwise premultiply the noise and darken the result.
+ * Grain: an even, seamlessly tiling texture of small soft clumps (two fine
+ * noise scales, nothing coarse, so it never reads as stains), as a neutral
+ * grey tile laid on with hard-light (see the note's background-blend-mode):
+ * 50% grey changes nothing, lighter specks lighten the note's colour and
+ * darker ones darken it, so the grain never greys the colour out and shows
+ * on black too. `opacity` is the layer's strength. Each turbulence is
+ * reduced to one opaque grey channel first: its own alpha would otherwise
+ * premultiply the noise and darken the result.
  */
 export function grainImage(opacity: number): string {
   if (opacity <= 0) return 'none';
   const grey = (name: string) =>
     `<feColorMatrix type='matrix' values='1 0 0 0 0  1 0 0 0 0  1 0 0 0 0  0 0 0 0 1' result='${name}'/>`;
-  const fn = (c: string) => `<feFunc${c} type='linear' slope='2.4' intercept='-0.7'/>`;
+  const fn = (c: string) => `<feFunc${c} type='linear' slope='2.6' intercept='-0.8'/>`;
   const svg =
-    `<svg xmlns='http://www.w3.org/2000/svg' width='360' height='360'>` +
-    `<filter id='p' x='0' y='0' width='100%' height='100%' color-interpolation-filters='sRGB'>` +
-    `<feTurbulence type='fractalNoise' baseFrequency='0.9 0.6' numOctaves='3' seed='4' stitchTiles='stitch'/>${grey('fine')}` +
-    `<feTurbulence type='fractalNoise' baseFrequency='0.03' numOctaves='4' seed='9' stitchTiles='stitch'/>${grey('soft')}` +
-    `<feComposite in='fine' in2='soft' operator='arithmetic' k1='0' k2='0.75' k3='0.45' k4='-0.1'/>` +
+    `<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'>` +
+    `<filter id='g' x='0' y='0' width='100%' height='100%' color-interpolation-filters='sRGB'>` +
+    `<feTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='2' seed='3' stitchTiles='stitch'/>${grey('a')}` +
+    `<feTurbulence type='fractalNoise' baseFrequency='0.4' numOctaves='2' seed='8' stitchTiles='stitch'/>${grey('b')}` +
+    `<feComposite in='a' in2='b' operator='arithmetic' k1='0' k2='0.6' k3='0.5' k4='-0.05'/>` +
     `<feComponentTransfer>${fn('R')}${fn('G')}${fn('B')}<feFuncA type='linear' slope='0' intercept='${opacity.toFixed(3)}'/></feComponentTransfer>` +
-    `</filter><rect width='100%' height='100%' filter='url(#p)'/></svg>`;
+    `</filter><rect width='100%' height='100%' filter='url(#g)'/></svg>`;
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
