@@ -6,6 +6,7 @@
   import { downscaleImage } from '$lib/image';
   import Icon from './Icon.svelte';
   import Modal from './Modal.svelte';
+  import { luminance } from '$lib/theme';
 
   interface Props {
     onDone: (svgDataUrl: string | null) => void;
@@ -205,7 +206,12 @@
           aria-label="Ink color: {colorName(c)}"
           title={colorName(c)}
           onclick={() => (color = c)}
-        ></button>
+        >
+          {#if c === color}
+            <!-- The chosen ink: a check, as in the note colour picker. -->
+            <span class="tick" style="color: {luminance(c) > 0.4 ? '#1f2328' : '#ffffff'}"><Icon name="check" /></span>
+          {/if}
+        </button>
       {/each}
     </div>
     <div class="sizes">
@@ -334,24 +340,26 @@
     gap: var(--btn-gap);
   }
   .swatches {
-    gap: 8px;
+    gap: var(--btn-gap);
   }
-  /* Every swatch carries a faint ring, so black shows on the dark bar and
-     white on the light one; the chosen one gets a full ring. */
+  /* Swatches are buttons: the same rounded square and size as every other.
+     A faint inner edge keeps black visible on the dark bar and white on
+     the light one; the chosen ink carries a check. */
   .dot {
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
+    width: var(--btn);
+    height: var(--btn);
+    border-radius: var(--btn-radius);
     border: none;
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-fg) 30%, transparent);
     cursor: pointer;
     padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
   }
-  .dot.sel {
-    box-shadow:
-      inset 0 0 0 1px color-mix(in srgb, var(--app-fg) 30%, transparent),
-      0 0 0 2px var(--app-panel),
-      0 0 0 4px var(--app-fg);
+  .tick {
+    display: inline-flex;
   }
   .sz {
     width: var(--btn);
@@ -435,28 +443,11 @@
     .bar::-webkit-scrollbar {
       display: none;
     }
-    .swatches {
-      gap: 5px;
-    }
-    .dot {
-      width: 22px;
-      height: 22px;
-    }
-    .sizes {
-      gap: 4px;
-    }
-    .sz {
-      width: 30px;
-      height: 30px;
-    }
+    /* Every button keeps the standard size: the bar wraps to a second row
+       rather than shrinking them (they were 22-32px when it had one row). */
     .tools,
     .ops {
-      gap: 4px;
       margin-left: 0;
-    }
-    .op {
-      width: 32px;
-      height: 30px;
     }
   }
   .actions {

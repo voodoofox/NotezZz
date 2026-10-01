@@ -2156,3 +2156,28 @@ test("in the note's ⋯ menu, Redo sits beneath Undo", async ({ page }) => {
   expect(Math.round(r!.x)).toBe(Math.round(u!.x));
   expect(r!.y).toBeGreaterThan(u!.y + u!.height - 1);
 });
+
+test('draw pad swatches are buttons: same size and corner, the chosen one checked', async ({ page }) => {
+  await page.setViewportSize({ width: 412, height: 915 }); // the phone layout had its own, smaller sizes
+  await createNote(page);
+  await page.getByTestId('fmt-draw').click();
+  const dots = page.locator('.pad .dot');
+  const [d, sz, op] = await Promise.all([
+    dots.first().boundingBox(),
+    page.locator('.pad .sz').first().boundingBox(),
+    page.getByTestId('tool-pen').boundingBox(),
+  ]);
+  const btn = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.pad .op')!).width));
+  for (const b of [d, sz, op]) {
+    expect(Math.abs(b!.width - btn)).toBeLessThan(0.5);
+    expect(Math.abs(b!.height - btn)).toBeLessThan(0.5);
+  }
+  expect(btn).toBeGreaterThan(33); // --btn on a 412px phone, not the old 22-32px
+  const r = await dots.first().evaluate((el) => parseFloat(getComputedStyle(el).borderTopLeftRadius) / el.getBoundingClientRect().width);
+  expect(r).toBeGreaterThan(0.2);
+  expect(r).toBeLessThan(0.27);
+  await expect(page.locator('.pad .dot[aria-pressed="true"] svg')).toHaveCount(1);
+  await dots.nth(2).click();
+  await expect(dots.nth(2).locator('svg')).toHaveCount(1);
+  await expect(page.locator('.pad .dot svg')).toHaveCount(1);
+});
