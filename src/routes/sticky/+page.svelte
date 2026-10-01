@@ -532,6 +532,7 @@
     background-color: color-mix(in srgb, var(--note-header) var(--note-header-mix), transparent);
     --pat-base: color-mix(in srgb, var(--note-header) var(--note-header-mix), transparent);
     --pat-ink: color-mix(in srgb, var(--note-ink) var(--note-pat-mix), transparent);
+    box-shadow: var(--note-strip); /* the adhesive tint */
     cursor: move;
     user-select: none;
   }

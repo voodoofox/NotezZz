@@ -32,6 +32,9 @@ export interface ThemeDef {
     grain: number;
     /** The title strip's opacity, 0..1 (1 = a solid band of the header colour). */
     header: number;
+    /** The adhesive: a tint laid over the title strip (black darkens it on
+     *  any note colour, light or dark). Strength 0 = none. */
+    strip: { color: string; strength: number };
     /** The formatting bar's background, 0..1 (0 = just the buttons). */
     toolbar: number;
   };
@@ -51,6 +54,7 @@ const FLAT_NOTE: ThemeDef['note'] = {
   curve: 4,
   grain: 0,
   header: 1,
+  strip: { color: '#000000', strength: 0 },
   toolbar: 1,
 };
 const LOGO_BUTTONS: ThemeDef['buttons'] = { corner: 0.235, edge: 6, gap: 2 };
@@ -64,8 +68,9 @@ export const BUILTIN_THEMES: ThemeDef[] = [
       light: { color: '#ffffff', strength: 0.5, reach: 0.4 },
       shade: { color: '#000000', strength: 0.16, reach: 0.4 },
       curve: 4,
-      grain: 0.1,
+      grain: 0.2,
       header: 0.1,
+      strip: { color: '#000000', strength: 0.1 },
       toolbar: 0,
     },
     buttons: { ...LOGO_BUTTONS },
@@ -160,6 +165,10 @@ export function normalizeTheme(raw: unknown, id: string): ThemeDef {
       curve: clamp(n.curve, 0, 8, FLAT_NOTE.curve),
       grain: clamp(n.grain, 0, 0.5, FLAT_NOTE.grain),
       header: clamp(n.header, 0, 1, FLAT_NOTE.header),
+      strip: {
+        color: hex(obj(n.strip).color, FLAT_NOTE.strip.color),
+        strength: clamp(obj(n.strip).strength, 0, 1, FLAT_NOTE.strip.strength),
+      },
       toolbar: clamp(n.toolbar, 0, 1, FLAT_NOTE.toolbar),
     },
     buttons: {
@@ -210,6 +219,12 @@ export function grainImage(opacity: number): string {
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 
+function stripShadow(s: { color: string; strength: number }): string {
+  if (s.strength <= 0) return 'none';
+  const [r, g, b] = rgb(s.color);
+  return `inset 0 0 0 100vmax rgba(${r}, ${g}, ${b}, ${s.strength.toFixed(3)})`;
+}
+
 /** The custom properties a theme sets on the document root. */
 export function themeVars(t: ThemeDef): Record<string, string> {
   const n = t.note;
@@ -218,6 +233,9 @@ export function themeVars(t: ThemeDef): Record<string, string> {
     '--note-shade': fadeGradient('to bottom', n.shade, n.curve),
     '--note-grain': grainImage(n.grain),
     '--note-header-mix': pct(n.header),
+    // Painted as an inset shadow, so it lies over the strip's colour AND any
+    // pattern on it (both are background) and under the title and buttons.
+    '--note-strip': stripShadow(n.strip),
     // Pattern pixels on a faint strip stay a little stronger than the strip.
     '--note-pat-mix': pct(Math.min(1, n.header + 0.25)),
     '--note-chin-mix': pct(n.toolbar),
