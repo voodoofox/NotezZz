@@ -22,7 +22,22 @@
   --app-danger: #e0245e; /* semantic error color (text only) */
   --radius-sm: 4px; /* buttons, inputs, chips */
   --radius-md: 5px; /* larger buttons, pills, sliders */
-  --radius-lg: 6px; /* cards, panels, popovers, sticky windows */
+  --radius-lg: 6px; /* cards, panels, sticky windows */
+  /* Buttons follow the logo: one size everywhere, corners rounded like the
+     logo's squares (23.5% of the side), 2px apart. Balloons (popovers and
+     menus) are small stickers, rounded the same way at twice the corner. */
+  --btn: 32px;
+  --btn-gap: 2px;
+  --btn-radius: calc(var(--btn) * 0.235);
+  --sticker-radius: calc(var(--btn) * 0.47);
+}
+
+/* Phones: sized so the 11-button formatting toolbar spans the screen exactly
+   (4px padding each side, 2px between), and every other button matches it. */
+@media (max-width: 700px) {
+  :root {
+    --btn: clamp(30px, calc((100vw - 28px) / 11), 40px);
+  }
 }
 
 :root[data-theme='dark'] {

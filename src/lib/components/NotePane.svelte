@@ -43,14 +43,21 @@
   let moreWrap = $state<HTMLElement | null>(null);
   let popEl = $state<HTMLElement | null>(null);
 
-  const popWidth = (which: Pop) =>
-    which === 'pal' ? 226 : which === 'size' ? (desktop ? 168 : 100) : which === 'remind' ? 250 : 236;
+  /** Three buttons and the two gaps between them, measured off a real button. */
+  const threeButtons = (a: HTMLElement) => {
+    // getBoundingClientRect, not offsetWidth: on phones the size is fractional.
+    const btn = (a.querySelector('button') ?? a).getBoundingClientRect().width;
+    return btn * 3 + 2 * 2;
+  };
+  const popWidth = (which: Pop, a: HTMLElement) =>
+    which === 'pal' ? 226 : which === 'size' ? threeButtons(a) : which === 'remind' ? 250 : 236;
 
   function togglePop(which: Pop, anchor?: HTMLElement | null) {
     if (openPop === which) return void (openPop = null);
     const a =
       anchor ?? (which === 'pal' ? palWrap : which === 'size' ? sizeWrapEl : which === 'remind' ? remindWrap : moreWrap);
-    if (a) popStyle = popoverStyle(a, popWidth(which));
+    // Whatever opens from the ⋯ button (the bar's last) lines up with its right edge.
+    if (a) popStyle = popoverStyle(a, popWidth(which, a), a === moreWrap ? 'end' : 'center');
     openPop = which;
   }
 
@@ -244,18 +251,19 @@
         onclick={() => store.update(note!.id, { pinned: !note!.pinned })}
       ><Icon name="pin" /></button>
 
+      {#if note.pinned}
+        <button
+          class="icon"
+          data-testid="pane-tuck"
+          class:on={!!note.tucked}
+          aria-pressed={!!note.tucked}
+          title={tuckTitle(note.tucked)}
+          aria-label={tuckTitle(note.tucked)}
+          onclick={() => store.update(note!.id, { tucked: !note!.tucked })}
+        ><Icon name={note.tucked ? 'untuck' : 'tuck'} /></button>
+      {/if}
+
       {#if !narrow.current}
-        {#if note.pinned}
-          <button
-            class="icon"
-            data-testid="pane-tuck"
-            class:on={!!note.tucked}
-            aria-pressed={!!note.tucked}
-            title={tuckTitle(note.tucked)}
-            aria-label={tuckTitle(note.tucked)}
-            onclick={() => store.update(note!.id, { tucked: !note!.tucked })}
-          ><Icon name={note.tucked ? 'untuck' : 'tuck'} /></button>
-        {/if}
         <button
           class="icon"
           data-testid="note-archive"
@@ -372,18 +380,6 @@
                 <Icon name="alarm" /><span>{note.remindAt ? 'Reminder' : 'Remind me'}</span>
                 {#if note.remindAt}<span class="mv">{fmtWhen(note.remindAt)}</span>{/if}
               </button>
-              {#if note.pinned}
-                <button
-                  class="mi"
-                  role="menuitemcheckbox"
-                  data-testid="menu-tuck"
-                  aria-checked={!!note.tucked}
-                  onclick={() => {
-                    store.update(note!.id, { tucked: !note!.tucked });
-                    openPop = null;
-                  }}
-                ><Icon name={note.tucked ? 'untuck' : 'tuck'} /><span>{tuckTitle(note.tucked)}</span></button>
-              {/if}
               <button class="mi" role="menuitem" data-testid="menu-archive" onclick={toggleArchive}>
                 <Icon name={note.archived ? 'unarchive' : 'archive'} />
                 <span>{note.archived ? 'Move back to notes' : 'Archive'}</span>
@@ -452,8 +448,7 @@
   .topbar {
     display: flex;
     align-items: center;
-    /* Same rhythm as the formatting toolbar: equal buttons, 3px apart. */
-    gap: 3px;
+    gap: var(--btn-gap);
     padding: 5px 8px 5px 12px; /* left matches the list */
     /* -color, not the shorthand: the shorthand would wipe a pattern's background-image */
     background-color: var(--note-header);
@@ -482,10 +477,10 @@
     border: none;
     background: transparent;
     color: var(--note-fg);
-    height: 30px;
-    min-width: 32px;
-    padding: 0 8px;
-    border-radius: var(--radius-sm);
+    width: var(--btn);
+    height: var(--btn);
+    padding: 0;
+    border-radius: var(--btn-radius);
     cursor: pointer;
     display: inline-flex;
     align-items: center;
@@ -516,14 +511,8 @@
     .mob {
       display: inline-flex;
     }
-    /* Phone: the toolbar's 42px touch targets, edge to edge. */
     .topbar {
-      gap: 0;
       padding: 4px;
-    }
-    .icon {
-      height: 42px;
-      min-width: 42px;
     }
     .pane {
       height: 70%;
@@ -545,11 +534,12 @@
     display: contents;
   }
   /* Popovers are fixed-positioned via inline style (see popoverStyle). */
+  /* Balloons are small stickers. */
   .pop {
     background: var(--app-panel);
     color: var(--app-fg);
     border: 1px solid var(--app-border);
-    border-radius: var(--radius-lg);
+    border-radius: var(--sticker-radius);
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
   }
   .remind {
@@ -615,32 +605,39 @@
   }
   /* Text size (and, on the PC, sticker opacity): vertical sliders, low at
      the bottom, the value on top. */
+  /* The text-size sticker is cut from the note itself: same colour, no
+     edge, no shadow, so only the slider shows. Three buttons wide (set
+     inline), 30% shorter than it was. */
   .sizepanel {
     flex-direction: row;
     justify-content: center;
-    gap: 20px;
-    padding: 14px 10px 12px;
+    gap: 6px;
+    padding: 10px 0 8px;
+    background: var(--note-bg);
+    color: var(--note-fg);
+    border: none;
+    box-shadow: none;
   }
   .vctl {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
-    color: var(--app-muted);
+    font-size: 11px;
+    color: color-mix(in srgb, var(--note-fg) 70%, transparent);
   }
   .vval {
     font-size: 16px;
-    color: var(--app-fg);
+    color: var(--note-fg);
     font-variant-numeric: tabular-nums;
   }
   .vrange {
     writing-mode: vertical-lr;
     direction: rtl;
-    width: 30px;
-    height: 180px;
+    width: 28px;
+    height: 100px;
     margin: 0;
-    accent-color: var(--app-fg);
+    accent-color: var(--note-fg);
   }
   /* The ⋯ menu on phones. */
   .menu {
@@ -658,7 +655,7 @@
     text-align: left;
     padding: 10px 12px;
     border: none;
-    border-radius: var(--radius-md);
+    border-radius: var(--btn-radius);
     background: transparent;
     color: var(--app-fg);
     cursor: pointer;

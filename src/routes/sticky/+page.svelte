@@ -489,7 +489,7 @@
   .bar {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--btn-gap);
     padding: 4px 6px 4px 10px;
     /* -color, not the shorthand: the shorthand would wipe a pattern's background-image */
     background-color: var(--note-header);
@@ -522,12 +522,15 @@
     border: none;
     background: transparent;
     color: var(--note-fg);
-    opacity: 0.55;
     cursor: pointer;
-    padding: 3px 6px;
-    border-radius: var(--radius-sm);
+    width: var(--btn);
+    height: var(--btn);
+    padding: 0;
+    border-radius: var(--btn-radius);
     display: inline-flex;
     align-items: center;
+    justify-content: center;
+    flex: none;
   }
   .x.on {
     opacity: 1;

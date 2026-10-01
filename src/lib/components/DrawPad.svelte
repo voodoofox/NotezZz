@@ -323,6 +323,9 @@
   .ops {
     display: flex;
     align-items: center;
+    gap: var(--btn-gap);
+  }
+  .swatches {
     gap: 8px;
   }
   .dot {
@@ -338,10 +341,10 @@
     outline-offset: 2px;
   }
   .sz {
-    width: 34px;
-    height: 34px;
+    width: var(--btn);
+    height: var(--btn);
     border: 1px solid var(--app-border);
-    border-radius: var(--radius-sm);
+    border-radius: var(--btn-radius);
     background: var(--app-bg);
     display: inline-flex;
     align-items: center;
@@ -359,14 +362,14 @@
   }
   .tools {
     display: flex;
-    gap: 8px;
+    gap: var(--btn-gap);
     margin-left: auto;
   }
   .op {
-    width: 40px;
-    height: 36px;
+    width: var(--btn);
+    height: var(--btn);
     border: 1px solid var(--app-border);
-    border-radius: var(--radius-sm);
+    border-radius: var(--btn-radius);
     background: var(--app-bg);
     color: var(--app-fg);
     cursor: pointer;

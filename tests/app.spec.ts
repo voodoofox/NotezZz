@@ -1335,3 +1335,60 @@ test.describe('touch phone', () => {
     expect(await scroller.evaluate((el) => el.scrollTop)).toBeLessThan(40);
   });
 });
+
+test.describe("phone: the logo's design rules", () => {
+  test.use({ viewport: { width: 400, height: 800 } });
+
+  test('every button is the same rounded square, 2px from its neighbour', async ({ page }) => {
+    await page.getByTestId('new-note').click();
+    await page.getByTestId('pane-pin').click(); // brings the tuck button into the bar
+    const ids = ['pane-pin', 'pane-tuck', 'note-more', 'fmt-bold', 'fmt-record', 'new-note', 'search-toggle'];
+    const boxes = await Promise.all(ids.map((id) => page.getByTestId(id).boundingBox()));
+    const w = Math.round(boxes[0]!.width);
+    for (const [i, b] of boxes.entries()) {
+      expect(Math.round(b!.width), ids[i]).toBe(w);
+      expect(Math.round(b!.height), ids[i]).toBe(w);
+    }
+    // 2px apart in the header.
+    const [pin, tuck, more] = boxes;
+    expect(Math.round(tuck!.x - (pin!.x + pin!.width))).toBe(2);
+    expect(Math.round(more!.x - (tuck!.x + tuck!.width))).toBe(2);
+    // Corners rounded like the logo's squares: 23.5% of the side.
+    const radius = await page.getByTestId('pane-pin').evaluate((el) => parseFloat(getComputedStyle(el).borderTopLeftRadius));
+    expect(radius / w).toBeGreaterThan(0.2);
+    expect(radius / w).toBeLessThan(0.27);
+    // The formatting toolbar's 11 buttons fit the screen exactly.
+    const mic = boxes[4]!;
+    expect(mic.x + mic.width).toBeLessThanOrEqual(400);
+    expect(mic.x + mic.width).toBeGreaterThan(390);
+  });
+
+  test('the ⋯ menu lines up with the right edge of its button', async ({ page }) => {
+    await page.getByTestId('new-note').click();
+    await page.getByTestId('note-more').click();
+    const more = (await page.getByTestId('note-more').boundingBox())!;
+    const menu = (await page.getByTestId('note-menu').boundingBox())!;
+    expect(Math.round(menu.x + menu.width)).toBe(Math.round(more.x + more.width));
+    await expect(page.getByTestId('menu-tuck')).toHaveCount(0); // tuck is in the bar, not here
+  });
+
+  test("the text-size sticker is three buttons wide, in the note's own colour", async ({ page }) => {
+    await page.getByTestId('new-note').click();
+    await page.getByTestId('note-more').click();
+    await page.getByTestId('menu-size').click();
+    const panel = page.locator('.sizepanel');
+    const box = (await panel.boundingBox())!;
+    const btn = (await page.getByTestId('note-more').boundingBox())!;
+    expect(Math.round(box.width)).toBe(Math.round(btn.width * 3 + 4));
+    expect(Math.round(box.x + box.width)).toBe(Math.round(btn.x + btn.width));
+    expect(box.height).toBeLessThan(190); // 30% shorter than the 264px it was
+    const [panelBg, noteBg] = await Promise.all([
+      panel.evaluate((el) => getComputedStyle(el).backgroundColor),
+      page.getByTestId('note-pane').evaluate((el) => getComputedStyle(el).backgroundColor),
+    ]);
+    expect(panelBg).toBe(noteBg);
+    // The slider sits in the middle of it.
+    const slider = (await page.getByTestId('size-slider').boundingBox())!;
+    expect(Math.abs(slider.x + slider.width / 2 - (box.x + box.width / 2))).toBeLessThan(2);
+  });
+});

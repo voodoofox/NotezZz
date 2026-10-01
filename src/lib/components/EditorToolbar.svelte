@@ -194,7 +194,7 @@
   .toolbar {
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: var(--btn-gap);
     padding: 5px 8px;
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -213,10 +213,10 @@
     color: var(--note-fg);
     background: transparent;
     border: none;
-    border-radius: var(--radius-sm);
-    min-width: 32px;
-    height: 30px;
-    padding: 0 8px;
+    border-radius: var(--btn-radius);
+    width: var(--btn);
+    height: var(--btn);
+    padding: 0;
     cursor: pointer;
     line-height: 1;
     flex-shrink: 0;
@@ -246,7 +246,7 @@
     padding: 10px;
     background: var(--app-panel);
     border: 1px solid var(--app-border);
-    border-radius: var(--radius-md);
+    border-radius: var(--sticker-radius);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
   }
   .sopt {
@@ -275,8 +275,11 @@
     background: color-mix(in srgb, var(--note-fg) 16%, transparent);
     flex-shrink: 0;
   }
-  /* Recording state: semantic red dot allowed (functional, not decorative). */
+  /* Recording state: semantic red dot allowed (functional, not decorative).
+     It also shows the seconds, so it may grow past one button. */
   .rec.recording {
+    width: auto;
+    padding: 0 8px;
     background: var(--app-danger);
     color: #fff;
   }
@@ -294,20 +297,7 @@
       order: 2;
       border-bottom: none;
       border-top: 1px solid color-mix(in srgb, var(--note-fg) 10%, transparent);
-      gap: 0;
       padding: 4px 4px calc(4px + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)));
-    }
-    .toolbar button {
-      flex: 1 1 0;
-      min-width: 0;
-      height: 42px;
-    }
-    .sizewrap {
-      flex: 1 1 0;
-      min-width: 0;
-    }
-    .sizewrap button {
-      width: 100%;
     }
     .sep {
       display: none;

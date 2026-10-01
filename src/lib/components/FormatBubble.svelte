@@ -57,9 +57,9 @@
     z-index: 40;
     display: flex;
     align-items: center;
-    gap: 2px;
-    padding: 4px 6px;
-    border-radius: var(--radius-md); /* squared-with-rounded-edges, matching the buttons */
+    gap: var(--btn-gap);
+    padding: 4px;
+    border-radius: var(--sticker-radius); /* a small sticker, like every balloon */
     background: var(--app-fg);
     color: var(--app-bg);
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
@@ -68,9 +68,9 @@
     border: none;
     background: transparent;
     color: inherit;
-    min-width: 32px;
-    height: 32px;
-    border-radius: var(--radius-sm);
+    min-width: var(--btn);
+    height: var(--btn);
+    border-radius: var(--btn-radius);
     cursor: pointer;
     display: inline-flex;
     align-items: center;

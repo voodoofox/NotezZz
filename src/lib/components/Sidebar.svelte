@@ -181,12 +181,12 @@
         onclick={toggleSearch}
         title="Search notes"
         aria-label="Search notes"
-      ><Icon name="search" size={18} /></button>
+      ><Icon name="search" /></button>
       <button class="ico" data-testid="open-settings" onclick={() => (showSettings = true)} title="Settings" aria-label="Settings">
-        <Icon name="settings" size={18} />
+        <Icon name="settings" />
       </button>
       <button class="new" data-testid="new-note" onclick={() => store.create()} title="New note" aria-label="New note">
-        <Icon name="add" size={19} />
+        <Icon name="add" />
       </button>
     </div>
   </div>
@@ -334,15 +334,15 @@
   }
   .head-actions {
     display: flex;
-    gap: 6px;
+    gap: var(--btn-gap);
   }
   .new,
   .ico {
-    width: 28px;
-    height: 28px;
+    width: var(--btn);
+    height: var(--btn);
     font-size: 18px;
     border: 1px solid var(--app-border);
-    border-radius: var(--radius-sm);
+    border-radius: var(--btn-radius);
     background: var(--app-bg);
     color: var(--app-fg);
     cursor: pointer;
@@ -465,10 +465,19 @@
     background: transparent;
     color: var(--app-fg);
     cursor: pointer;
-    padding: 0 12px 0 8px;
+    width: var(--btn);
+    height: var(--btn);
+    align-self: center;
+    flex: none;
+    padding: 0;
+    border-radius: var(--btn-radius);
     opacity: 0.3;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
+  }
+  .pin:last-child {
+    margin-right: 4px;
   }
   .pin:hover {
     opacity: 0.7;
