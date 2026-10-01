@@ -337,7 +337,7 @@
             </div>
           {:else if openPop === 'more'}
             <div class="pop menu" role="menu" style={popStyle} data-testid="note-menu">
-              <!-- Undo / redo side by side; the menu stays open for another step. -->
+              <!-- Undo, then Redo beneath it; the menu stays open for another step. -->
               <div class="mrow">
                 <button
                   class="mi"
@@ -710,8 +710,8 @@
     background: transparent;
   }
   .mrow {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 2px;
   }
   .mi .mv {

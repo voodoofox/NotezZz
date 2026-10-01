@@ -2148,3 +2148,11 @@ test("a phone keyboard's Backspace (an input event, not a key) selects, then del
   await expect(page.locator('.ProseMirror')).toContainText('after');
 });
 
+
+test("in the note's ⋯ menu, Redo sits beneath Undo", async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('note-more').click();
+  const [u, r] = await Promise.all([page.getByTestId('menu-undo').boundingBox(), page.getByTestId('menu-redo').boundingBox()]);
+  expect(Math.round(r!.x)).toBe(Math.round(u!.x));
+  expect(r!.y).toBeGreaterThan(u!.y + u!.height - 1);
+});
