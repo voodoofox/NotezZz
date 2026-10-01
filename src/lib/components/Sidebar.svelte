@@ -138,6 +138,12 @@
   let listMaxH = $state(0);
   let listW = $state(0);
   let rowH = $state(0);
+  // More notes below the visible part: the list's bottom edge fades out.
+  let moreBelow = $state(false);
+  const checkMore = () => {
+    const el = listEl;
+    if (el) moreBelow = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+  };
 
   $effect(() => {
     const el = listEl;
@@ -146,6 +152,7 @@
       listH = el.clientHeight;
       listW = el.clientWidth;
       listMaxH = parseFloat(getComputedStyle(el).maxHeight) || 0; // 'none' beside the note
+      checkMore();
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -161,8 +168,10 @@
   // Row height, re-read when rows appear (the observer only sees the list box).
   $effect(() => {
     void visibleNotes.length;
+    void columns;
     const row = listEl?.querySelector<HTMLElement>('[data-testid="note-item"]');
     if (row && row.offsetHeight) rowH = row.offsetHeight;
+    checkMore(); // rows came or went, or moved into columns: the box may not have resized
   });
 
   let columns = $derived.by(() => {
@@ -215,8 +224,10 @@
 
   <div
     class="list cols-{columns}"
+    class:more-below={moreBelow}
     role="list"
     bind:this={listEl}
+    onscroll={checkMore}
     onpointermove={moveDrag}
     onpointerup={endDrag}
     onpointercancel={endDrag}
@@ -398,6 +409,27 @@
     flex: 1;
     overflow-y: auto;
     padding: 4px 0;
+  }
+  /* There is more below: a soft shade over the last half row, as if the
+     list ran on under the edge, so a cut-off row reads as "scroll" rather
+     than as a clipped layout. Gone once the end is in view. It sticks to
+     the bottom of what is visible and takes no room of its own; -4px
+     reaches through the list's bottom padding, so it meets the edge. */
+  .list.more-below::after {
+    content: '';
+    display: block;
+    grid-column: 1 / -1;
+    position: sticky;
+    bottom: -4px;
+    height: calc(var(--bar-h) / 2);
+    margin-top: calc(var(--bar-h) / -2);
+    pointer-events: none;
+    background: linear-gradient(
+      to bottom,
+      rgb(0 0 0 / 0),
+      rgb(0 0 0 / calc(var(--list-shade) / 4)) 45%,
+      rgb(0 0 0 / var(--list-shade))
+    );
   }
   /* Rows are full-bleed: selection and the color block run edge to edge. */
   .item {
@@ -614,6 +646,12 @@
        to that rather than being squeezed out of sight. */
     max-height: calc(0.3 * (100dvh - var(--safe-top, 0px)) - var(--btn) - 23px);
     min-height: calc(3 * var(--bar-h) + 8px);
+  }
+  /* While the list has more below (see .more-below), the line under it
+     takes the shade's darkest tone, so the shade runs right into the note.
+     After the rules above that draw the line, so it wins over them. */
+  .sidebar:has(> .list.more-below) {
+    border-bottom-color: color-mix(in srgb, #000 var(--list-shade), var(--app-panel));
   }
   /* Columns only make sense in the wide strip. Rows keep their full-bleed
      look inside each column; the grid supplies the columns. */

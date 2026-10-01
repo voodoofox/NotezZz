@@ -1753,3 +1753,19 @@ test('a list row is as tall as the formatting toolbar, on a phone and on a PC', 
     expect(Math.abs(h.row - h.bar)).toBeLessThan(0.5);
   }
 });
+
+test('a list with more below shades its bottom edge into the note; at the end it stops', async ({ page }) => {
+  await page.setViewportSize({ width: 412, height: 915 });
+  const list = page.locator('.list');
+  const line = () => page.locator('.sidebar').evaluate((el) => getComputedStyle(el).borderBottomColor);
+  await createNote(page);
+  await expect(list).not.toHaveClass(/more-below/); // one note: nothing to scroll
+  const plain = await line();
+  for (let i = 0; i < 7; i++) await createNote(page);
+  await expect(list).toHaveClass(/more-below/);
+  expect(await list.evaluate((el) => getComputedStyle(el, '::after').position)).toBe('sticky');
+  expect(await line()).not.toBe(plain); // the line under the list joins the shade
+  await list.evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await expect(list).not.toHaveClass(/more-below/);
+  expect(await line()).toBe(plain);
+});
