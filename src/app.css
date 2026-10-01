@@ -123,6 +123,12 @@ textarea {
   font-family: inherit;
 }
 
+/* No grey/blue flash on tap (Android's own highlight covered only part of
+   a list row): buttons show their own press state instead. */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* Scrollbars follow the surface they sit on rather than the OS default.
    Inside a note they inherit the note's ink; elsewhere, the app's. */
 * {

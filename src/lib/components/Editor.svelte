@@ -10,6 +10,7 @@
   import { TaskList, TaskItem } from '@tiptap/extension-list';
   import { FontSize } from '../editor/fontSize';
   import { AudioNote } from '../editor/audio';
+  import { AtomDelete } from '../editor/atomDelete';
   import { VoiceRecorder } from '../editor/recorder.svelte';
   import { BASE_FONT_PX } from '$lib/types';
   import DrawPad from './DrawPad.svelte';
@@ -135,6 +136,7 @@
         TextStyle,
         FontSize,
         AudioNote,
+        AtomDelete,
         Image.configure({ allowBase64: true }),
         TaskList,
         TaskItem.configure({ nested: true }),
@@ -204,6 +206,18 @@
     syncedHtml = next;
     editor.commands.setContent(next || '<p></p>', { emitUpdate: false });
   });
+
+  /** Undo / redo for the note's ⋯ menu. No focus: on a phone that would
+   *  bring the keyboard up just to take a word back. */
+  export function history(dir: 'undo' | 'redo') {
+    if (!editor || editor.isDestroyed) return;
+    if (dir === 'undo') editor.commands.undo();
+    else editor.commands.redo();
+  }
+  export function canHistory(dir: 'undo' | 'redo'): boolean {
+    if (!editor || editor.isDestroyed) return false;
+    return dir === 'undo' ? editor.can().undo() : editor.can().redo();
+  }
 </script>
 
 <div class="editor">
@@ -322,16 +336,33 @@
      note's own ink, so it reads as part of the note rather than a widget
      dropped into it. */
   .content :global(.nz-audio) {
+    position: relative;
+    isolation: isolate;
     display: flex;
     align-items: center;
     gap: 12px;
     max-width: 420px;
     margin: 10px 0;
     color: var(--note-fg);
-    border-radius: var(--btn-radius);
   }
-  /* Play: the same rounded square as every button, lightly filled so it
-     reads as one away from a bar. */
+  /* The play button's tile, drawn behind the player: one button wide at
+     rest; selected, it grows to the whole player (like a list row filling
+     from its colour bar). No outline. */
+  .content :global(.nz-audio::before) {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--btn);
+    z-index: -1;
+    border-radius: var(--btn-radius);
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    transition: width 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .content :global(.nz-audio.selected::before) {
+    width: 100%;
+  }
   .content :global(.nz-audio-play) {
     flex: none;
     width: var(--btn);
@@ -339,7 +370,7 @@
     padding: 0;
     border: none;
     border-radius: var(--btn-radius);
-    background: color-mix(in srgb, currentColor 10%, transparent);
+    background: transparent;
     color: inherit;
     cursor: pointer;
     display: inline-flex;
@@ -377,10 +408,32 @@
     opacity: 0.7;
     font-variant-numeric: tabular-nums;
   }
-  /* Selected (to move or delete it): a faint ring, not a frame. */
-  .content :global(.nz-audio.ProseMirror-selectednode) {
-    outline: 1.5px solid color-mix(in srgb, var(--note-fg) 14%, transparent);
-    outline-offset: 4px;
+  .content :global(.nz-audio-del) {
+    display: none;
+    flex: none;
+    width: var(--btn);
+    height: var(--btn);
+    margin-left: -6px; /* the time keeps its room; the button sits at the end */
+    padding: 0;
+    border: none;
+    border-radius: var(--btn-radius);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+  }
+  .content :global(.nz-audio.selected .nz-audio-del) {
+    display: inline-flex;
+  }
+  .content :global(.nz-audio-del:active),
+  .content :global(.nz-audio-del:hover) {
+    background: color-mix(in srgb, currentColor 14%, transparent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .content :global(.nz-audio::before) {
+      transition: none;
+    }
   }
 
   /* Links stay ink-colored — just underlined, no browser blue. */

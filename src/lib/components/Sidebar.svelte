@@ -530,19 +530,21 @@
   .searchrow {
     padding: 8px 10px 4px;
   }
+  /* Tinted like the app's buttons and fields, no outline. */
   .search {
     width: 100%;
     font: inherit;
     font-size: 15px;
-    padding: 7px 11px;
-    border: 1px solid var(--app-border);
-    border-radius: var(--radius-sm);
-    background: var(--app-bg);
+    min-height: var(--btn);
+    padding: 0 11px;
+    border: none;
+    border-radius: var(--btn-radius);
+    background: color-mix(in srgb, var(--app-fg) 7%, transparent);
     color: var(--app-fg);
     outline: none;
   }
   .search:focus {
-    border-color: var(--app-fg);
+    background: color-mix(in srgb, var(--app-fg) 11%, transparent);
   }
   /* The list and, over its bottom edge, the shade below. A box of its own
      so the shade spans the scrollbar too (inside the scrolling list it
@@ -570,7 +572,7 @@
   .thumb {
     position: absolute;
     right: 0;
-    z-index: 2;
+    z-index: auto; /* see the shade above */
     width: var(--edge);
     display: flex;
     justify-content: center;
@@ -609,7 +611,10 @@
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 1;
+    /* auto, not 1: a z-index here lifted it over the whole note (the note
+       is its own layer), full-screen draw pad included. Being after the
+       rows in the page is enough to sit over them. */
+    z-index: auto;
     height: calc(var(--bar-h) / 2);
     pointer-events: none;
     background: linear-gradient(
@@ -905,24 +910,17 @@
     width: 100%;
     height: auto;
     flex: none;
-    border-right: none;
-    border-bottom: 2px solid var(--app-border);
+    border-right: none; /* and no line below: the note's own title bar parts them */
   }
   :global(.app.stacked) > .sidebar .listbox,
   :global(.app.stacked) > .sidebar .list {
     flex: none;
     /* The header and the list together: at most 30% of the app's height
-       (the header is a bar, --bar-h tall; a 2px line below),
+       (the header is a bar, --bar-h tall),
        never under three rows. A search box or a sync/update banner adds
        to that rather than being squeezed out of sight. */
-    max-height: calc(0.3 * (100dvh - var(--safe-top, 0px)) - var(--bar-h) - 2px);
+    max-height: calc(0.3 * (100dvh - var(--safe-top, 0px)) - var(--bar-h));
     min-height: calc(3 * var(--bar-h));
-  }
-  /* While the list has more below (see .more-below), the line under it
-     takes the shade's darkest tone, so the shade runs right into the note.
-     After the rules above that draw the line, so it wins over them. */
-  .sidebar:has(> .listbox.more-below) {
-    border-bottom-color: color-mix(in srgb, #000 var(--list-shade), var(--app-panel));
   }
   /* Columns only make sense in the wide strip. Rows keep their full-bleed
      look inside each column; the grid supplies the columns. */
@@ -951,16 +949,15 @@
       height: auto;
       flex: none;
       border-right: none;
-      border-bottom: 2px solid var(--app-border);
     }
     .listbox,
     .list {
       flex: none;
       /* The header and the list together: at most 30% of the app's height
-         (the header is a bar, --bar-h tall; a 2px line below),
+         (the header is a bar, --bar-h tall),
          never under three rows. A search box or a sync/update banner adds
          to that rather than being squeezed out of sight. */
-      max-height: calc(0.3 * (100dvh - var(--safe-top, 0px)) - var(--bar-h) - 2px);
+      max-height: calc(0.3 * (100dvh - var(--safe-top, 0px)) - var(--bar-h));
       min-height: calc(3 * var(--bar-h));
     }
     :global(.note-open) > .sidebar {

@@ -142,6 +142,16 @@
     }, 250);
   }
 
+  // The size balloon: white, except for a light note in the dark theme,
+  // where it takes the ⋯ menu's dark panel and the slider the note's colour.
+  const balloonDark = $derived(!!note && !pal.dark && store.settings.appTheme === 'dark');
+
+  // The editor, for undo / redo from the ⋯ menu.
+  let edit = $state<{ history(dir: 'undo' | 'redo'): void; canHistory(dir: 'undo' | 'redo'): boolean } | undefined>();
+  let histTick = $state(0);
+  const canUndo = $derived.by(() => (void histTick, void openPop, edit?.canHistory('undo') ?? false));
+  const canRedo = $derived.by(() => (void histTick, void openPop, edit?.canHistory('redo') ?? false));
+
   function toggleArchive() {
     if (!note) return;
     openPop = null;
@@ -175,7 +185,8 @@
       --note-header: {pal.header};
       --note-fg: {pal.fg};
       --note-ink: {pal.ink ?? pal.fg};
-      --slider-ink: {inkOnWhite(pal.bg, pal.fg)};
+      --balloon: {balloonDark ? 'var(--app-panel)' : '#fff'};
+      --slider-ink: {balloonDark ? pal.bg : inkOnWhite(pal.bg, pal.fg)};
       --own-strip: {pal.dark ? 'var(--note-strip-dark)' : 'var(--note-strip)'};
       --pat-img: {pal.patternImage ?? 'none'};
       color-scheme: {pal.dark ? 'dark' : 'light'};
@@ -326,6 +337,29 @@
             </div>
           {:else if openPop === 'more'}
             <div class="pop menu" role="menu" style={popStyle} data-testid="note-menu">
+              <!-- Undo / redo side by side; the menu stays open for another step. -->
+              <div class="mrow">
+                <button
+                  class="mi"
+                  role="menuitem"
+                  data-testid="menu-undo"
+                  disabled={!canUndo}
+                  onclick={() => {
+                    edit?.history('undo');
+                    histTick++;
+                  }}
+                ><Icon name="undo" /><span>Undo</span></button>
+                <button
+                  class="mi"
+                  role="menuitem"
+                  data-testid="menu-redo"
+                  disabled={!canRedo}
+                  onclick={() => {
+                    edit?.history('redo');
+                    histTick++;
+                  }}
+                ><Icon name="redo" /><span>Redo</span></button>
+              </div>
               <button class="mi" role="menuitem" data-testid="menu-color" onclick={() => fromMenu('pal')}>
                 <Icon name="palette" /><span>Note color</span>
               </button>
@@ -360,6 +394,7 @@
     <div class="editorWrap">
       {#key note.id}
         <Editor
+          bind:this={edit}
           html={note.contentHtml}
           baseSize={note.fontSize}
           noteId={note.id}
@@ -638,7 +673,7 @@
     justify-content: center;
     gap: 6px;
     padding: 20px 0 18px;
-    background: #fff;
+    background: var(--balloon, #fff);
     --note-fg: var(--slider-ink);
     color: var(--slider-ink);
     border: none;
@@ -668,6 +703,16 @@
   .mi:hover,
   .mi:active {
     background: var(--app-bg);
+  }
+  .mi:disabled {
+    opacity: 0.4;
+    cursor: default;
+    background: transparent;
+  }
+  .mrow {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
   }
   .mi .mv {
     margin-left: auto;

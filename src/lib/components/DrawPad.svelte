@@ -27,6 +27,14 @@
   // design: the pad is remounted fresh on every open.
   // svelte-ignore state_referenced_locally
   const inkAtOpen = ink;
+  // Near-identical colours count as one: a dark note ink next to Black was
+  // two swatches nobody could tell apart.
+  const near = (a: string, b: string) => {
+    const p = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+    if (!/^#[0-9a-f]{6}$/i.test(a) || !/^#[0-9a-f]{6}$/i.test(b)) return a === b;
+    const [x, y] = [p(a), p(b)];
+    return Math.max(...x.map((v, i) => Math.abs(v - y[i]))) < 40;
+  };
   const COLORS = [
     ...(inkAtOpen ? [inkAtOpen] : []),
     '#1f2328',
@@ -35,7 +43,7 @@
     '#2f8fe0',
     '#2fa579',
     '#f2b705',
-  ].filter((c, i, a) => a.indexOf(c) === i);
+  ].filter((c, i, a) => a.findIndex((d) => near(c, d)) === i);
   const SIZES = [4, 8, 14];
   // Swatches need distinct names: six buttons all called "Ink color" are
   // indistinguishable to a screen reader.
@@ -328,17 +336,22 @@
   .swatches {
     gap: 8px;
   }
+  /* Every swatch carries a faint ring, so black shows on the dark bar and
+     white on the light one; the chosen one gets a full ring. */
   .dot {
     width: 26px;
     height: 26px;
     border-radius: 50%;
-    border: 2px solid transparent;
+    border: none;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-fg) 30%, transparent);
     cursor: pointer;
     padding: 0;
   }
   .dot.sel {
-    outline: 2px solid var(--app-fg);
-    outline-offset: 2px;
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--app-fg) 30%, transparent),
+      0 0 0 2px var(--app-panel),
+      0 0 0 4px var(--app-fg);
   }
   .sz {
     width: var(--btn);
@@ -358,6 +371,9 @@
   .sz span {
     border-radius: 50%;
     display: block;
+    /* The dot is drawn in the ink: a faint ring keeps a dark ink visible on
+       the dark bar (and white on the light one). */
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-fg) 30%, transparent);
   }
   .tools {
     display: flex;
@@ -405,12 +421,12 @@
       order: 2;
       border-bottom: none;
       border-top: 1px solid var(--app-border);
-      flex-wrap: nowrap;
+      /* Two rows when one doesn't fit (colours and sizes, then the tools),
+         rather than a row that scrolls Undo and Clear out of sight. */
+      flex-wrap: wrap;
       justify-content: space-between;
-      gap: 4px;
+      gap: 6px 4px;
       padding: 8px 8px;
-      overflow-x: auto;
-      scrollbar-width: none;
     }
     .actions {
       order: 3;

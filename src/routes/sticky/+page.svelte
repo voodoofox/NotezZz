@@ -367,7 +367,8 @@
       --note-ink: {pal.ink ?? pal.fg};
       --pat-img: {pal.patternImage ?? 'none'};
       --note-accent: {pal.accent};
-      --slider-ink: {inkOnWhite(pal.bg, pal.fg)};
+      --balloon: {!pal.dark && store.settings.appTheme === 'dark' ? 'var(--app-panel)' : '#fff'};
+      --slider-ink: {!pal.dark && store.settings.appTheme === 'dark' ? pal.bg : inkOnWhite(pal.bg, pal.fg)};
       --own-strip: {pal.dark ? 'var(--note-strip-dark)' : 'var(--note-strip)'};
     "
   >
@@ -676,7 +677,7 @@
     width: calc(var(--btn) * 3 + 4px);
     /* White, the slider in the note's colour (as in the app's balloon). */
     padding: 20px 0 18px;
-    background: #fff;
+    background: var(--balloon, #fff);
     --note-fg: var(--slider-ink);
     color: var(--slider-ink);
     border-radius: var(--sticker-radius);

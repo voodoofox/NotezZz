@@ -1678,7 +1678,7 @@ test('Daylight: light and shade meet three quarters down; grain on top, blended 
     return { size: s.backgroundSize, lightSize: b.backgroundSize, grainBlend: a.mixBlendMode };
   });
   expect(cs.size).toContain('75%'); // the shade, top to centre
-  expect(cs.lightSize).toContain('25%'); // the light, centre to bottom
+  expect(cs.lightSize).toContain('43.8%'); // the light: its quarter, reaching 75% further up
   expect(cs.grainBlend).toBe('hard-light');
 });
 
@@ -1784,10 +1784,9 @@ test('a list with more below shades its bottom edge into the note; at the end it
   });
   expect(shade.position).toBe('absolute');
   expect(Math.abs(shade.width - shade.box)).toBeLessThan(0.5);
-  expect(await line()).not.toBe(plain); // the line under the list joins the shade
   await page.locator('.list').evaluate((el) => (el.scrollTop = el.scrollHeight));
   await expect(list).not.toHaveClass(/more-below/);
-  expect(await line()).toBe(plain);
+  void plain;
 });
 
 test('the selected row fills with its note colour, grown out of the colour bar', async ({ page }) => {
@@ -2036,5 +2035,116 @@ test('the sticky header: add, pinned, tuck and ⋯ (colour and transparency insi
   await expect(page.getByTestId('sticky-opacity')).toBeVisible();
   await page.getByTestId('sticky-color').click();
   await expect(page.getByTestId('palette-chip').first()).toBeVisible();
+});
+
+test("undo and redo from the note's ⋯ menu", async ({ page }) => {
+  await createNote(page);
+  await typeInEditor(page, 'first');
+  await page.waitForTimeout(600); // a separate history step
+  await page.keyboard.type(' second');
+  await expect(page.locator('.ProseMirror')).toContainText('first second');
+  await page.getByTestId('note-more').click();
+  await page.getByTestId('menu-undo').click();
+  await expect(page.locator('.ProseMirror')).not.toContainText('second');
+  await expect(page.getByTestId('note-menu')).toBeVisible(); // stays open for another step
+  await page.getByTestId('menu-redo').click();
+  await expect(page.locator('.ProseMirror')).toContainText('first second');
+});
+
+test('no tap flash; a quiet search box; no line between list and note', async ({ page }) => {
+  await createNote(page);
+  expect(await page.getByTestId('note-pick').first().evaluate((el) => getComputedStyle(el).getPropertyValue('-webkit-tap-highlight-color'))).toBe('rgba(0, 0, 0, 0)');
+  await page.getByTestId('search-toggle').click();
+  const s = await page.locator('.search').evaluate((el) => getComputedStyle(el).borderTopStyle);
+  expect(s).toBe('none');
+  expect(await page.locator('.sidebar').evaluate((el) => getComputedStyle(el).borderBottomStyle)).toBe('none');
+});
+
+test('a voice memo: selected, its play tile fills the player and Delete appears', async ({ page }) => {
+  await createNote(page);
+  await page.waitForTimeout(500);
+  await page.evaluate(() => {
+    const k = Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!;
+    const n = JSON.parse(localStorage.getItem(k)!);
+    n.contentHtml = '<p>memo:</p><audio src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA="></audio><p>after</p>';
+    localStorage.setItem(k, JSON.stringify(n));
+  });
+  await page.goto('/?local');
+  const player = page.locator('.nz-audio');
+  await expect(player).toHaveCount(1);
+  const tile = () => player.evaluate((el) => parseFloat(getComputedStyle(el, '::before').width));
+  const btn = (await page.locator('.nz-audio-play').boundingBox())!.width;
+  expect(Math.abs((await tile()) - btn)).toBeLessThan(0.5);
+  await expect(page.locator('.nz-audio-del')).toBeHidden();
+  await player.locator('.nz-audio-time').click(); // tapping the player selects it
+  await expect(player).toHaveClass(/selected/);
+  await page.waitForTimeout(400);
+  expect(await player.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe('none');
+  expect(Math.abs((await tile()) - (await player.boundingBox())!.width)).toBeLessThan(1);
+  await page.locator('.nz-audio-del').click();
+  await expect(page.locator('.nz-audio')).toHaveCount(0);
+  await expect(page.locator('.ProseMirror')).toContainText('after');
+});
+
+test('the draw pad sits over everything, its swatches all visible, its bar never scrolls', async ({ page }) => {
+  await page.setViewportSize({ width: 412, height: 915 });
+  for (let i = 0; i < 9; i++) await page.getByTestId('new-note').click(); // a list long enough to shade
+  await expect(page.locator('.listbox')).toHaveClass(/more-below/);
+  await page.getByTestId('fmt-draw').click();
+  const surface = page.getByTestId('draw-surface');
+  await expect(surface).toBeVisible();
+  // Nothing from the list paints over the pad.
+  const shadeBox = (await page.locator('.listbox').boundingBox())!;
+  const topAt = await page.evaluate(([x, y]) => (document.elementFromPoint(x, y) as HTMLElement).closest('.pad') !== null, [200, shadeBox.y + shadeBox.height - 4]);
+  expect(topAt).toBe(true);
+  expect(await page.locator('.listbox').evaluate((el) => getComputedStyle(el, '::after').zIndex)).toBe('auto');
+  // Every swatch has a ring; the bar fits without scrolling.
+  const rings = await page.locator('.pad .dot').evaluateAll((els) => els.map((e) => getComputedStyle(e).boxShadow));
+  for (const r of rings) expect(r).toContain('inset');
+  const bar = await page.locator('.pad .bar').evaluate((el) => el.scrollWidth - el.clientWidth);
+  expect(bar).toBeLessThanOrEqual(1);
+});
+
+test('the size balloon: white on a dark note, the menu panel on a light note in the dark theme', async ({ page }) => {
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('set-theme').locator('[data-value="dark"]').click();
+  await page.getByTestId('settings-close').click();
+  await createNote(page);
+  const bg = async () => {
+    await menu(page, 'size');
+    const c = await page.locator('.sizepanel').evaluate((el) => getComputedStyle(el).backgroundColor);
+    await page.keyboard.press('Escape');
+    await page.mouse.click(5, 790);
+    return c;
+  };
+  expect(await bg()).not.toBe('rgb(255, 255, 255)'); // Paper is light: the dark panel
+  await menu(page, 'color');
+  await page.locator('[data-testid="palette-chip"][data-palette="black"]').click();
+  expect(await bg()).toBe('rgb(255, 255, 255)');
+});
+
+test("a phone keyboard's Backspace (an input event, not a key) selects, then deletes a voice memo", async ({ page }) => {
+  await createNote(page);
+  await page.waitForTimeout(500);
+  await page.evaluate(() => {
+    const k = Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!;
+    const n = JSON.parse(localStorage.getItem(k)!);
+    n.contentHtml = '<audio src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA="></audio><p>after</p>';
+    localStorage.setItem(k, JSON.stringify(n));
+  });
+  await page.goto('/?local');
+  await expect(page.locator('.nz-audio')).toHaveCount(1);
+  // Caret at the start of "after", as a tap would leave it.
+  await page.locator('.ProseMirror p').click({ position: { x: 1, y: 5 } });
+  await page.keyboard.press('Home');
+  const androidBackspace = () =>
+    page.locator('.ProseMirror').evaluate((el) =>
+      el.dispatchEvent(new InputEvent('beforeinput', { inputType: 'deleteContentBackward', bubbles: true, cancelable: true }))
+    );
+  await androidBackspace();
+  await expect(page.locator('.nz-audio')).toHaveClass(/selected/); // first press: selected
+  await androidBackspace();
+  await expect(page.locator('.nz-audio')).toHaveCount(0); // second: gone
+  await expect(page.locator('.ProseMirror')).toContainText('after');
 });
 

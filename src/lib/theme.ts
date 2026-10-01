@@ -85,13 +85,13 @@ export const BUILTIN_THEMES: ThemeDef[] = [
     name: 'Daylight',
     author: 'NotezZz',
     note: {
-      light: { color: '#ffffff', strength: 0.096, reach: 1 },
+      light: { color: '#ffffff', strength: 0.0768, reach: 1.75 },
       shade: { color: '#000000', strength: 0.16, reach: 1 },
       curve: 2.5,
       spread: 3.5,
       center: 0.75,
       lightOnDark: 1,
-      grain: 0.025,
+      grain: 0.02,
       header: 0.075,
       strip: { color: '#000000', strength: 0.075 },
       toolbar: 0,
@@ -147,7 +147,9 @@ function fade(v: unknown, base: Fade): Fade {
   return {
     color: hex(o.color, base.color),
     strength: clamp(o.strength, 0, 1, base.strength),
-    reach: clamp(o.reach, 0, 1, base.reach),
+    // Up to 2: past 1 the layer reaches beyond the centre into the other
+    // half (each still clear along its own edge, so no seam).
+    reach: clamp(o.reach, 0, 2, base.reach),
   };
 }
 
@@ -334,8 +336,8 @@ export function themeVars(t: ThemeDef): Record<string, string> {
     '--note-grain': grainImage(n.grain),
     '--note-light-on-dark': String(n.lightOnDark),
     // The shade paints the note down to the centre, the light from there on.
-    '--note-shade-size': `100% ${pct(n.center)}`,
-    '--note-light-size': `100% ${pct(1 - n.center)}`,
+    '--note-shade-size': `100% ${pct(n.center * Math.max(1, n.shade.reach))}`,
+    '--note-light-size': `100% ${pct((1 - n.center) * Math.max(1, n.light.reach))}`,
     '--note-header-mix': pct(n.header),
     // Painted as an inset shadow, so it lies over the strip's colour AND any
     // pattern on it (both are background) and under the title and buttons.

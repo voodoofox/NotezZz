@@ -51,7 +51,7 @@ export const AudioNote = Node.create({
    * note's ink. The <audio> element still does the work, just unseen.
    */
   addNodeView() {
-    return ({ node }) => {
+    return ({ node, getPos, editor }) => {
       const PLAY = 'M8 5v14l11-7z';
       const PAUSE = 'M6 19h4V5H6v14zm8-14v14h4V5h-4z';
       const fmt = (s: number) =>
@@ -86,7 +86,24 @@ export const AudioNote = Node.create({
       time.className = 'nz-audio-time';
       time.textContent = '0:00';
 
-      dom.append(button, track, time);
+      // Delete, shown while the player is selected: a phone has no keyboard
+      // up for Backspace when a memo is tapped, so this is the only way.
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'nz-audio-del';
+      del.setAttribute('aria-label', 'Delete voice memo');
+      del.title = 'Delete voice memo';
+      del.innerHTML =
+        '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
+      del.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const pos = typeof getPos === 'function' ? getPos() : undefined;
+        if (typeof pos !== 'number') return;
+        editor.chain().deleteRange({ from: pos, to: pos + node.nodeSize }).run();
+      });
+
+      dom.append(button, track, time, del);
 
       const audio = new Audio(node.attrs.src);
       audio.preload = 'metadata';
@@ -160,6 +177,10 @@ export const AudioNote = Node.create({
 
       return {
         dom,
+        // Selected: the play button's tile grows to the full player (as a
+        // list row fills from its colour bar) and Delete appears.
+        selectNode: () => dom.classList.add('selected'),
+        deselectNode: () => dom.classList.remove('selected'),
         // Atomic node: nothing inside is editable, so ignore mutations.
         ignoreMutation: () => true,
         destroy: () => {
