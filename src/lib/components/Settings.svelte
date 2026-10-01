@@ -38,11 +38,12 @@
     const v = themeVars(t);
     return (
       `background-color: #f0e7c2; background-image: ${v['--note-grain']}, ${v['--note-shade']};` +
-      'background-size: auto, 100% 50%; background-position: 0 0, center top; background-repeat: repeat, no-repeat;'
+      `background-size: auto, ${v['--note-shade-size']}; background-position: 0 0, center top;` +
+      'background-repeat: repeat, no-repeat; background-blend-mode: hard-light, normal;'
     );
   }
   const lightPreview = (t: ThemeDef) =>
-    `background-image: ${themeVars(t)['--note-light']}; background-size: 100% 50%; background-position: center bottom; background-repeat: no-repeat;`;
+    `background-image: ${themeVars(t)['--note-light']}; background-size: ${themeVars(t)['--note-light-size']}; background-position: center bottom; background-repeat: no-repeat;`;
 
   async function copyTheme() {
     const json = exportTheme(activeTheme);

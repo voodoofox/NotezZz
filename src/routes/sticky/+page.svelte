@@ -518,9 +518,10 @@
     flex-direction: column;
     background-color: var(--note-bg);
     background-image: var(--note-grain), var(--note-shade);
-    background-size: auto, 100% 50%;
+    background-size: auto, var(--note-shade-size);
     background-position: 0 0, center top;
     background-repeat: repeat, no-repeat;
+    background-blend-mode: hard-light, normal;
     color: var(--note-fg);
     border-radius: var(--sticky-radius);
     overflow: hidden;
@@ -535,7 +536,7 @@
     z-index: -1;
     pointer-events: none;
     background-image: var(--note-light);
-    background-size: 100% 50%;
+    background-size: var(--note-light-size);
     background-position: center bottom;
     background-repeat: no-repeat;
     /* Full on a white note, lightOnDark of it on a black one. */

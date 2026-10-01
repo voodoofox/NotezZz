@@ -1634,16 +1634,35 @@ test('the colour picker offers a completely black note', async ({ page }) => {
   expect(await page.getByTestId('title-input').evaluate((el) => getComputedStyle(el).color)).toBe('rgb(230, 232, 235)');
 });
 
-test('Daylight lights light notes more than dark ones', async ({ page }) => {
+test('Daylight lights every note the same; a theme can ease it off on dark ones', async ({ page }) => {
   await createNote(page);
   const lightOpacity = () =>
     page.getByTestId('note-pane').evaluate((el) => +getComputedStyle(el, '::before').opacity);
-  await menu(page, 'color');
-  await page.locator('[data-testid="palette-chip"][data-palette="sunflower"]').click();
-  const light = await lightOpacity();
-  await menu(page, 'color');
-  await page.locator('[data-testid="palette-chip"][data-palette="black"]').click();
-  const dark = await lightOpacity();
-  expect(dark).toBeCloseTo(0.5, 2); // lightOnDark
-  expect(light).toBeGreaterThan(0.85);
+  const pick = async (pal: string) => {
+    await menu(page, 'color');
+    await page.locator(`[data-testid="palette-chip"][data-palette="${pal}"]`).click();
+  };
+  await pick('sunflower');
+  expect(await lightOpacity()).toBeCloseTo(1, 2);
+  await pick('black');
+  expect(await lightOpacity()).toBeCloseTo(1, 2);
+  // lightOnDark < 1: a black note gets that share of the light.
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('theme-import-toggle').click();
+  await page.getByTestId('theme-json').fill('{"note":{"light":{"strength":0.2},"lightOnDark":0.5}}');
+  await page.getByTestId('theme-add').click();
+  await page.getByTestId('settings-close').click();
+  expect(await lightOpacity()).toBeCloseTo(0.5, 2);
+});
+
+test('Daylight: light and shade meet three quarters down; paper grain blended around neutral', async ({ page }) => {
+  await createNote(page);
+  const cs = await page.getByTestId('note-pane').evaluate((el) => {
+    const s = getComputedStyle(el);
+    const b = getComputedStyle(el, '::before');
+    return { size: s.backgroundSize, blend: s.backgroundBlendMode, lightSize: b.backgroundSize };
+  });
+  expect(cs.size).toContain('75%'); // the shade, top to centre
+  expect(cs.lightSize).toContain('25%'); // the light, centre to bottom
+  expect(cs.blend.startsWith('hard-light')).toBe(true);
 });

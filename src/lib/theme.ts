@@ -11,8 +11,8 @@ export interface Fade {
   color: string;
   /** Opacity at the note's edge, 0..1. */
   strength: number;
-  /** How far in from its edge it reaches, as a share of the note's height
-   *  (at most 0.5: the fade is clear at the note's centre). */
+  /** How far in from its edge it reaches, as a share of its part of the
+   *  note: 1 = all the way to the centre (where it is clear). */
   reach: number;
 }
 
@@ -37,6 +37,10 @@ export interface ThemeDef {
      *  off on darker notes, so light ones can glow without dark ones going
      *  milky. 1 = the same amount everywhere. */
     lightOnDark: number;
+    /** Where the light and shade meet (clear), as a share of the note's
+     *  height from the top: 0.5 = the middle, 0.75 = three quarters down,
+     *  so the shade covers the upper three quarters and the light the rest. */
+    center: number;
     /** Light and shade are halves of one ellipse centred on the note; this
      *  is its horizontal radius in note widths. Wide = contours that barely
      *  curve, like light on a gently bowed sheet. */
@@ -62,10 +66,11 @@ export interface ThemeDef {
 }
 
 const FLAT_NOTE: ThemeDef['note'] = {
-  light: { color: '#ffffff', strength: 0, reach: 0.4 },
-  shade: { color: '#000000', strength: 0, reach: 0.4 },
+  light: { color: '#ffffff', strength: 0, reach: 1 },
+  shade: { color: '#000000', strength: 0, reach: 1 },
   curve: 4,
   spread: 3.5,
+  center: 0.5,
   lightOnDark: 1,
   grain: 0,
   header: 1,
@@ -80,12 +85,13 @@ export const BUILTIN_THEMES: ThemeDef[] = [
     name: 'Daylight',
     author: 'NotezZz',
     note: {
-      light: { color: '#ffffff', strength: 0.15, reach: 0.5 },
-      shade: { color: '#000000', strength: 0.16, reach: 0.5 },
+      light: { color: '#ffffff', strength: 0.096, reach: 1 },
+      shade: { color: '#000000', strength: 0.16, reach: 1 },
       curve: 2.5,
       spread: 3.5,
-      lightOnDark: 0.5,
-      grain: 0.07,
+      center: 0.75,
+      lightOnDark: 1,
+      grain: 0.025,
       header: 0.075,
       strip: { color: '#000000', strength: 0.075 },
       toolbar: 0,
@@ -141,7 +147,7 @@ function fade(v: unknown, base: Fade): Fade {
   return {
     color: hex(o.color, base.color),
     strength: clamp(o.strength, 0, 1, base.strength),
-    reach: clamp(o.reach, 0, 0.5, base.reach),
+    reach: clamp(o.reach, 0, 1, base.reach),
   };
 }
 
@@ -181,6 +187,7 @@ export function normalizeTheme(raw: unknown, id: string): ThemeDef {
       shade: fade(n.shade, FLAT_NOTE.shade),
       curve: clamp(n.curve, 0, 8, FLAT_NOTE.curve),
       spread: clamp(n.spread, 0.5, 20, FLAT_NOTE.spread),
+      center: clamp(n.center, 0.05, 0.95, FLAT_NOTE.center),
       lightOnDark: clamp(n.lightOnDark, 0, 1, FLAT_NOTE.lightOnDark),
       grain: clamp(n.grain, 0, 0.5, FLAT_NOTE.grain),
       header: clamp(n.header, 0, 1, FLAT_NOTE.header),
@@ -227,7 +234,7 @@ export function fadeGradient(edge: 'bottom' | 'top', f: Fade, curve: number, spr
   // From the edge (t = 0) inward to where the fade ends (t = 1).
   const at = (t: number) => (k < 0.01 ? 1 - t : (Math.exp(-k * t) - Math.exp(-k)) / (1 - Math.exp(-k)));
   // Radial position: 0 = the note's centre, 100% = the edge.
-  const start = 1 - Math.min(0.5, f.reach) / 0.5;
+  const start = 1 - Math.min(1, f.reach);
   const steps = 12;
   const stops: string[] = [`rgba(${r}, ${g}, ${b}, 0) 0%`];
   for (let i = steps; i >= 0; i--) {
@@ -241,14 +248,28 @@ export function fadeGradient(edge: 'bottom' | 'top', f: Fade, curve: number, spr
   return `radial-gradient(${size} at 50% ${edge === 'bottom' ? '0%' : '100%'}, ${stops.join(', ')})`;
 }
 
-/** Paper grain: a grey noise tile at the given opacity. */
+/**
+ * Paper grain: fine, slightly stretched speckle over soft larger mottling,
+ * as a neutral grey tile laid on with hard-light (see the note's
+ * background-blend-mode): 50% grey changes nothing, lighter specks lighten
+ * the note's colour and darker ones darken it, so the grain never greys the
+ * colour out and shows on black too. `opacity` is the layer's strength.
+ * Each turbulence is reduced to one opaque grey channel first: its own
+ * alpha would otherwise premultiply the noise and darken the result.
+ */
 export function grainImage(opacity: number): string {
   if (opacity <= 0) return 'none';
+  const grey = (name: string) =>
+    `<feColorMatrix type='matrix' values='1 0 0 0 0  1 0 0 0 0  1 0 0 0 0  0 0 0 0 1' result='${name}'/>`;
+  const fn = (c: string) => `<feFunc${c} type='linear' slope='2.4' intercept='-0.7'/>`;
   const svg =
-    `<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'>` +
-    `<filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/>` +
-    `<feColorMatrix type='saturate' values='0'/></filter>` +
-    `<rect width='100%' height='100%' filter='url(#g)' opacity='${opacity.toFixed(3)}'/></svg>`;
+    `<svg xmlns='http://www.w3.org/2000/svg' width='360' height='360'>` +
+    `<filter id='p' x='0' y='0' width='100%' height='100%' color-interpolation-filters='sRGB'>` +
+    `<feTurbulence type='fractalNoise' baseFrequency='0.9 0.6' numOctaves='3' seed='4' stitchTiles='stitch'/>${grey('fine')}` +
+    `<feTurbulence type='fractalNoise' baseFrequency='0.03' numOctaves='4' seed='9' stitchTiles='stitch'/>${grey('soft')}` +
+    `<feComposite in='fine' in2='soft' operator='arithmetic' k1='0' k2='0.75' k3='0.45' k4='-0.1'/>` +
+    `<feComponentTransfer>${fn('R')}${fn('G')}${fn('B')}<feFuncA type='linear' slope='0' intercept='${opacity.toFixed(3)}'/></feComponentTransfer>` +
+    `</filter><rect width='100%' height='100%' filter='url(#p)'/></svg>`;
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
@@ -280,6 +301,9 @@ export function themeVars(t: ThemeDef): Record<string, string> {
     '--note-shade': fadeGradient('top', n.shade, n.curve, n.spread),
     '--note-grain': grainImage(n.grain),
     '--note-light-on-dark': String(n.lightOnDark),
+    // The shade paints the note down to the centre, the light from there on.
+    '--note-shade-size': `100% ${pct(n.center)}`,
+    '--note-light-size': `100% ${pct(1 - n.center)}`,
     '--note-header-mix': pct(n.header),
     // Painted as an inset shadow, so it lies over the strip's colour AND any
     // pattern on it (both are background) and under the title and buttons.

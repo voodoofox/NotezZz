@@ -387,10 +387,12 @@
     isolation: isolate;
     background-color: var(--note-bg);
     background-image: var(--note-grain), var(--note-shade);
-    /* Grain tiles; the shade is the top half of the note's ellipse. */
-    background-size: auto, 100% 50%;
+    /* Grain tiles (hard-light: it lightens and darkens the colour around
+       neutral); the shade is the ellipse's part above its centre. */
+    background-size: auto, var(--note-shade-size);
     background-position: 0 0, center top;
     background-repeat: repeat, no-repeat;
+    background-blend-mode: hard-light, normal;
     color: var(--note-fg);
     height: 100%;
   }
@@ -404,7 +406,7 @@
     z-index: -1;
     pointer-events: none;
     background-image: var(--note-light);
-    background-size: 100% 50%; /* the bottom half of the note's ellipse */
+    background-size: var(--note-light-size); /* the ellipse below its centre */
     background-position: center bottom;
     background-repeat: no-repeat;
     /* Full on a white note, lightOnDark of it on a black one. */

@@ -47,6 +47,8 @@
      strip and formatting bar. */
   --note-light: none;
   --note-light-on-dark: 1;
+  --note-shade-size: 100% 50%;
+  --note-light-size: 100% 50%;
   --note-shade: none;
   --note-grain: none;
   --note-header-mix: 100%;
