@@ -86,7 +86,7 @@ export const BUILTIN_THEMES: ThemeDef[] = [
     author: 'NotezZz',
     note: {
       light: { color: '#ffffff', strength: 0.0768, reach: 1.75 },
-      shade: { color: '#000000', strength: 0.16, reach: 1 },
+      shade: { color: '#000000', strength: 0.112, reach: 1 },
       curve: 2.5,
       spread: 3.5,
       center: 0.75,

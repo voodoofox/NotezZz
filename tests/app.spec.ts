@@ -1983,7 +1983,7 @@ test('sign-in: the logo and Google’s own button', async ({ page }) => {
   expect(await g.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(255, 255, 255)');
 });
 
-test('the list shows a pin only on pinned notes, filled like every on button', async ({ page }) => {
+test('the list shows a pin only on pinned notes, as a plain icon', async ({ page }) => {
   await createNote(page);
   await createNote(page);
   const rows = page.getByTestId('note-item');
@@ -1995,7 +1995,7 @@ test('the list shows a pin only on pinned notes, filled like every on button', a
   await page.mouse.move(5, 790);
   const on = await pinOf(1).evaluate((el) => ({ o: getComputedStyle(el).opacity, bg: getComputedStyle(el).backgroundColor }));
   expect(on.o).toBe('1');
-  expect(on.bg).not.toBe('rgba(0, 0, 0, 0)');
+  expect(on.bg).toBe('rgba(0, 0, 0, 0)'); // no filled tile: a long pinned list stays light
 });
 
 test('right-click on a row: pin and archive without opening the note', async ({ page }) => {
@@ -2223,3 +2223,16 @@ test.describe('phone: buttons line up in columns', () => {
     }
   });
 });
+
+test('list beside the note: no line or seam between them', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 }); // 30% = 409.8px
+  await createNote(page);
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('set-layout').locator('[data-value="side"]').click();
+  await page.getByTestId('settings-close').click();
+  const [side, pane] = await Promise.all([page.locator('.sidebar').boundingBox(), page.getByTestId('note-pane').boundingBox()]);
+  expect(Number.isInteger(side!.width)).toBe(true);
+  expect(pane!.x).toBe(side!.x + side!.width);
+  expect(await page.locator('.sidebar').evaluate((el) => getComputedStyle(el).borderRightStyle)).toBe('none');
+});
+

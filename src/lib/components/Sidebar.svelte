@@ -464,12 +464,15 @@
     /* Beside the note: 30% of the window's width, the same share the
        list gets of the height when it sits above the note. */
     width: 30%;
+    /* Whole pixels: a fractional edge left a hairline seam beside the note. */
+    width: round(down, 30%, 1px);
     min-width: 200px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
     background: var(--app-panel);
-    border-right: 1px solid var(--app-border);
+    /* No line beside the note: it read as a gap (as the one under a stacked
+       list did); the note's own colour parts them. */
     height: 100%;
   }
   .head {
@@ -767,17 +770,9 @@
     align-items: center;
     justify-content: center;
   }
-  /* The pin: only on pinned notes, and filled like every "on" button (the
-     note's header shows it the same way). A PC offers it on an unpinned
-     row under the pointer; a phone pins from the note's header. */
-  .pin.on:not(.tuck) {
-    background: var(--app-fg);
-    color: var(--app-panel);
-  }
-  .item.active .pin.on:not(.tuck) {
-    background: var(--row-fg);
-    color: var(--swatch);
-  }
+  /* The pin: only on pinned notes, a plain icon (a filled tile on every
+     pinned row made a long list heavy). A PC offers it on an unpinned row
+     under the pointer; a phone pins from the note's header. */
   .pin:not(.on):not(.tuck) {
     opacity: 0;
   }
