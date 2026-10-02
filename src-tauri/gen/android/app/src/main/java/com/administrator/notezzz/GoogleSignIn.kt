@@ -64,6 +64,23 @@ class GoogleSignIn(
   fun token(id: Int, interactive: Boolean, invalidate: String) {
     thread {
       if (invalidate.isNotEmpty()) runCatching { GoogleAuthUtil.clearToken(activity, invalidate) }
+      // Silently, on a phone already signed in: GoogleAuthUtil.getToken never
+      // shows anything (it throws when consent is wanted). The Identity API's
+      // authorize() could flash Play services' white window at a cold start,
+      // which read as a sign-in screen. It stays the way when this fails, and
+      // for any request that may ask.
+      if (!interactive) {
+        val email = prefs.getString("email", "") ?: ""
+        if (prefs.getBoolean("signedIn", false) && email.isNotEmpty()) {
+          val token = runCatching {
+            GoogleAuthUtil.getToken(activity.applicationContext, Account(email, "com.google"), "oauth2:$DRIVE_FILE")
+          }.getOrNull()
+          if (!token.isNullOrEmpty()) {
+            reply(id, true, JSONObject().put("token", token).put("email", email).toString())
+            return@thread
+          }
+        }
+      }
       activity.runOnUiThread { authorize(id, interactive) }
     }
   }
