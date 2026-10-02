@@ -14,7 +14,28 @@ import { DRIVE_NOT_GRANTED, DriveAccessError } from './driveAccess';
 /** Play services hands out ~1h tokens; reuse one well inside that. */
 const TOKEN_TTL_MS = 45 * 60 * 1000;
 
-let cached: { token: string; at: number } | null = null;
+/** Kept across launches for its short life: a relaunch within it needs no
+ *  Google round-trip at all (each one could flash Play services' window). */
+const SAVED_KEY = 'notezzz:android:tok';
+function loadSaved(): { token: string; at: number } | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(SAVED_KEY) ?? 'null') as { token?: string; at?: number } | null;
+    return v?.token && typeof v.at === 'number' ? { token: v.token, at: v.at } : null;
+  } catch {
+    return null;
+  }
+}
+let cached: { token: string; at: number } | null = loadSaved();
+/** Every change to the token goes through here, so the saved copy follows. */
+function setCached(v: { token: string; at: number } | null): void {
+  cached = v;
+  try {
+    if (v) localStorage.setItem(SAVED_KEY, JSON.stringify(v));
+    else localStorage.removeItem(SAVED_KEY);
+  } catch {
+    /* no storage: memory only */
+  }
+}
 let inflight: Promise<string> | null = null;
 /** A token Drive refused for lacking the Drive permission: invalidated in
  * Play services' cache on the next request. */
@@ -70,7 +91,7 @@ export function androidToken(opts: { fresh?: boolean } = {}): Promise<string> {
   if (inflight && !opts.fresh) return inflight;
   const stale = (opts.fresh ? (cached?.token ?? '') : '') || dropped;
   dropped = '';
-  cached = null;
+  setCached(null);
   const run = (async () => {
     let interactive = false;
     if (!nativeAccount().signedIn) {
@@ -80,7 +101,7 @@ export function androidToken(opts: { fresh?: boolean } = {}): Promise<string> {
       interactive = true; // the one-time move from the old browser sign-in
     }
     const r = await request(interactive, stale);
-    cached = { token: r.token, at: Date.now() };
+    setCached({ token: r.token, at: Date.now() });
     if (interactive) void invoke('google_sign_out').catch(() => {});
     return r.token;
   })();
@@ -94,7 +115,7 @@ export function androidToken(opts: { fresh?: boolean } = {}): Promise<string> {
 /** Interactive sign-in: Android's account sheet. Resolves to the address ('' if unreadable). */
 export async function androidSignIn(): Promise<string> {
   const r = await request(true, '');
-  cached = { token: r.token, at: Date.now() };
+  setCached({ token: r.token, at: Date.now() });
   void invoke('google_sign_out').catch(() => {}); // any old browser-flow tokens
   return r.email;
 }
@@ -102,12 +123,12 @@ export async function androidSignIn(): Promise<string> {
 /** Forget the current token: Drive refused it for lacking the Drive permission. */
 export function androidDropToken(): void {
   dropped = cached?.token ?? dropped;
-  cached = null;
+  setCached(null);
 }
 
 export async function androidSignOut(): Promise<void> {
   const token = cached?.token ?? '';
-  cached = null;
+  setCached(null);
   await androidCall((b, id) => b.googleSignOut!(id, token));
   await invoke('google_sign_out').catch(() => {});
 }

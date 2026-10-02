@@ -27,6 +27,9 @@
         var s = JSON.parse(localStorage.getItem('notezzz:cache:settings') || 'null');
         var t = (s && s.appTheme) || (localStorage.getItem('notezzz:settings')
           ? (JSON.parse(localStorage.getItem('notezzz:settings')).appTheme) : null);
+        // The page's background before its stylesheet has loaded: the
+        // header's colour, never a white frame.
+        document.documentElement.style.backgroundColor = t === 'dark' ? '#1e2127' : '#ffffff';
         if (t) {
           document.documentElement.dataset.theme = t;
           var m = document.querySelector('meta[name="theme-color"]');

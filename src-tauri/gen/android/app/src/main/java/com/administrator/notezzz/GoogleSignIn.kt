@@ -69,7 +69,11 @@ class GoogleSignIn(
   }
 
   private fun authorize(id: Int, interactive: Boolean) {
-    Identity.getAuthorizationClient(activity).authorize(request())
+    // A silent request runs against the application, not the activity, so
+    // Play services has no screen of ours to put its (empty, white) window
+    // over at launch. Only a request allowed to ask goes through the activity.
+    val client = Identity.getAuthorizationClient(if (interactive) activity else activity.applicationContext)
+    client.authorize(request())
       .addOnSuccessListener { r ->
         if (!r.hasResolution()) return@addOnSuccessListener finish(listOf(id), r)
         val pending = r.pendingIntent

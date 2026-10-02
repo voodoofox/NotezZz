@@ -68,9 +68,23 @@ class MainActivity : TauriActivity() {
     runOnUiThread { notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS) }
   }
 
+  /** The app's own light/dark choice, remembered for the next launch. */
+  private val uiPrefs by lazy { getSharedPreferences("notezzz_ui", MODE_PRIVATE) }
+
+  /** What the page's header is painted in: the first frame, before the page
+   *  has loaded, is this instead of a white flash (in the dark theme). */
+  private fun startColor(): Int =
+    if (uiPrefs.getBoolean("dark", false)) 0xFF1E2127.toInt() else 0xFFFFFFFF.toInt()
+
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
+    val dark = uiPrefs.getBoolean("dark", false)
+    window.decorView.setBackgroundColor(startColor())
+    WindowCompat.getInsetsController(window, window.decorView).apply {
+      isAppearanceLightStatusBars = !dark
+      isAppearanceLightNavigationBars = !dark
+    }
     stashShare(intent)
     stashAction(intent)
     // Widgets and reminder alarms stay current with the app closed.
@@ -98,6 +112,8 @@ class MainActivity : TauriActivity() {
 
   override fun onWebViewCreate(webView: WebView) {
     super.onWebViewCreate(webView)
+    // A web view is white until its page paints: the app's colour instead.
+    webView.setBackgroundColor(startColor())
     this.webView = webView
     webView.addJavascriptInterface(Bridge(), "NotezzzAndroid")
   }
@@ -133,6 +149,13 @@ class MainActivity : TauriActivity() {
     /** Download a release APK and open Android's installer (ApkUpdater.kt). */
     @JavascriptInterface
     fun installApk(id: Int, url: String) = updater.install(id, url)
+
+    /** The app theme itself (not a note's), kept for the next launch's
+     *  first frame (see startColor). */
+    @JavascriptInterface
+    fun setAppTheme(dark: Boolean) {
+      uiPrefs.edit().putBoolean("dark", dark).apply()
+    }
 
     /** Status-bar icons: light on a dark app theme, dark on a light one. */
     @JavascriptInterface

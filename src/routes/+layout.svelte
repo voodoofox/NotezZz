@@ -143,6 +143,11 @@
     const theme = store.settings.appTheme;
     void store.settings.themeId; // Mono changes the panel colour the title bar takes
     document.documentElement.dataset.theme = theme;
+    // Android: remembered for the next launch's first frame (MainActivity
+    // paints the window in it before the page loads: no white blink).
+    (window as unknown as { NotezzzAndroid?: { setAppTheme?(d: boolean): void } }).NotezzzAndroid?.setAppTheme?.(
+      theme === 'dark'
+    );
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', theme === 'dark' ? '#16181d' : '#f4f5f7');
     // Windows 11: the main window's title bar takes the colour of the app's
