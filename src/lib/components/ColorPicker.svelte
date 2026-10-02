@@ -30,7 +30,7 @@
   const seed = untrack(() => (paletteId.startsWith('custom:') ? hexToHsl(paletteId.slice(7)) : null));
   let custHue = $state(seed?.h ?? 45);
   let custSat = $state(seed ? Math.min(90, seed.s) : 70);
-  let custLight = $state(seed ? Math.max(30, Math.min(94, seed.l)) : 82);
+  let custLight = $state(seed ? Math.max(0, Math.min(100, seed.l)) : 82);
 
   function applyCustom() {
     onPick(`custom:${hslToHex(custHue, custSat, custLight)}`);
@@ -177,11 +177,13 @@
   />
 </label>
 <label class="crow">
-  <span class="clab">Light / deep</span>
+  <span class="clab">Dark / light</span>
+  <!-- The full range: all the way to black at the left, white at the right. -->
   <input
     class="shade"
-    type="range" min="30" max="94" step="1"
-    aria-label="Custom color shade"
+    type="range" min="0" max="100" step="1"
+    data-testid="custom-light"
+    aria-label="Custom color lightness"
     style="--hue: {custHue}; --sat: {custSat}%"
     bind:value={custLight}
     oninput={applyCustom}
@@ -323,11 +325,14 @@
       hsl(360, 70%, 70%)
     );
   }
+  /* Black, through the hue at its fullest, to white: the slider's ends are
+     the ends of what it can make. */
   .shade {
     background: linear-gradient(
       to right,
-      hsl(var(--hue), var(--sat, 70%), 30%),
-      hsl(var(--hue), var(--sat, 70%), 94%)
+      #000,
+      hsl(var(--hue), var(--sat, 70%), 50%),
+      #fff
     );
   }
   .desat {

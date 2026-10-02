@@ -2434,3 +2434,15 @@ test("another account's cached notes are never shown, and are cleared", async ({
   // ...and its copy is gone from this device.
   expect(await page.evaluate(() => localStorage.getItem('notezzz:cache:notes'))).toBeNull();
 });
+
+test('the custom lightness slider reaches pure black and pure white', async ({ page }) => {
+  await createNote(page);
+  await menu(page, 'color');
+  await page.getByTestId('custom-toggle').click();
+  const light = page.getByTestId('custom-light');
+  await light.fill('0');
+  await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', 'custom:#000000');
+  await light.fill('100');
+  await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', 'custom:#ffffff');
+});
+
