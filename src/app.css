@@ -130,7 +130,7 @@ textarea {
    notes keep their colours (and their own ink); everything around them is
    black or white: no greys, no soft shadows, no dimmed backdrops. Hover and
    press invert; fields and quiet buttons are a ring instead of a grey fill;
-   balloons get an edge instead of a shadow. Loud on purpose: it is a mode. */
+   balloons and panels have no edge at all. Loud on purpose: it is a mode. */
 :root[data-ui='mono'] {
   --app-bg: #ffffff;
   --app-panel: #ffffff;
@@ -139,7 +139,7 @@ textarea {
   --app-muted: #000000;
   --app-border: transparent; /* no divider lines; rings draw the edges that matter */
   --app-danger: #000000;
-  --sticker-shadow: 0 0 0 1.5px var(--app-fg);
+  --sticker-shadow: none;
   --list-shade: 0%;
 }
 :root[data-ui='mono'][data-theme='dark'] {
@@ -200,7 +200,7 @@ textarea {
 }
 :root[data-ui='mono'] :is(.panel, .card, .toast, .pop, .smenu, .rowmenu, .bubble, .sizemenu) {
   border: none !important;
-  box-shadow: 0 0 0 1.5px var(--app-fg) !important;
+  box-shadow: none !important;
 }
 :root[data-ui='mono'] .mini {
   border-color: var(--app-fg) !important;

@@ -2446,3 +2446,17 @@ test('the custom lightness slider reaches pure black and pure white', async ({ p
   await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', 'custom:#ffffff');
 });
 
+test('Mono: menus and balloons have no outline', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('theme-pick').filter({ hasText: 'Mono' }).click();
+  await page.getByTestId('settings-close').click();
+  await page.getByTestId('note-more').click();
+  const edge = await page.getByTestId('note-menu').evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return { shadow: cs.boxShadow, border: cs.borderTopStyle };
+  });
+  expect(edge.shadow).toBe('none');
+  expect(edge.border).toBe('none');
+});
+
