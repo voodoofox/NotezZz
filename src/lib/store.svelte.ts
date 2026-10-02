@@ -80,6 +80,8 @@ async function pickBackend(): Promise<StorageBackend> {
 const CACHE_KEY = 'notezzz:cache:notes';
 /** Cached settings — theme/palette apply immediately, not after the network. */
 const SETTINGS_CACHE_KEY = 'notezzz:cache:settings';
+/** Whose notes the cache holds: it is only ever shown to that account. */
+const CACHE_ACCOUNT_KEY = 'notezzz:cache:account';
 /** Marks that this launch already retried itself — never reload twice. */
 const REBOOT_KEY = 'notezzz:reboot';
 
@@ -166,6 +168,7 @@ class AppStore {
     // over an empty list, indistinguishable from the app being broken.
     if (!isTauri()) {
       const { hasPriorAuth } = await import('./drive/auth'); // static elsewhere: no fetch
+      this.#account = webAccount();
       if (hasPriorAuth()) this.#paintCache();
     } else {
       // The apps the same: signed in (tokens on this device, a local check,
@@ -197,6 +200,16 @@ class AppStore {
     }
     this.#clearReboot();
     const cloud = this.#backend.kind === 'drive';
+    if (cloud && !this.#account) {
+      // Who is this? (PC/Android: the stored sign-in; web: the email Drive
+      // reported, once known.)
+      if (isTauri()) {
+        const { desktopAccount } = await import('./drive/desktopAuth');
+        this.#account = await desktopAccount().catch(() => null);
+      } else {
+        this.#account = webAccount();
+      }
+    }
     this.syncStatus = cloud ? 'loading' : 'local';
     // Cloud mode: paint cached notes + settings instantly; the Drive refresh
     // replaces them when it lands. Kills the startup loading screen and the
@@ -277,7 +290,8 @@ class AppStore {
     if (!isTauri() || this.notes.length) return this.notes.length > 0;
     try {
       const { desktopAccount } = await import('./drive/desktopAuth');
-      if (await desktopAccount()) this.#paintCache();
+      this.#account = await desktopAccount();
+      if (this.#account) this.#paintCache();
     } catch {
       /* no account: the load decides */
     }
@@ -288,6 +302,19 @@ class AppStore {
   #paintCache() {
     if (this.notes.length) return;
     try {
+      // Another account's notes and settings (its "welcome notes done", its
+      // order) must never be shown — or kept — for this one: a new account
+      // signed in on a used device got no welcome notes. A cache with no
+      // owner (written before owners were recorded) is skipped the same way.
+      const owner = localStorage.getItem(CACHE_ACCOUNT_KEY);
+      if (!this.#account || owner !== this.#account) {
+        if (owner && this.#account && owner !== this.#account) {
+          localStorage.removeItem(CACHE_KEY);
+          localStorage.removeItem(SETTINGS_CACHE_KEY);
+          localStorage.removeItem(CACHE_ACCOUNT_KEY);
+        }
+        return;
+      }
       // Settings first: the order lives there.
       const cachedSettings = localStorage.getItem(SETTINGS_CACHE_KEY);
       if (cachedSettings) this.settings = { ...this.settings, ...JSON.parse(cachedSettings) };
@@ -332,12 +359,18 @@ class AppStore {
   #cacheNotes() {
     if (this.#backend?.kind !== 'drive') return;
     try {
+      // Unknown owner, no cache: it could end up shown to someone else.
+      if (!this.#account) return;
+      localStorage.setItem(CACHE_ACCOUNT_KEY, this.#account);
       localStorage.setItem(CACHE_KEY, JSON.stringify($state.snapshot(this.notes)));
       localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify($state.snapshot(this.settings)));
     } catch {
       /* quota — cache is best-effort */
     }
   }
+
+  /** The signed-in account (its email), owner of what gets cached. */
+  #account: string | null = null;
 
   /** Network failures since the connection last worked. */
   #offlineStreak = 0;
@@ -941,6 +974,15 @@ class AppStore {
 }
 
 export const store = new AppStore();
+
+/** The web sign-in's account email (auth.ts remembers it), if known yet. */
+function webAccount(): string | null {
+  try {
+    return localStorage.getItem('notezzz:acct');
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The network failing (a timeout, no connection, a dropped request) rather
