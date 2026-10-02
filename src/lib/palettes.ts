@@ -1,7 +1,7 @@
 // Sticky-note color palettes. Each note picks one by id. Colors are chosen to be
 // legible with dark text; `dark` palettes carry light text via `fg`.
 
-import { customPatternSlot, getCustomPattern, paletteFromTint, patternSvg } from './patterns.svelte';
+import { customPatternSlot, getCustomPattern, paletteFromSlot, patternSvg } from './patterns.svelte';
 
 export interface Palette {
   id: string;
@@ -58,7 +58,7 @@ export const PALETTE_MAP = new Map(PALETTES.map((p) => [p.id, p]));
  */
 export const PATTERNS: Palette[] = [
   { id: 'pattern:checker', name: 'Checker', pattern: 'checker', bg: '#D3C2F0', header: '#C3AEE6', fg: '#2E2145', accent: '#2E2145' },
-  { id: 'pattern:stripes', name: 'Stripes', pattern: 'stripes', bg: '#F0E7C2', header: '#E3D6A0', fg: '#453E21', accent: '#453E21' },
+  { id: 'pattern:stripes', name: 'Stripes', pattern: 'stripes', bg: '#C2F0EC', header: '#A3E2DC', fg: '#214542', accent: '#214542' },
   { id: 'pattern:dots',    name: 'Dots',    pattern: 'dots',    bg: '#F0C2D9', header: '#E3A4C1', fg: '#452133', accent: '#452133' },
   { id: 'pattern:stairs',  name: 'Stairs',  pattern: 'stairs',  bg: '#C2D9F0', header: '#A3C2E2', fg: '#213345', accent: '#213345' },
   { id: 'pattern:bricks',  name: 'Bricks',  pattern: 'bricks',  bg: '#F0CDC2', header: '#E2B1A2', fg: '#452A21', accent: '#452A21' },
@@ -117,12 +117,13 @@ function customPatternPalette(id: string): Palette {
   const slot = customPatternSlot(id);
   const p = slot >= 0 ? getCustomPattern(slot) : null;
   if (!p) return PALETTES[0];
-  const t = paletteFromTint(p.tint);
+  const t = paletteFromSlot(p);
   return {
     id,
     name: `Pattern ${slot + 1}`,
     pattern: 'custom',
     patternImage: patternSvg(p.px, t.ink),
+    dark: t.fg === '#ECEDEF',
     bg: t.bg,
     header: t.header,
     fg: t.fg,

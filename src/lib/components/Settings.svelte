@@ -313,8 +313,15 @@
       <div class="row">
         <span>Saved colours &amp; patterns</span>
         <span class="btns">
-          <button data-testid="reset-colors" onclick={() => store.saveSettings({ customColors: [] })}>Reset colours</button>
-          <button data-testid="reset-patterns" onclick={() => store.saveSettings({ customPatterns: [] })}>Reset patterns</button>
+          <!-- The five slots hold both: each reset clears its own kind. -->
+          <button
+            data-testid="reset-colors"
+            onclick={() => store.saveSettings({ customColors: [], customPatterns: (store.settings.customPatterns ?? []).map((p) => (p?.solid ? null : p)) })}
+          >Reset colours</button>
+          <button
+            data-testid="reset-patterns"
+            onclick={() => store.saveSettings({ customPatterns: (store.settings.customPatterns ?? []).map((p) => (p && !p.solid ? null : p)) })}
+          >Reset patterns</button>
         </span>
       </div>
 

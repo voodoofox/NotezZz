@@ -136,7 +136,6 @@ test('image import inserts a picture into the note', async ({ page }) => {
 test('custom color sliders recolor the note', async ({ page }) => {
   await createNote(page);
   await menu(page, 'color');
-  await page.getByTestId('custom-toggle').click();
   await page.getByTestId('custom-hue').fill('200');
   await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', /custom:#/);
 });
@@ -1208,7 +1207,6 @@ test('a sticky can be renamed in place with a double-click on its title', async 
 test('a custom colour can be saved to a slot and reset from Settings', async ({ page }) => {
   await createNote(page);
   await menu(page, 'color');
-  await page.getByTestId('custom-toggle').click();
   await page.getByTestId('custom-hue').fill('120');
   await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', /custom:#/);
   await page.getByTestId('save-color').click();
@@ -2438,7 +2436,6 @@ test("another account's cached notes are never shown, and are cleared", async ({
 test('the custom lightness slider reaches pure black and pure white', async ({ page }) => {
   await createNote(page);
   await menu(page, 'color');
-  await page.getByTestId('custom-toggle').click();
   const light = page.getByTestId('custom-light');
   await light.fill('0');
   await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', 'custom:#000000');
@@ -2468,5 +2465,84 @@ test('Mono: no outlines on menus, balloons or fields', async ({ page }) => {
   });
   expect(field.shadow).toBe('none');
   expect(field.border).toBe('none');
+});
+
+test('colours and patterns share the five slots; a slot editor sets background and dots, black to white', async ({ page }) => {
+  await createNote(page);
+  await menu(page, 'color');
+  await expect(page.getByTestId('pattern-empty')).toHaveCount(5);
+  // A custom colour saved goes into the first free slot.
+  await page.getByTestId('custom-hue').fill('200');
+  await page.getByTestId('save-color').click();
+  await expect(page.getByTestId('saved-color')).toHaveCount(1);
+  await expect(page.getByTestId('pattern-empty')).toHaveCount(4);
+  // A new slot: dots in one colour, a pure black background.
+  await page.getByTestId('pattern-empty').first().click();
+  const cells = page.getByTestId('pat-cell');
+  await cells.nth(0).click();
+  await cells.nth(9).click();
+  await page.getByTestId('pat-which-ink').click();
+  await page.getByTestId('pat-light').fill('100'); // white dots
+  await page.getByTestId('pat-which-bg').click();
+  await page.getByTestId('pat-light').fill('0'); // black background
+  await page.getByTestId('pat-save').click();
+  const pane = page.getByTestId('note-pane');
+  await expect(pane).toHaveAttribute('data-palette', 'upat:1');
+  const slot = await page.evaluate(() => JSON.parse(localStorage.getItem('notezzz:settings')!).customPatterns[1]);
+  expect(slot.bg).toBe('#000000');
+  expect(slot.ink).toBe('#ffffff');
+  // The title bar is the background exactly (no darkening) and no tint strip.
+  const bar = await pane.locator('.topbar').evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return { bg: cs.backgroundColor, shadow: cs.boxShadow };
+  });
+  expect(bar.bg).toBe('rgb(0, 0, 0)');
+  expect(bar.shadow).toBe('none');
+  // A slot saved with no dots is a plain colour.
+  await menu(page, 'color');
+  await page.getByTestId('pattern-empty').first().click();
+  await page.getByTestId('pat-which-bg').click();
+  await page.getByTestId('pat-light').fill('100');
+  await page.getByTestId('pat-save').click();
+  await expect(pane).toHaveAttribute('data-palette', 'custom:#ffffff');
+});
+
+test("a pattern note's title bar shows the same colours as its list row", async ({ page }) => {
+  await createNote(page);
+  await menu(page, 'color');
+  await page.locator('[data-testid="palette-chip"][data-palette="pattern:bricks"]').click();
+  await page.mouse.click(5, 790);
+  const [bar, fill] = await Promise.all([
+    page.locator('.topbar').evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { bg: cs.backgroundColor, img: cs.backgroundImage, shadow: cs.boxShadow };
+    }),
+    page.getByTestId('note-fill').first().evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { bg: cs.backgroundColor, img: cs.backgroundImage };
+    }),
+  ]);
+  expect(bar.bg).toBe(fill.bg);
+  expect(bar.img).toBe(fill.img);
+  expect(bar.shadow).toBe('none');
+});
+
+test('the second pattern is teal now', async ({ page }) => {
+  await createNote(page);
+  await menu(page, 'color');
+  await page.locator('[data-testid="palette-chip"][data-palette="pattern:stripes"]').click();
+  expect(await page.getByTestId('note-pane').evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(194, 240, 236)');
+});
+
+test.describe('phone: the note title bar and a list row are the same height', () => {
+  test.use({ viewport: { width: 412, height: 915 } });
+  test('equal heights', async ({ page }) => {
+    await createNote(page);
+    const h = await page.evaluate(() => ({
+      row: document.querySelector('[data-testid="note-item"]')!.getBoundingClientRect().height,
+      topbar: document.querySelector('.topbar')!.getBoundingClientRect().height,
+    }));
+    expect(Math.abs(h.row - h.topbar)).toBeLessThan(0.5);
+  });
 });
 

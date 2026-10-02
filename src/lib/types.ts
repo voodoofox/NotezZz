@@ -73,7 +73,7 @@ export interface Settings {
   /** Custom colours kept from the picker's sliders, up to five #rrggbb. */
   customColors?: string[];
   /** Five user-painted pattern slots (see patterns.ts); null = empty. */
-  customPatterns?: ({ px: string; tint: string } | null)[];
+  customPatterns?: ({ px: string; tint: string; bg?: string; ink?: string; solid?: boolean } | null)[];
   /** Main window: note list above the note (default, like the phone) or beside it. */
   layout?: 'side' | 'top';
   /** With the list above the note: how many columns of notes. 'auto' adds

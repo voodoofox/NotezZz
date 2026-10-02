@@ -843,10 +843,23 @@ class AppStore {
    */
   #migrateSettings() {
     const v = this.settings.settingsVersion ?? 0;
-    if (v >= 2) return;
-    const patch: Partial<Settings> = { settingsVersion: 2 };
+    if (v >= 3) return;
+    const patch: Partial<Settings> = { settingsVersion: 3 };
     if (v < 1) Object.assign(patch, { layout: 'top', listColumns: 'auto', stickyTilt: false });
-    if (this.settings.defaultFontSize === BASE_FONT_PX) patch.defaultFontSize = DEFAULT_NOTE_PX;
+    if (v < 2 && this.settings.defaultFontSize === BASE_FONT_PX) patch.defaultFontSize = DEFAULT_NOTE_PX;
+    // v3: saved colours share the five custom slots with patterns. They
+    // move into the free slots in order; notes keep their custom:<hex>.
+    const colours = this.settings.customColors ?? [];
+    if (colours.length) {
+      const slots = Array.from({ length: 5 }, (_, i) => this.settings.customPatterns?.[i] ?? null);
+      for (const hex of colours) {
+        const free = slots.indexOf(null);
+        if (free < 0) break;
+        slots[free] = { px: '0'.repeat(64), tint: hex, bg: hex, solid: true };
+      }
+      patch.customPatterns = slots;
+      patch.customColors = [];
+    }
     void this.saveSettings(patch);
   }
 

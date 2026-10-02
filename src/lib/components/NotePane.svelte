@@ -192,7 +192,12 @@
       color-scheme: {pal.dark ? 'dark' : 'light'};
     "
   >
-    <div class="topbar {pal.pattern ? `nz-pat-${pal.pattern}` : ''}" bind:this={barEl}>
+    <div
+      class="topbar {pal.pattern ? `nz-pat-${pal.pattern}` : ''}"
+      class:patterned={!!pal.pattern}
+      style={pal.pattern ? `--pat-exact-base: ${pal.header}; --pat-exact-ink: ${pal.inkStrong ?? pal.ink ?? pal.fg}` : undefined}
+      bind:this={barEl}
+    >
       {#if fullscreen}
         <button
           class="icon mob"
@@ -494,7 +499,9 @@
     align-items: center;
     gap: var(--btn-gap);
     /* The title (2px into its input) in line with the note's text. */
-    padding: var(--edge) var(--edge) var(--edge) calc(var(--text-inset) - 2px);
+    /* +1px at the bottom: as tall as a list row and the bottom toolbar
+       (--bar-h), which each carry a 1px line. */
+    padding: var(--edge) var(--edge) calc(var(--edge) + 1px) calc(var(--text-inset) - 2px);
     /* The title strip is the note's adhesive: as solid as the theme says.
        -color, not the shorthand: the shorthand would wipe a pattern's
        background-image, which these two variables tone down with it. */
@@ -502,6 +509,15 @@
     --pat-base: color-mix(in srgb, var(--note-header) var(--note-header-mix), transparent);
     --pat-ink: color-mix(in srgb, var(--note-ink) var(--note-pat-mix), transparent);
     box-shadow: var(--own-strip, var(--note-strip)); /* the adhesive tint (lighter on dark notes) */
+  }
+  /* A pattern's title bar: its exact colours (as in its list row), opaque
+     over the note's shade, without the adhesive tint. Contrast is the
+     pattern's own (a custom one sets both of its colours). */
+  .topbar.patterned {
+    --pat-base: var(--pat-exact-base);
+    --pat-ink: var(--pat-exact-ink);
+    background-color: var(--pat-exact-base);
+    box-shadow: none;
   }
   .title {
     flex: 1 1 0;
@@ -569,7 +585,7 @@
       display: inline-flex;
     }
     .topbar {
-      padding: var(--edge);
+      padding: var(--edge) var(--edge) calc(var(--edge) + 1px);
     }
     /* Full screen: the title bar reaches up under Android's status bar. */
     :global(.app.note-open) > .pane .topbar {

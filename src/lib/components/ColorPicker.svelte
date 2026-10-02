@@ -1,16 +1,16 @@
 <script lang="ts">
-  // The note colour picker: nine palettes, five pixel patterns, five custom
-  // patterns of your own, a custom colour from three sliders, and five slots
-  // to keep custom colours in. One component, used by the note pane and by
-  // the sticky window's title bar, so the two can never drift apart.
+  // The note colour picker: ten palettes, five pixel patterns, five slots of
+  // your own (a colour or a pattern each), and a custom colour from three
+  // sliders. One component, used by the note pane and by the sticky window's
+  // title bar, so the two can never drift apart.
   import { PALETTES, PATTERNS, getPalette, hslToHex, hexToHsl } from '$lib/palettes';
   import {
-    COLOR_SLOTS,
+    EMPTY_PX,
     PATTERN_SLOTS,
     customPatternId,
     getCustomPattern,
     patternSvg,
-    paletteFromTint,
+    paletteFromSlot,
     type CustomPattern,
   } from '$lib/patterns.svelte';
   import { store } from '$lib/store.svelte';
@@ -21,13 +21,13 @@
   let { paletteId, onPick }: { paletteId: string; onPick: (id: string) => void } = $props();
 
   let pal = $derived(getPalette(paletteId));
-  let isCustom = $derived(paletteId.startsWith('custom:'));
+  let isCustom = $derived(!!paletteId?.startsWith('custom:'));
 
   // Inline custom colour: hue + shade + saturation apply instantly — no native
   // colour-dialog chain. Read once, deliberately: the sliders start where the
   // note is and then own their values; re-seeding on every prop change would
   // fight the drag.
-  const seed = untrack(() => (paletteId.startsWith('custom:') ? hexToHsl(paletteId.slice(7)) : null));
+  const seed = untrack(() => (paletteId?.startsWith('custom:') ? hexToHsl(paletteId.slice(7)) : null));
   let custHue = $state(seed?.h ?? 45);
   let custSat = $state(seed ? Math.min(90, seed.s) : 70);
   let custLight = $state(seed ? Math.max(0, Math.min(100, seed.l)) : 82);
@@ -36,17 +36,7 @@
     onPick(`custom:${hslToHex(custHue, custSat, custLight)}`);
   }
 
-  // ---- saved colours: five slots, first free one, then the oldest ----------
-  let saved = $derived((store.settings.customColors ?? []).slice(0, COLOR_SLOTS));
-  let currentHex = $derived(isCustom ? paletteId.slice(7) : null);
-  let alreadySaved = $derived(!!currentHex && saved.includes(currentHex));
-  function saveColour() {
-    if (!currentHex || alreadySaved) return;
-    const next = saved.length < COLOR_SLOTS ? [...saved, currentHex] : [...saved.slice(1), currentHex];
-    void store.saveSettings({ customColors: next });
-  }
-
-  // ---- custom patterns: five slots; empty opens the editor -----------------
+  // ---- the five slots: a colour or a pattern each; empty opens the editor ---
   // The registry (patterns.ts) follows settings; reading settings here makes
   // this re-render when a slot changes.
   let slots = $derived(
@@ -56,19 +46,45 @@
     })
   );
   let editing = $state<number | null>(null);
-  // The custom-colour sliders stay folded away unless the note already has
-  // a custom colour: most picks are one of the chips.
-  let showCustom = $state(untrack(() => paletteId.startsWith('custom:')));
-  function chipStyle(p: CustomPattern): string {
-    const t = paletteFromTint(p.tint);
+
+  /** What picking a slot gives the note. */
+  const slotId = (p: CustomPattern, i: number) => (p.solid ? `custom:${p.bg ?? p.tint}` : customPatternId(i));
+  /** Pick it; pick it again (it's the note's already) to edit it. */
+  function pickSlot(p: CustomPattern, i: number) {
+    if (paletteId === slotId(p, i)) editing = i;
+    else onPick(slotId(p, i));
+  }
+  function chipStyle(p: CustomPattern) {
+    const t = paletteFromSlot(p);
     return `--pat-base: ${t.header}; --pat-ink: ${t.inkStrong}; --pat-img: ${patternSvg(p.px, t.inkStrong)}`;
   }
-  function savePattern(i: number, p: CustomPattern) {
-    const list = Array.from({ length: PATTERN_SLOTS }, (_, k) => store.settings.customPatterns?.[k] ?? null);
-    list[i] = p;
+  function writeSlots(list: (CustomPattern | null)[]) {
     void store.saveSettings({ customPatterns: list });
+  }
+  const allSlots = () => Array.from({ length: PATTERN_SLOTS }, (_, k) => store.settings.customPatterns?.[k] ?? null);
+  function savePattern(i: number, p: CustomPattern) {
+    const list = allSlots();
+    list[i] = p;
+    writeSlots(list);
     editing = null;
-    onPick(customPatternId(i));
+    onPick(slotId(p, i));
+  }
+  function removeSlot(i: number) {
+    const list = allSlots();
+    list[i] = null;
+    writeSlots(list);
+    editing = null;
+  }
+
+  // The note's custom colour, kept in the first free slot.
+  let currentHex = $derived(isCustom ? paletteId.slice(7) : null);
+  let alreadySaved = $derived(!!currentHex && slots.some((p) => p?.solid && (p.bg ?? p.tint) === currentHex));
+  let freeSlot = $derived(slots.indexOf(null));
+  function saveColour() {
+    if (!currentHex || alreadySaved || freeSlot < 0) return;
+    const list = allSlots();
+    list[freeSlot] = { px: EMPTY_PX, tint: currentHex, bg: currentHex, solid: true };
+    writeSlots(list);
   }
 </script>
 
@@ -104,24 +120,41 @@
       {/if}
     </button>
   {/each}
-  <!-- Fourth row: your own patterns. -->
+  <!-- Fourth row: your five slots, a colour or a pattern each. Tap to use;
+       tap the one in use (or its pencil) to edit; + makes a new one. -->
   {#each slots as p, i}
     {#if p}
       <span class="slot">
-        <button
-          class="pchip nz-pat-custom"
-          data-testid="palette-chip"
-          data-palette={customPatternId(i)}
-          style={chipStyle(p)}
-          title="Pattern {i + 1}"
-          aria-label="Pattern {i + 1}"
-          onclick={() => onPick(customPatternId(i))}
-        >
-          {#if paletteId === customPatternId(i)}
-            <span class="pcheck" style="color: #2a2c2e"><Icon name="check" size={15} /></span>
-          {/if}
-        </button>
-        <button class="edit" data-testid="pattern-edit" title="Edit pattern {i + 1}" aria-label="Edit pattern {i + 1}" onclick={() => (editing = i)}>
+        {#if p.solid}
+          <button
+            class="pchip"
+            data-testid="saved-color"
+            data-hex={p.bg ?? p.tint}
+            style="background: {p.bg ?? p.tint}"
+            title="Colour {i + 1}"
+            aria-label="Colour {i + 1}"
+            onclick={() => pickSlot(p, i)}
+          >
+            {#if paletteId === slotId(p, i)}
+              <span class="pcheck" style="color: {paletteFromSlot({ ...p, ink: p.bg ?? p.tint }).fg}"><Icon name="check" size={15} /></span>
+            {/if}
+          </button>
+        {:else}
+          <button
+            class="pchip nz-pat-custom"
+            data-testid="palette-chip"
+            data-palette={customPatternId(i)}
+            style={chipStyle(p)}
+            title="Pattern {i + 1}"
+            aria-label="Pattern {i + 1}"
+            onclick={() => pickSlot(p, i)}
+          >
+            {#if paletteId === customPatternId(i)}
+              <span class="pcheck" style="color: {paletteFromSlot(p).fg}"><Icon name="check" size={15} /></span>
+            {/if}
+          </button>
+        {/if}
+        <button class="edit" data-testid="pattern-edit" title="Edit slot {i + 1}" aria-label="Edit slot {i + 1}" onclick={() => (editing = i)}>
           <Icon name="draw" size={11} />
         </button>
       </span>
@@ -129,84 +162,65 @@
       <button
         class="pchip empty"
         data-testid="pattern-empty"
-        title="New pattern in slot {i + 1}"
-        aria-label="New pattern in slot {i + 1}"
+        title="New colour or pattern in slot {i + 1}"
+        aria-label="New colour or pattern in slot {i + 1}"
         onclick={() => (editing = i)}
       >
         <Icon name="add" size={15} />
       </button>
     {/if}
   {/each}
-  {#if isCustom}
+  {#if isCustom && !alreadySaved}
     <span class="pchip current" style="background: {pal.bg}">
       <span class="pcheck" style="color: {pal.fg}"><Icon name="check" size={15} /></span>
     </span>
   {/if}
 </div>
-<!-- Saved colours: the five small chips, and the way into custom colour. -->
-<div class="saved">
-  {#each Array.from({ length: COLOR_SLOTS }) as _, i}
-    {#if saved[i]}
-      <button
-        class="mini"
-        data-testid="saved-color"
-        data-hex={saved[i]}
-        style="background: {saved[i]}"
-        title="Saved colour {i + 1}"
-        aria-label="Saved colour {i + 1}"
-        onclick={() => onPick(`custom:${saved[i]}`)}
-      ></button>
-    {:else}
-      <span class="mini hole" aria-hidden="true"></span>
-    {/if}
-  {/each}
-  <button class="ctoggle" data-testid="custom-toggle" aria-expanded={showCustom} onclick={() => (showCustom = !showCustom)}>
-    Custom colour
-  </button>
-</div>
-{#if showCustom}
+<!-- A custom colour: hue, dark to light, soft to vivid (the tracks say which). -->
 <label class="crow">
-  <span class="clab">Hue</span>
   <input
     class="hue"
     type="range" min="0" max="360" step="1"
     data-testid="custom-hue"
-    aria-label="Custom color hue"
+    aria-label="Custom colour hue"
     bind:value={custHue}
     oninput={applyCustom}
   />
 </label>
 <label class="crow">
-  <span class="clab">Dark / light</span>
   <!-- The full range: all the way to black at the left, white at the right. -->
   <input
     class="shade"
     type="range" min="0" max="100" step="1"
     data-testid="custom-light"
-    aria-label="Custom color lightness"
+    aria-label="Custom colour lightness"
     style="--hue: {custHue}; --sat: {custSat}%"
     bind:value={custLight}
     oninput={applyCustom}
   />
 </label>
 <label class="crow">
-  <span class="clab">Soft / vivid</span>
   <input
     class="desat"
     type="range" min="0" max="90" step="1"
-    aria-label="Custom color saturation"
+    aria-label="Custom colour saturation"
     style="--hue: {custHue}"
     bind:value={custSat}
     oninput={applyCustom}
   />
 </label>
-<button class="save" data-testid="save-color" disabled={!currentHex || alreadySaved} onclick={saveColour}>
-  {alreadySaved ? 'Saved' : 'Save colour'}
+<button class="save" data-testid="save-color" disabled={!currentHex || alreadySaved || freeSlot < 0} onclick={saveColour}>
+  {alreadySaved ? 'Saved' : freeSlot < 0 ? 'Slots full' : 'Save colour'}
 </button>
-{/if}
 
 {#if editing !== null}
-  <PatternEditor slot={editing} initial={slots[editing]} onSave={(p) => savePattern(editing!, p)} onClose={() => (editing = null)} />
+  <PatternEditor
+    slot={editing}
+    initial={slots[editing]}
+    onSave={(p) => savePattern(editing!, p)}
+    onRemove={slots[editing] ? () => removeSlot(editing!) : undefined}
+    onClose={() => (editing = null)}
+  />
 {/if}
 
 <style>
@@ -292,10 +306,6 @@
     flex-direction: column;
     gap: 4px;
   }
-  .clab {
-    font-size: 12px;
-    color: var(--app-muted);
-  }
   .crow input[type='range'] {
     width: 100%;
     height: 22px;
@@ -344,47 +354,6 @@
   }
   /* Chips on one line, the button on its own beneath: side by side they
      overran the 226px menu and the button clipped. */
-  .savedrow {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .saved {
-    display: flex;
-    gap: 6px;
-  }
-  .mini {
-    width: 22px;
-    height: 22px;
-    border-radius: var(--radius-sm);
-    border: 1px solid rgba(0, 0, 0, 0.16);
-    padding: 0;
-    cursor: pointer;
-  }
-  .mini:hover {
-    transform: scale(1.1);
-  }
-  .mini.hole {
-    border: none;
-    background: color-mix(in srgb, var(--app-fg) 6%, transparent);
-  }
-  .ctoggle {
-    margin-left: auto;
-    font: inherit;
-    font-size: 13px;
-    padding: 0 10px;
-    height: 24px;
-    border: none;
-    border-radius: var(--btn-radius);
-    background: color-mix(in srgb, var(--app-fg) 8%, transparent);
-    color: var(--app-fg);
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .ctoggle[aria-expanded='true'] {
-    background: var(--app-fg);
-    color: var(--app-panel);
-  }
   .save {
     width: 100%;
     font: inherit;

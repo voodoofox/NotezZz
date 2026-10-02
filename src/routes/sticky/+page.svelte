@@ -372,7 +372,12 @@
       --own-strip: {pal.dark ? 'var(--note-strip-dark)' : 'var(--note-strip)'};
     "
   >
-    <header class="bar {pal.pattern ? `nz-pat-${pal.pattern}` : ''}" data-tauri-drag-region>
+    <header
+      class="bar {pal.pattern ? `nz-pat-${pal.pattern}` : ''}"
+      class:patterned={!!pal.pattern}
+      style={pal.pattern ? `--pat-exact-base: ${pal.header}; --pat-exact-ink: ${pal.inkStrong ?? pal.ink ?? pal.fg}` : undefined}
+      data-tauri-drag-region
+    >
       {#if hasWin && tucked && tuckSide === 'right'}
         <!-- Tucked to the right edge, only the left of the bar shows: the
              way back has to live there. -->
@@ -572,6 +577,15 @@
     box-shadow: var(--own-strip, var(--note-strip)); /* the adhesive tint (lighter on dark notes) */
     cursor: move;
     user-select: none;
+  }
+  /* A pattern's title bar: its exact colours (as in its list row), opaque
+     over the note's shade, without the adhesive tint. Contrast is the
+     pattern's own (a custom one sets both of its colours). */
+  .bar.patterned {
+    --pat-base: var(--pat-exact-base);
+    --pat-ink: var(--pat-exact-ink);
+    background-color: var(--pat-exact-base);
+    box-shadow: none;
   }
   .ttl {
     flex: 1;

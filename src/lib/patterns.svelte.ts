@@ -1,7 +1,8 @@
-// Custom pixel patterns: an 8×8 tile the user paints, plus one tint that
-// colours the whole note. They live in settings (so they sync) in five slots,
-// and notes refer to a slot as `upat:<n>` — restyle the slot, every note on it
-// follows, the way a theme would.
+// The five custom slots: each holds a colour of your own or a pattern (an 8×8
+// tile you paint, in a background and a dot colour you choose). They live in
+// settings (so they sync); a pattern note refers to its slot as `upat:<n>` —
+// restyle the slot, every note on it follows, the way a theme would. A colour
+// slot is just a keeper: picking it gives the note `custom:<hex>`.
 
 import { mixHex } from './palettes';
 
@@ -12,8 +13,28 @@ export const TILE = 8;
 export interface CustomPattern {
   /** 64 chars of '0'/'1', row-major, top-left first. */
   px: string;
-  /** #rrggbb — the pixels, and the source of the note's palette. */
+  /** #rrggbb. Older patterns' single colour, their palette derived from it;
+   *  kept (= bg) on new ones so older app versions still read them. */
   tint: string;
+  /** The background (title bar and note) and the dots, chosen directly. */
+  bg?: string;
+  ink?: string;
+  /** A plain colour kept in the slot: no dots; picking it gives custom:<bg>. */
+  solid?: boolean;
+}
+
+/** Readable text on a background: dark on light, light on dark. */
+export function textOn(bg: string): string {
+  const n = parseInt(bg.slice(1), 16);
+  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return lum < 0.55 ? '#ECEDEF' : '#26282B';
+}
+
+/** A slot's note palette: its own two colours, exactly (the title bar is the
+ *  background as chosen, no darker), or an older slot's derived tint. */
+export function paletteFromSlot(p: CustomPattern) {
+  if (p.bg && p.ink) return { bg: p.bg, header: p.bg, fg: textOn(p.bg), ink: p.ink, inkStrong: p.ink };
+  return paletteFromTint(p.tint);
 }
 
 export const EMPTY_PX = '0'.repeat(TILE * TILE);
