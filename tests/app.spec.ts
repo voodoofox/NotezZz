@@ -2236,3 +2236,21 @@ test('list beside the note: no line or seam between them', async ({ page }) => {
   expect(await page.locator('.sidebar').evaluate((el) => getComputedStyle(el).borderRightStyle)).toBe('none');
 });
 
+
+test('a new sticky (Windows) opens big enough to show the whole toolbar and header', async ({ page }) => {
+  const { STICKY_SIZE } = await import('../src/lib/desktop');
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Groceries for the weekend');
+  await page.waitForTimeout(500);
+  const id = await page.evaluate(
+    () => Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!.slice('notezzz:note:'.length)
+  );
+  await page.setViewportSize({ width: STICKY_SIZE.w, height: STICKY_SIZE.h });
+  await page.goto(`/sticky?id=${id}`);
+  const tb = page.locator('.toolbar');
+  await expect(tb).toBeVisible();
+  expect(await tb.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+  const mic = (await page.getByTestId('fmt-record').boundingBox())!;
+  expect(mic.x + mic.width).toBeLessThanOrEqual(STICKY_SIZE.w);
+  await expect(page.getByTestId('sticky-more')).toBeInViewport();
+});

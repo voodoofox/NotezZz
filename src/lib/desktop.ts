@@ -47,6 +47,14 @@ function savedGeometry(id: string): { x: number; y: number; w: number; h: number
 }
 
 /**
+ * A new sticky's size: wide enough for the whole formatting toolbar (389px
+ * at the desktop's button size) and the header with room to spare, and tall
+ * enough to read a note without scrolling. Was 260 x 260, where the toolbar
+ * had to scroll. A sticky that was resized keeps its own size.
+ */
+export const STICKY_SIZE = { w: 420, h: 460 };
+
+/**
  * `near` (logical px): where to put a sticky that has no remembered place —
  * a note created from another sticky's + button lands beside that sticky,
  * not wherever the default happens to be.
@@ -78,8 +86,8 @@ export async function openSticky(note: Note, near?: { x: number; y: number }): P
     alwaysOnTop: true,
     skipTaskbar: true,
     shadow: false,
-    width: geom?.w ?? 260,
-    height: geom?.h ?? 260,
+    width: geom?.w ?? STICKY_SIZE.w,
+    height: geom?.h ?? STICKY_SIZE.h,
     x: geom?.x ?? near?.x,
     y: geom?.y ?? near?.y,
     minWidth: 170,
