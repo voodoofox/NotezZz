@@ -1926,20 +1926,22 @@ test('checklist boxes follow the text size and the button shape', async ({ page 
   expect(box.border).toBe('none');
 });
 
-test('a dropped connection is retried quietly; a run of them is said in words', async ({ page }) => {
+test('a dropped connection is retried quietly; only lasting trouble is said, in words', async ({ page }) => {
   await createNote(page);
   const sync = () => page.evaluate(() => (window as unknown as { __nzSyncNow: () => Promise<void> }).__nzSyncNow());
   await page.evaluate(() => localStorage.setItem('notezzz:test:failLoads', '1'));
-  await sync();
-  await sync();
-  await expect(page.getByTestId('sync-error')).toHaveCount(0); // weather, not news
+  // A blip: several failures within seconds say nothing (the grace is 45s).
+  for (let i = 0; i < 4; i++) await sync();
+  await expect(page.getByTestId('sync-error')).toHaveCount(0);
+  // Lasting trouble (grace shortened for the test): said, in words.
+  await page.evaluate(() => localStorage.setItem('notezzz:test:offlineGrace', '0'));
   await sync();
   await expect(page.getByTestId('sync-error')).toBeVisible();
   await expect(page.getByTestId('sync-error')).toContainText("Can't reach Google Drive");
   await expect(page.getByTestId('sync-error')).not.toContainText('signal timed out');
+  // Back: it retries by itself (no Reconnect) and the message goes.
   await page.evaluate(() => localStorage.removeItem('notezzz:test:failLoads'));
-  await sync();
-  await expect(page.getByTestId('sync-error')).toHaveCount(0); // gone on its own
+  await expect(page.getByTestId('sync-error')).toHaveCount(0, { timeout: 12_000 });
 });
 
 test.describe('phone: the selection balloon', () => {

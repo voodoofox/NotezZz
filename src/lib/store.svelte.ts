@@ -79,6 +79,18 @@ const SETTINGS_CACHE_KEY = 'notezzz:cache:settings';
 /** Marks that this launch already retried itself — never reload twice. */
 const REBOOT_KEY = 'notezzz:reboot';
 
+/** How long network trouble lasts before it is mentioned (tests shorten it
+ *  through a storage key, as with the other test hooks). */
+function offlineGrace(): number {
+  try {
+    const t = localStorage.getItem('notezzz:test:offlineGrace');
+    if (t !== null) return Number(t);
+  } catch {
+    /* no storage */
+  }
+  return 45_000;
+}
+
 /** What a run of network failures says, instead of the browser's wording. */
 const OFFLINE_MESSAGE = "Can't reach Google Drive. Your notes are kept here and will sync when the connection is back.";
 
@@ -169,7 +181,7 @@ class AppStore {
       // both causes. Do it for them, once, before giving up and showing why.
       if (this.#rebootOnce()) return;
       this.#paintCache();
-      this.#fail(e);
+      this.#fail(e, this.notes.length > 0);
       this.loaded = true;
       this.#markReady();
       return;
@@ -202,8 +214,9 @@ class AppStore {
       if (!this.activeId && this.notes.length) this.activeId = this.notes[0].id;
       if (!this.#outbox.busy) this.syncStatus = cloud ? 'synced' : 'local';
       this.#cacheNotes();
+      this.#recovered();
     } catch (e) {
-      this.#fail(e);
+      this.#fail(e, this.notes.length > 0);
     }
     this.loaded = true;
     this.#markReady();
@@ -296,19 +309,32 @@ class AppStore {
     }
   }
 
-  /** Network failures in a row on background work; one is not news. */
+  /** Network failures since the connection last worked. */
   #offlineStreak = 0;
+  /** When that run of failures began (0 = the connection is fine). */
+  #offlineSince = 0;
+  #retryTimer: ReturnType<typeof setTimeout> | undefined;
+  #retryStep = 0;
+  /** A settings save the network dropped, sent again once it's back. */
+  #settingsOwed = false;
 
   /**
-   * Show a sync error. Background work (polls, queued writes) shrugs off a
-   * dropped request or two, since the heartbeat retries anyway; a run of
-   * them, or any refusal, is shown. Network trouble is said in words, not
-   * as the browser's "signal timed out".
+   * Show a sync error. Network trouble on background work (polls, queued
+   * writes, settings, a start-up with notes already on screen) is retried
+   * quickly and only said once it has lasted: a connection that drops for
+   * a second, while a few notes happen to be syncing, used to fail three
+   * requests at once and put the message up at once. Refusals (sign-in,
+   * permissions) show straight away. Network trouble is said in words.
    */
   #fail(e: unknown, background = false) {
     console.error('[NotezZz sync]', e);
     const transient = isTransient(e);
-    if (transient && background && ++this.#offlineStreak < 3) return;
+    if (transient && background) {
+      this.#offlineStreak += 1;
+      if (!this.#offlineSince) this.#offlineSince = Date.now();
+      this.#retrySoon();
+      if (this.#offlineStreak < 3 || Date.now() - this.#offlineSince < offlineGrace()) return;
+    }
     this.syncStatus = 'error';
     // A retryable failure that wasn't the network (a few notes Drive would
     // not hand over) keeps its own words; network trouble gets ours.
@@ -320,6 +346,35 @@ class AppStore {
   backOnline() {
     this.#outbox.retryAll();
     void this.syncNow();
+  }
+
+  /** Try again soon after a dropped connection (3s, 8s, 15s, then every
+   *  30s while it lasts), not on the slower heartbeat. */
+  #retrySoon() {
+    if (this.#retryTimer) return;
+    const delays = [3_000, 8_000, 15_000, 30_000];
+    const wait = delays[Math.min(this.#retryStep++, delays.length - 1)];
+    this.#retryTimer = setTimeout(() => {
+      this.#retryTimer = undefined;
+      this.backOnline();
+    }, wait);
+  }
+
+  /** Drive answered: the run of failures is over, and its message with it. */
+  #recovered() {
+    this.#offlineStreak = 0;
+    this.#offlineSince = 0;
+    this.#retryStep = 0;
+    clearTimeout(this.#retryTimer);
+    this.#retryTimer = undefined;
+    if (this.#settingsOwed) {
+      this.#settingsOwed = false;
+      void this.saveSettings({});
+    }
+    if (this.syncError === OFFLINE_MESSAGE && !this.#outbox.failedCount) {
+      this.syncError = '';
+      if (this.syncStatus === 'error') this.syncStatus = this.isCloud ? 'synced' : 'local';
+    }
   }
 
   /** User-initiated recovery from a sync error: interactive sign-in (allowed,
@@ -462,7 +517,7 @@ class AppStore {
 
   #settled(ok: boolean, e?: unknown) {
     if (!ok) return this.#fail(e, true);
-    this.#offlineStreak = 0;
+    this.#recovered();
     // One success doesn't clear the error while other writes are still failed;
     // a fully drained queue does.
     if (!this.#outbox.busy && this.#outbox.failedCount === 0 && this.isCloud) {
@@ -662,7 +717,9 @@ class AppStore {
     try {
       await this.#backend?.saveSettings(this.settings);
     } catch (e) {
-      this.#fail(e);
+      // Dropped by the network: kept here, sent again once Drive answers.
+      if (isTransient(e)) this.#settingsOwed = true;
+      this.#fail(e, isTransient(e));
     }
   }
 
@@ -755,12 +812,7 @@ class AppStore {
     try {
       await this.#doReload();
       this.#pollFailures = 0;
-      this.#offlineStreak = 0;
-      // Drive answered: a "can't reach" message no longer holds.
-      if (this.syncError === OFFLINE_MESSAGE && !this.#outbox.failedCount) {
-        this.syncError = '';
-        if (this.syncStatus === 'error') this.syncStatus = this.isCloud ? 'synced' : 'local';
-      }
+      this.#recovered();
     } catch (e) {
       // Back off doubling from 30s to 5min: a rate limit that is polled
       // through every 6s never clears.
