@@ -62,7 +62,8 @@ export function desktopTokenFresh(): Promise<string> {
 }
 
 /** Shown when tokens exist but the userinfo lookup failed at sign-in. */
-export const UNKNOWN_ACCOUNT = 'Google account (email unavailable)';
+import { UNKNOWN_ACCOUNT } from './account';
+export { UNKNOWN_ACCOUNT };
 
 /** Signed-in account address, or null when signed out. */
 export async function desktopAccount(): Promise<string | null> {

@@ -9,6 +9,7 @@
 // which is why flush() exists for page-hide.
 
 import { isDriveAccessError } from './drive/driveAccess';
+import { UNKNOWN_ACCOUNT } from './drive/account';
 import { BASE_FONT_PX, DEFAULT_NOTE_PX, DEFAULT_SETTINGS, newNote, rollTilt, type Note, type Settings } from './types';
 import { welcomeNotes } from './welcome';
 import { Outbox, type OutboxOp } from './outbox';
@@ -102,7 +103,10 @@ const OFFLINE_MESSAGE = "Can't reach Google Drive. Your notes are kept here and 
 
 class AppStore {
   notes = $state<Note[]>([]);
-  settings = $state<Settings>({ ...DEFAULT_SETTINGS });
+  // The theme app.html chose before the first paint (from the cache)
+  // carries over: applying the default 'light' first flashed a light app
+  // for the moment until the cached settings were read.
+  settings = $state<Settings>({ ...DEFAULT_SETTINGS, appTheme: earlyTheme() });
   activeId = $state<string | null>(null);
   loaded = $state(false);
 
@@ -288,6 +292,22 @@ class AppStore {
    */
   async paintCachedNow(): Promise<boolean> {
     if (!isTauri() || this.notes.length) return this.notes.length > 0;
+    // Android: the account is a synchronous bridge call, so the cache is
+    // painted before anything async (the first frame used to be an empty
+    // "Loading notes…" list for the round-trip's length).
+    const b = (window as unknown as { NotezzzAndroid?: { googleAccount?(): string } }).NotezzzAndroid;
+    if (typeof b?.googleAccount === 'function') {
+      try {
+        const a = JSON.parse(b.googleAccount()) as { signedIn?: boolean; email?: string };
+        if (a.signedIn) {
+          this.#account = a.email || UNKNOWN_ACCOUNT;
+          this.#paintCache();
+        }
+        return this.notes.length > 0;
+      } catch {
+        /* fall through to the async path */
+      }
+    }
     try {
       const { desktopAccount } = await import('./drive/desktopAuth');
       this.#account = await desktopAccount();
@@ -974,6 +994,15 @@ class AppStore {
 }
 
 export const store = new AppStore();
+
+/** The theme app.html's early script set from the cache ('' when none). */
+function earlyTheme(): 'light' | 'dark' {
+  try {
+    return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
 
 /** The web sign-in's account email (auth.ts remembers it), if known yet. */
 function webAccount(): string | null {
