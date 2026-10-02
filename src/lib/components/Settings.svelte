@@ -37,13 +37,13 @@
   function themePreview(t: ThemeDef): string {
     const v = themeVars(t);
     return (
-      `background-color: #f0e7c2; background-image: ${v['--note-shade']};` +
-      `background-size: ${v['--note-shade-size']}; background-position: center top; background-repeat: no-repeat;`
+      `background-color: #f0e7c2; background-image: ${v['--note-shade']}, ${v['--note-wear']};` +
+      `background-size: ${v['--note-shade-size']}, 100% 100%; background-position: center top, center; background-repeat: no-repeat;`
     );
   }
   const grainPreview = (t: ThemeDef) => {
     const v = themeVars(t);
-    return `background-image: ${v['--note-grain']}, ${v['--note-wear']}; background-repeat: repeat, no-repeat; background-size: auto, 100% 100%;`;
+    return `background-image: ${v['--note-grain']}; background-size: ${v['--note-grain-size']}; opacity: ${v['--note-grain-opacity']};`;
   };
   const lightPreview = (t: ThemeDef) =>
     `background-image: ${themeVars(t)['--note-light']}; background-size: ${themeVars(t)['--note-light-size']}; background-position: center bottom; background-repeat: no-repeat;`;

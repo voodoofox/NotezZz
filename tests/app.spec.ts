@@ -1529,8 +1529,8 @@ test.describe('themes', () => {
     await page.getByTestId('open-settings').click();
     await page.getByTestId('theme-pick').filter({ hasText: 'Flat' }).click();
     await page.getByTestId('settings-close').click();
-    expect(await image()).toBe('none');
-    expect(await grain()).toBe('none, none'); // no grain, no wear
+    expect(await image()).toBe('none, none'); // no shade, no wear
+    expect(await grain()).toBe('none');
     expect(await rootVar(page, '--note-header-mix')).toBe('100%');
   });
 
@@ -2300,10 +2300,13 @@ test('Paper: Daylight on a paper texture with light wear', async ({ page }) => {
     const a = getComputedStyle(el, '::after');
     return { img: a.backgroundImage, blend: a.mixBlendMode };
   });
-  expect(layer.img).toContain('data:image/svg+xml');
-  expect(layer.img).toContain('radial-gradient'); // the aged edges
-  expect(layer.img).toContain("baseFrequency%3D'0.035'"); // the fibres' formation
+  expect(layer.img).toContain('textures/paper.webp'); // a real texture, not noise
   expect(layer.blend).toBe('hard-light');
+  expect(await page.getByTestId('note-pane').evaluate((el) => getComputedStyle(el).backgroundImage)).toContain(
+    'radial-gradient(' // the aged edges, on the note's own surface
+  );
+  const res = await page.request.get(layer.img.match(/url\("(.*)"\)/)![1]);
+  expect(res.ok()).toBe(true);
 });
 
 test('Mono: the app in black and white only, the note keeps its colour', async ({ page }) => {
@@ -2332,5 +2335,36 @@ test('Mono: the app in black and white only, the note keeps its colour', async (
   await page.getByTestId('theme-pick').filter({ hasText: 'Daylight' }).click();
   await page.getByTestId('settings-close').click();
   await expect(page.locator('html')).not.toHaveAttribute('data-ui', 'mono');
+});
+
+test('Mono draws no divider lines', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('theme-pick').filter({ hasText: 'Mono' }).click();
+  await page.getByTestId('settings-close').click();
+  const line = await page.locator('.head').evaluate((el) => getComputedStyle(el).borderBottomColor);
+  expect(line).toBe('rgba(0, 0, 0, 0)');
+});
+
+test.describe('phone: the alarm sits in a button column', () => {
+  test.use({ viewport: { width: 412, height: 915 } });
+
+  test("a pinned row's alarm lines up with the header's search button", async ({ page }) => {
+    await createNote(page);
+    await page.getByTestId('pane-pin').click();
+    await page.waitForTimeout(500);
+    await page.evaluate(() => {
+      const k = Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!;
+      const n = JSON.parse(localStorage.getItem(k)!);
+      n.remindAt = Date.now() + 86_400_000;
+      localStorage.setItem(k, JSON.stringify(n));
+    });
+    await page.goto('/?local');
+    const [alarm, search] = await Promise.all([
+      page.getByTestId('note-alarm').boundingBox(),
+      page.getByTestId('search-toggle').boundingBox(),
+    ]);
+    expect(Math.abs(alarm!.x + alarm!.width / 2 - (search!.x + search!.width / 2))).toBeLessThan(0.5);
+  });
 });
 

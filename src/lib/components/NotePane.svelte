@@ -423,10 +423,11 @@
     position: relative;
     isolation: isolate;
     background-color: var(--note-bg);
-    /* The shade: the ellipse's part above its centre. */
-    background-image: var(--note-shade);
-    background-size: var(--note-shade-size);
-    background-position: center top;
+    /* The shade (the ellipse's part above its centre), and a theme's wear:
+       aged edges over the whole note. */
+    background-image: var(--note-shade), var(--note-wear, none);
+    background-size: var(--note-shade-size), 100% 100%;
+    background-position: center top, center;
     background-repeat: no-repeat;
     color: var(--note-fg);
     height: 100%;
@@ -458,10 +459,10 @@
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    /* The grain tiles; a theme's wear (aged edges) spans the whole note. */
-    background-image: var(--note-grain), var(--note-wear, none);
-    background-repeat: repeat, no-repeat;
-    background-size: auto, 100% 100%;
+    /* The grain or paper tile, at the theme's strength. */
+    background-image: var(--note-grain);
+    background-size: var(--note-grain-size, auto);
+    opacity: var(--note-grain-opacity, 1);
     mix-blend-mode: hard-light;
   }
   .pane.empty::before,

@@ -56,6 +56,8 @@
   --note-shade-size: 100% 50%;
   --note-strip-dark: none;
   --note-wear: none;
+  --note-grain-size: auto;
+  --note-grain-opacity: 1;
   --note-light-size: 100% 50%;
   --note-shade: none;
   --note-grain: none;
@@ -135,7 +137,7 @@ textarea {
   --app-fg: #000000;
   --app-pat-ink: #000000;
   --app-muted: #000000;
-  --app-border: #000000;
+  --app-border: transparent; /* no divider lines; rings draw the edges that matter */
   --app-danger: #000000;
   --sticker-shadow: 0 0 0 1.5px var(--app-fg);
   --list-shade: 0%;
@@ -146,7 +148,7 @@ textarea {
   --app-fg: #ffffff;
   --app-pat-ink: #ffffff;
   --app-muted: #ffffff;
-  --app-border: #ffffff;
+  --app-border: transparent;
   --app-danger: #ffffff;
 }
 :root[data-ui='mono'] :is(.search, .seg, .ctoggle, .save, .tfile, .pchip.empty, .mini.hole),

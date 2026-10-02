@@ -363,11 +363,13 @@
         ></span>
         <button class="pick" data-testid="note-pick" onclick={() => (store.activeId = note.id)}>
           <span class="title" data-testid="note-title">{noteLabel(note)}</span>
-          {#if note.remindAt}
-            <!-- A reminder is set: a small bell beside the title. -->
-            <span class="alarm" data-testid="note-alarm" title="Reminder set" aria-label="Reminder set"><Icon name="alarm" size={16} /></span>
-          {/if}
+
         </button>
+        {#if note.remindAt}
+          <!-- A reminder is set: a bell in its own button-sized cell, so it
+               sits in the column of the header's buttons like the pin. -->
+          <span class="alarm" data-testid="note-alarm" title="Reminder set" aria-label="Reminder set"><Icon name="alarm" /></span>
+        {/if}
         <button
           class="pin"
           data-testid="note-pin"
@@ -749,9 +751,13 @@
   }
   .alarm {
     flex: none;
+    align-self: center;
+    width: var(--btn);
+    height: var(--btn);
     display: inline-flex;
-    margin-right: 6px;
-    opacity: 0.6;
+    align-items: center;
+    justify-content: center;
+    margin-right: var(--btn-gap);
   }
   .title {
     flex: 1;

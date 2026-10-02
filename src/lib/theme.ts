@@ -6,6 +6,8 @@
 // CSS custom properties. Nothing from a theme file is ever written into CSS
 // as text, so a shared theme can't smuggle styles (or URLs) into the app.
 
+import { base } from '$app/paths';
+
 export interface Fade {
   /** #rrggbb */
   color: string;
@@ -124,7 +126,7 @@ export const BUILTIN_THEMES: ThemeDef[] = [
       spread: 3.5,
       center: 0.75,
       lightOnDark: 1,
-      grain: 0.07,
+      grain: 0.035, // the layer at 14%: felt more than seen
       texture: 'paper',
       wear: 0.45,
       header: 0.075,
@@ -383,7 +385,14 @@ export function themeVars(t: ThemeDef): Record<string, string> {
   return {
     '--note-light': fadeGradient('bottom', n.light, n.curve, n.spread),
     '--note-shade': fadeGradient('top', n.shade, n.curve, n.spread),
-    '--note-grain': n.texture === 'paper' ? paperImage(n.grain, n.wear) : grainImage(n.grain),
+    // Paper is a real texture (static/textures/paper.webp, made by
+    // scripts/make-paper.py): a 1024px tile shown at 512px for sharpness on
+    // dense screens; its strength is the layer's opacity. The grain bakes
+    // its strength into its own alpha.
+    '--note-grain':
+      n.texture === 'paper' ? (n.grain > 0 ? `url("${base}/textures/paper.webp")` : 'none') : grainImage(n.grain),
+    '--note-grain-size': n.texture === 'paper' ? '512px 512px' : 'auto',
+    '--note-grain-opacity': n.texture === 'paper' ? String(Math.min(1, n.grain * 4)) : '1',
     '--note-wear': wearImage(n.wear),
     '--note-light-on-dark': String(n.lightOnDark),
     // The shade paints the note down to the centre, the light from there on.
@@ -412,43 +421,8 @@ export function applyTheme(t: ThemeDef, root: HTMLElement = document.documentEle
   else delete root.dataset.ui;
 }
 
-/**
- * Paper: what real paper shows, with no weave or grid. A fine surface
- * tooth, the soft clumpy "formation" of its fibres (the cloudiness seen when
- * paper is held to the light) and a slow overall variation, as a seamlessly
- * tiling grey tile laid on with hard-light like the grain (50% grey changes
- * nothing). With wear, a few faint darker spots (foxing). Every noise
- * stitches, so the tile has no seams.
- */
-export function paperImage(opacity: number, wear: number): string {
-  if (opacity <= 0) return 'none';
-  const grey = (name: string) =>
-    `<feColorMatrix type='matrix' values='1 0 0 0 0  1 0 0 0 0  1 0 0 0 0  0 0 0 0 1' result='${name}'/>`;
-  const fn = (c: string) => `<feFunc${c} type='linear' slope='1.9' intercept='-0.45'/>`;
-  const spot = `<feFunc$C type='discrete' tableValues='0.36 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5'/>`;
-  const spots = wear > 0
-    ? `<feTurbulence type='fractalNoise' baseFrequency='0.04' numOctaves='2' seed='21' stitchTiles='stitch'/>${grey('s0')}` +
-      // Only the darkest few percent of that noise become spots.
-      `<feComponentTransfer in='s0' result='spots'>${['R', 'G', 'B'].map((c) => spot.replace('$C', c)).join('')}</feComponentTransfer>` +
-      `<feComposite in='p' in2='spots' operator='arithmetic' k1='0' k2='1' k3='${(wear * 0.8).toFixed(2)}' k4='${(-wear * 0.4).toFixed(3)}' result='p2'/>`
-    : `<feComposite in='p' in2='p' operator='arithmetic' k1='0' k2='1' k3='0' k4='0' result='p2'/>`;
-  const svg =
-    `<svg xmlns='http://www.w3.org/2000/svg' width='384' height='384'>` +
-    `<filter id='p' x='0' y='0' width='100%' height='100%' color-interpolation-filters='sRGB'>` +
-    `<feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='2' stitchTiles='stitch'/>${grey('tooth')}` +
-    `<feTurbulence type='fractalNoise' baseFrequency='0.035' numOctaves='4' seed='9' stitchTiles='stitch'/>${grey('form')}` +
-    `<feTurbulence type='fractalNoise' baseFrequency='0.008' numOctaves='3' seed='17' stitchTiles='stitch'/>${grey('cloud')}` +
-    `<feComposite in='tooth' in2='form' operator='arithmetic' k1='0' k2='0.45' k3='0.55' k4='0' result='fine'/>` +
-    `<feComposite in='fine' in2='cloud' operator='arithmetic' k1='0' k2='0.75' k3='0.25' k4='0' result='raw'/>` +
-    `<feComponentTransfer in='raw' result='p'>${fn('R')}${fn('G')}${fn('B')}</feComponentTransfer>` +
-    spots +
-    `<feComponentTransfer in='p2'><feFuncA type='linear' slope='0' intercept='${opacity.toFixed(3)}'/></feComponentTransfer>` +
-    `</filter><rect width='100%' height='100%' filter='url(#p)'/></svg>`;
-  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
-}
-
 /** Wear's aged edges: a warm darkening that gathers at the note's edges,
- *  over the whole note (not tiled), in the same hard-light layer. */
+ *  over the whole note (not tiled), on the note's own surface. */
 export function wearImage(wear: number): string {
   if (wear <= 0) return 'none';
   const a = (0.42 * wear).toFixed(3);
