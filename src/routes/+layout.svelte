@@ -141,6 +141,7 @@
   // bar (theme-color) in step with it.
   $effect(() => {
     const theme = store.settings.appTheme;
+    void store.settings.themeId; // Mono changes the panel colour the title bar takes
     document.documentElement.dataset.theme = theme;
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', theme === 'dark' ? '#16181d' : '#f4f5f7');

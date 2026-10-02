@@ -47,6 +47,11 @@ export interface ThemeDef {
     spread: number;
     /** Paper grain over the whole note, 0..0.5 opacity. */
     grain: number;
+    /** What the grain is: an even fine 'grain', or 'paper' (fibres and a
+     *  soft cloudiness, with faint spots when worn). */
+    texture: 'grain' | 'paper';
+    /** Wear, 0..1: aged, slightly darker edges and a few faint spots. */
+    wear: number;
     /** The title strip's opacity, 0..1 (1 = a solid band of the header colour). */
     header: number;
     /** The adhesive: a tint laid over the title strip (black darkens it on
@@ -55,6 +60,9 @@ export interface ThemeDef {
     /** The formatting bar's background, 0..1 (0 = just the buttons). */
     toolbar: number;
   };
+  /** The app around the notes: 'standard', or 'mono' (black and white only;
+   *  the notes keep their colours). */
+  ui: 'standard' | 'mono';
   buttons: {
     /** Corner radius as a share of the button's side (the logo: 0.235). */
     corner: number;
@@ -73,6 +81,8 @@ const FLAT_NOTE: ThemeDef['note'] = {
   center: 0.5,
   lightOnDark: 1,
   grain: 0,
+  texture: 'grain',
+  wear: 0,
   header: 1,
   strip: { color: '#000000', strength: 0 },
   toolbar: 1,
@@ -92,10 +102,45 @@ export const BUILTIN_THEMES: ThemeDef[] = [
       center: 0.75,
       lightOnDark: 1,
       grain: 0.02,
+      texture: 'grain',
+      wear: 0,
       header: 0.075,
       strip: { color: '#000000', strength: 0.075 },
       toolbar: 0,
     },
+    ui: 'standard',
+    buttons: { ...LOGO_BUTTONS },
+  },
+  {
+    // Daylight's light and shade on real-looking paper: fibres, a soft
+    // cloudiness, and a little wear (faint spots, aged edges).
+    id: 'paper',
+    name: 'Paper',
+    author: 'NotezZz',
+    note: {
+      light: { color: '#ffffff', strength: 0.0768, reach: 1.75 },
+      shade: { color: '#000000', strength: 0.112, reach: 1 },
+      curve: 2.5,
+      spread: 3.5,
+      center: 0.75,
+      lightOnDark: 1,
+      grain: 0.07,
+      texture: 'paper',
+      wear: 0.45,
+      header: 0.075,
+      strip: { color: '#000000', strength: 0.075 },
+      toolbar: 0,
+    },
+    ui: 'standard',
+    buttons: { ...LOGO_BUTTONS },
+  },
+  {
+    // The app in black and white only; the notes are the one colour.
+    id: 'mono',
+    name: 'Mono',
+    author: 'NotezZz',
+    note: structuredClone(FLAT_NOTE),
+    ui: 'mono',
     buttons: { ...LOGO_BUTTONS },
   },
   {
@@ -103,6 +148,7 @@ export const BUILTIN_THEMES: ThemeDef[] = [
     name: 'Flat',
     author: 'NotezZz',
     note: structuredClone(FLAT_NOTE),
+    ui: 'standard',
     buttons: { ...LOGO_BUTTONS },
   },
 ];
@@ -125,7 +171,7 @@ const VERSION = 1;
 /** The JSON people share: everything but the local id. */
 export function exportTheme(t: ThemeDef): string {
   return JSON.stringify(
-    { format: FORMAT, version: VERSION, name: t.name, author: t.author, note: t.note, buttons: t.buttons },
+    { format: FORMAT, version: VERSION, name: t.name, author: t.author, note: t.note, ui: t.ui, buttons: t.buttons },
     null,
     2
   );
@@ -192,6 +238,9 @@ export function normalizeTheme(raw: unknown, id: string): ThemeDef {
       center: clamp(n.center, 0.05, 0.95, FLAT_NOTE.center),
       lightOnDark: clamp(n.lightOnDark, 0, 1, FLAT_NOTE.lightOnDark),
       grain: clamp(n.grain, 0, 0.5, FLAT_NOTE.grain),
+      // Names from a short list, never text that reaches CSS.
+      texture: n.texture === 'paper' ? 'paper' : 'grain',
+      wear: clamp(n.wear, 0, 1, FLAT_NOTE.wear),
       header: clamp(n.header, 0, 1, FLAT_NOTE.header),
       strip: {
         color: hex(obj(n.strip).color, FLAT_NOTE.strip.color),
@@ -199,6 +248,7 @@ export function normalizeTheme(raw: unknown, id: string): ThemeDef {
       },
       toolbar: clamp(n.toolbar, 0, 1, FLAT_NOTE.toolbar),
     },
+    ui: o.ui === 'mono' ? 'mono' : 'standard',
     buttons: {
       corner: clamp(b.corner, 0, 0.5, LOGO_BUTTONS.corner),
       edge: clamp(b.edge, 0, 16, LOGO_BUTTONS.edge),
@@ -333,7 +383,8 @@ export function themeVars(t: ThemeDef): Record<string, string> {
   return {
     '--note-light': fadeGradient('bottom', n.light, n.curve, n.spread),
     '--note-shade': fadeGradient('top', n.shade, n.curve, n.spread),
-    '--note-grain': grainImage(n.grain),
+    '--note-grain': n.texture === 'paper' ? paperImage(n.grain, n.wear) : grainImage(n.grain),
+    '--note-wear': wearImage(n.wear),
     '--note-light-on-dark': String(n.lightOnDark),
     // The shade paints the note down to the centre, the light from there on.
     '--note-shade-size': `100% ${pct(n.center * Math.max(1, n.shade.reach))}`,
@@ -356,4 +407,50 @@ export function themeVars(t: ThemeDef): Record<string, string> {
 
 export function applyTheme(t: ThemeDef, root: HTMLElement = document.documentElement): void {
   for (const [k, v] of Object.entries(themeVars(t))) root.style.setProperty(k, v);
+  // The app's own colours (app.css): black and white only under 'mono'.
+  if (t.ui === 'mono') root.dataset.ui = 'mono';
+  else delete root.dataset.ui;
+}
+
+/**
+ * Paper: what real paper shows, with no weave or grid. A fine surface
+ * tooth, the soft clumpy "formation" of its fibres (the cloudiness seen when
+ * paper is held to the light) and a slow overall variation, as a seamlessly
+ * tiling grey tile laid on with hard-light like the grain (50% grey changes
+ * nothing). With wear, a few faint darker spots (foxing). Every noise
+ * stitches, so the tile has no seams.
+ */
+export function paperImage(opacity: number, wear: number): string {
+  if (opacity <= 0) return 'none';
+  const grey = (name: string) =>
+    `<feColorMatrix type='matrix' values='1 0 0 0 0  1 0 0 0 0  1 0 0 0 0  0 0 0 0 1' result='${name}'/>`;
+  const fn = (c: string) => `<feFunc${c} type='linear' slope='1.9' intercept='-0.45'/>`;
+  const spot = `<feFunc$C type='discrete' tableValues='0.36 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5'/>`;
+  const spots = wear > 0
+    ? `<feTurbulence type='fractalNoise' baseFrequency='0.04' numOctaves='2' seed='21' stitchTiles='stitch'/>${grey('s0')}` +
+      // Only the darkest few percent of that noise become spots.
+      `<feComponentTransfer in='s0' result='spots'>${['R', 'G', 'B'].map((c) => spot.replace('$C', c)).join('')}</feComponentTransfer>` +
+      `<feComposite in='p' in2='spots' operator='arithmetic' k1='0' k2='1' k3='${(wear * 0.8).toFixed(2)}' k4='${(-wear * 0.4).toFixed(3)}' result='p2'/>`
+    : `<feComposite in='p' in2='p' operator='arithmetic' k1='0' k2='1' k3='0' k4='0' result='p2'/>`;
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='384' height='384'>` +
+    `<filter id='p' x='0' y='0' width='100%' height='100%' color-interpolation-filters='sRGB'>` +
+    `<feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='2' stitchTiles='stitch'/>${grey('tooth')}` +
+    `<feTurbulence type='fractalNoise' baseFrequency='0.035' numOctaves='4' seed='9' stitchTiles='stitch'/>${grey('form')}` +
+    `<feTurbulence type='fractalNoise' baseFrequency='0.008' numOctaves='3' seed='17' stitchTiles='stitch'/>${grey('cloud')}` +
+    `<feComposite in='tooth' in2='form' operator='arithmetic' k1='0' k2='0.45' k3='0.55' k4='0' result='fine'/>` +
+    `<feComposite in='fine' in2='cloud' operator='arithmetic' k1='0' k2='0.75' k3='0.25' k4='0' result='raw'/>` +
+    `<feComponentTransfer in='raw' result='p'>${fn('R')}${fn('G')}${fn('B')}</feComponentTransfer>` +
+    spots +
+    `<feComponentTransfer in='p2'><feFuncA type='linear' slope='0' intercept='${opacity.toFixed(3)}'/></feComponentTransfer>` +
+    `</filter><rect width='100%' height='100%' filter='url(#p)'/></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
+/** Wear's aged edges: a warm darkening that gathers at the note's edges,
+ *  over the whole note (not tiled), in the same hard-light layer. */
+export function wearImage(wear: number): string {
+  if (wear <= 0) return 'none';
+  const a = (0.42 * wear).toFixed(3);
+  return `radial-gradient(ellipse 72% 68% at 50% 46%, rgba(128, 128, 128, 0) 62%, rgba(92, 74, 50, ${a}) 100%)`;
 }

@@ -458,7 +458,10 @@
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    background-image: var(--note-grain);
+    /* The grain tiles; a theme's wear (aged edges) spans the whole note. */
+    background-image: var(--note-grain), var(--note-wear, none);
+    background-repeat: repeat, no-repeat;
+    background-size: auto, 100% 100%;
     mix-blend-mode: hard-light;
   }
   .pane.empty::before,

@@ -41,7 +41,10 @@
       `background-size: ${v['--note-shade-size']}; background-position: center top; background-repeat: no-repeat;`
     );
   }
-  const grainPreview = (t: ThemeDef) => `background-image: ${themeVars(t)['--note-grain']};`;
+  const grainPreview = (t: ThemeDef) => {
+    const v = themeVars(t);
+    return `background-image: ${v['--note-grain']}, ${v['--note-wear']}; background-repeat: repeat, no-repeat; background-size: auto, 100% 100%;`;
+  };
   const lightPreview = (t: ThemeDef) =>
     `background-image: ${themeVars(t)['--note-light']}; background-size: ${themeVars(t)['--note-light-size']}; background-position: center bottom; background-repeat: no-repeat;`;
 

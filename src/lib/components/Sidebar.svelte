@@ -363,6 +363,10 @@
         ></span>
         <button class="pick" data-testid="note-pick" onclick={() => (store.activeId = note.id)}>
           <span class="title" data-testid="note-title">{noteLabel(note)}</span>
+          {#if note.remindAt}
+            <!-- A reminder is set: a small bell beside the title. -->
+            <span class="alarm" data-testid="note-alarm" title="Reminder set" aria-label="Reminder set"><Icon name="alarm" size={16} /></span>
+          {/if}
         </button>
         <button
           class="pin"
@@ -742,6 +746,12 @@
   }
   .item.dragging .swatch {
     cursor: grabbing;
+  }
+  .alarm {
+    flex: none;
+    display: inline-flex;
+    margin-right: 6px;
+    opacity: 0.6;
   }
   .title {
     flex: 1;

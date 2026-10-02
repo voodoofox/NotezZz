@@ -36,12 +36,16 @@ function dedupeById(notes: Note[]): Note[] {
  * updatedAt, and a pure newest-first sort would yank the note you just
  * touched to the top while you're looking at it).
  */
+/** Newest first: by when a note was made, never by when it was last edited
+ *  (that moved notes around on every sync and every reload). */
+const newestFirst = (a: Note, b: Note) => (b.createdAt || b.updatedAt) - (a.createdAt || a.updatedAt);
+
 function orderedBy(anchor: string[]): (a: Note, b: Note) => number {
   const pos = new Map(anchor.map((id, i) => [id, i]));
   return (a, b) => {
     const ai = pos.get(a.id);
     const bi = pos.get(b.id);
-    if (ai === undefined && bi === undefined) return b.updatedAt - a.updatedAt;
+    if (ai === undefined && bi === undefined) return newestFirst(a, b);
     if (ai === undefined) return -1;
     if (bi === undefined) return 1;
     return ai - bi;
@@ -208,7 +212,9 @@ class AppStore {
         setTimeout(() => rej(new Error('Loading timed out — check your connection and retry.')), 45_000)
       );
       const [notes, settings] = await Promise.race([load, watchdog]);
-      if (settings) this.settings = settings; // order lives here, so read it first
+      // Order lives here, so read it first. Not over changes of ours the
+      // network dropped (a reorder, say): those win and are sent again.
+      if (settings && !this.#settingsOwed) this.settings = settings;
       this.#migrateSettings();
       this.notes = this.#merge(notes);
       if (!this.activeId && this.notes.length) this.activeId = this.notes[0].id;
@@ -851,11 +857,10 @@ class AppStore {
         merged.set(local.id, $state.snapshot(local));
       }
     }
-    // A manual arrangement wins; otherwise notes hold their current position.
-    const anchor = this.settings.noteOrder?.length
-      ? this.settings.noteOrder
-      : this.notes.map((n) => n.id);
-    return [...merged.values()].sort(orderedBy(anchor));
+    // A manual arrangement wins; otherwise newest first. Never "where it was
+    // on screen": that depended on what happened to be painted at the time,
+    // so a reconnect or a cold start could show a different order.
+    return [...merged.values()].sort(orderedBy(this.settings.noteOrder ?? []));
   }
 
   async #doReload() {

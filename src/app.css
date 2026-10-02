@@ -55,6 +55,7 @@
   --note-light-on-dark: 1;
   --note-shade-size: 100% 50%;
   --note-strip-dark: none;
+  --note-wear: none;
   --note-light-size: 100% 50%;
   --note-shade: none;
   --note-grain: none;
@@ -121,6 +122,93 @@ input,
 select,
 textarea {
   font-family: inherit;
+}
+
+/* ---- Mono (a theme with ui: 'mono'): the app in black and white only. The
+   notes keep their colours (and their own ink); everything around them is
+   black or white: no greys, no soft shadows, no dimmed backdrops. Hover and
+   press invert; fields and quiet buttons are a ring instead of a grey fill;
+   balloons get an edge instead of a shadow. Loud on purpose: it is a mode. */
+:root[data-ui='mono'] {
+  --app-bg: #ffffff;
+  --app-panel: #ffffff;
+  --app-fg: #000000;
+  --app-pat-ink: #000000;
+  --app-muted: #000000;
+  --app-border: #000000;
+  --app-danger: #000000;
+  --sticker-shadow: 0 0 0 1.5px var(--app-fg);
+  --list-shade: 0%;
+}
+:root[data-ui='mono'][data-theme='dark'] {
+  --app-bg: #000000;
+  --app-panel: #000000;
+  --app-fg: #ffffff;
+  --app-pat-ink: #ffffff;
+  --app-muted: #ffffff;
+  --app-border: #ffffff;
+  --app-danger: #ffffff;
+}
+:root[data-ui='mono'] :is(.search, .seg, .ctoggle, .save, .tfile, .pchip.empty, .mini.hole),
+:root[data-ui='mono'] .row :is(select, input[type='number']),
+:root[data-ui='mono'] .panel button:not(.close):not(.tpick) {
+  background: transparent !important;
+  box-shadow: inset 0 0 0 1.5px var(--app-fg) !important;
+}
+:root[data-ui='mono'] .panel .seg button {
+  box-shadow: none !important;
+}
+:root[data-ui='mono'] .panel .seg button.on,
+:root[data-ui='mono'] .ctoggle[aria-expanded='true'] {
+  background: var(--app-fg) !important;
+  color: var(--app-panel) !important;
+}
+:root[data-ui='mono'] :is(.new, .ico, .pin, .mi, .rowmenu .mi, .bubble button, .sz, .op, .later):active {
+  background: var(--app-fg) !important;
+  color: var(--app-panel) !important;
+}
+@media (hover: hover) {
+  :root[data-ui='mono'] :is(.new, .ico, .mi, .rowmenu .mi, .bubble button, .sz, .op):hover {
+    background: var(--app-fg) !important;
+    color: var(--app-panel) !important;
+  }
+}
+:root[data-ui='mono'] :is(.pin, .alarm) {
+  opacity: 1;
+}
+:root[data-ui='mono'] .pin:not(.on):not(.tuck) {
+  opacity: 0;
+}
+/* Unavailable without a grey: solid, struck through. */
+:root[data-ui='mono'] :is(.mi, button):disabled {
+  opacity: 1 !important;
+  text-decoration: line-through;
+}
+:root[data-ui='mono'] .thumb::before {
+  background: var(--app-fg) !important;
+}
+:root[data-ui='mono'] .sz.sel {
+  background: var(--app-fg) !important;
+}
+:root[data-ui='mono'] .sz.sel span {
+  box-shadow: 0 0 0 1.5px var(--app-panel);
+}
+:root[data-ui='mono'] :is(.backdrop, .overlay) {
+  background: transparent !important;
+}
+:root[data-ui='mono'] :is(.panel, .card, .toast, .pop, .smenu, .rowmenu, .bubble, .sizemenu) {
+  border: none !important;
+  box-shadow: 0 0 0 1.5px var(--app-fg) !important;
+}
+:root[data-ui='mono'] .mini {
+  border-color: var(--app-fg) !important;
+}
+:root[data-ui='mono'] * {
+  scrollbar-color: var(--app-fg) transparent;
+}
+:root[data-ui='mono'] ::-webkit-scrollbar-thumb {
+  background: var(--app-fg);
+  background-clip: padding-box;
 }
 
 /* No grey/blue flash on tap (Android's own highlight covered only part of

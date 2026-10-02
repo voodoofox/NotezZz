@@ -1530,7 +1530,7 @@ test.describe('themes', () => {
     await page.getByTestId('theme-pick').filter({ hasText: 'Flat' }).click();
     await page.getByTestId('settings-close').click();
     expect(await image()).toBe('none');
-    expect(await grain()).toBe('none');
+    expect(await grain()).toBe('none, none'); // no grain, no wear
     expect(await rootVar(page, '--note-header-mix')).toBe('100%');
   });
 
@@ -2256,3 +2256,81 @@ test('a new sticky (Windows) opens big enough to show the whole toolbar and head
   expect(mic.x + mic.width).toBeLessThanOrEqual(STICKY_SIZE.w);
   await expect(page.getByTestId('sticky-more')).toBeInViewport();
 });
+
+test('the list stays newest first: editing an older note or reloading never moves it', async ({ page }) => {
+  for (const t of ['Oldest', 'Middle', 'Newest']) {
+    await page.getByTestId('new-note').click();
+    await page.getByTestId('title-input').fill(t);
+    await page.waitForTimeout(30);
+  }
+  const order = () => page.getByTestId('note-title').allTextContents();
+  expect(await order()).toEqual(['Newest', 'Middle', 'Oldest']);
+  await page.getByTestId('note-item').filter({ hasText: 'Oldest' }).getByTestId('note-pick').click();
+  await typeInEditor(page, 'edited later');
+  await page.waitForTimeout(600);
+  await syncAndSettle(page);
+  expect(await order()).toEqual(['Newest', 'Middle', 'Oldest']);
+  // A cold start with nothing cached on screen still lands newest first.
+  await page.goto('/?local');
+  await expect(page.getByTestId('note-item')).toHaveCount(3);
+  expect(await order()).toEqual(['Newest', 'Middle', 'Oldest']);
+});
+
+test('a note with a reminder shows a small alarm in the list', async ({ page }) => {
+  await createNote(page);
+  await createNote(page);
+  await page.waitForTimeout(500);
+  await page.evaluate(() => {
+    const k = Object.keys(localStorage).filter((k) => k.startsWith('notezzz:note:'))[0];
+    const n = JSON.parse(localStorage.getItem(k)!);
+    n.remindAt = Date.now() + 86_400_000;
+    localStorage.setItem(k, JSON.stringify(n));
+  });
+  await page.goto('/?local');
+  await expect(page.getByTestId('note-item')).toHaveCount(2);
+  await expect(page.getByTestId('note-alarm')).toHaveCount(1);
+});
+
+test('Paper: Daylight on a paper texture with light wear', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('theme-pick').filter({ hasText: 'Paper' }).click();
+  await page.getByTestId('settings-close').click();
+  const layer = await page.getByTestId('note-pane').evaluate((el) => {
+    const a = getComputedStyle(el, '::after');
+    return { img: a.backgroundImage, blend: a.mixBlendMode };
+  });
+  expect(layer.img).toContain('data:image/svg+xml');
+  expect(layer.img).toContain('radial-gradient'); // the aged edges
+  expect(layer.img).toContain("baseFrequency%3D'0.035'"); // the fibres' formation
+  expect(layer.blend).toBe('hard-light');
+});
+
+test('Mono: the app in black and white only, the note keeps its colour', async ({ page }) => {
+  await createNote(page);
+  await menu(page, 'color');
+  await page.locator('[data-testid="palette-chip"][data-palette="sunflower"]').click();
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('theme-pick').filter({ hasText: 'Mono' }).click();
+  await page.getByTestId('settings-close').click();
+  await expect(page.locator('html')).toHaveAttribute('data-ui', 'mono');
+  const bw = /^rgba?\((0, 0, 0|255, 255, 255)(, 1)?\)$|^rgba\(0, 0, 0, 0\)$/;
+  const colours = await page.evaluate(() => {
+    const cs = (s: string, p: string) => getComputedStyle(document.querySelector(s)!).getPropertyValue(p);
+    return [
+      cs('.sidebar', 'background-color'),
+      cs('.head', 'color'),
+      cs('[data-testid="new-note"]', 'background-color'),
+      cs('[data-testid="open-settings"]', 'color'),
+    ];
+  });
+  for (const c of colours) expect(c).toMatch(bw);
+  // The note is still the note's colour.
+  expect(await page.getByTestId('note-pane').evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(240, 231, 194)');
+  // And it goes away with the theme.
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('theme-pick').filter({ hasText: 'Daylight' }).click();
+  await page.getByTestId('settings-close').click();
+  await expect(page.locator('html')).not.toHaveAttribute('data-ui', 'mono');
+});
+
