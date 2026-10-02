@@ -231,13 +231,20 @@
     // rule: before the load, so the question comes up at once.
     await pullMobileShare();
 
+    // PC: the cached notes, and the pinned ones' stickies, at once; the
+    // Drive load then only adds what's new. (Stickies used to wait for the
+    // whole load, after a long blank pause.)
+    if (await store.paintCachedNow()) {
+      void restoreStickies(store.notes).catch((e) => console.error('restoreStickies', e));
+    }
     await store.init();
     // A brand-new account gets a few notes explaining the app. Skipped under
     // ?local, which is the E2E suite's bypass and expects a clean slate.
     if (!localMode) await store.seedWelcome().catch((e) => console.error('seedWelcome', e));
     // Never let one failing step strand the ones below it — those wire up
-    // saving, syncing and the share handoff.
-    await restoreStickies(store.notes).catch((e) => console.error('restoreStickies', e));
+    // saving, syncing and the share handoff. Only the stickies not already
+    // open (pinned since the cache, or no cache at all).
+    await restoreStickies(store.notes, { onlyMissing: true }).catch((e) => console.error('restoreStickies', e));
 
     // Background sync so changes from other devices (pins, new notes) appear
     // on their own. Desktop reads local files — cheap, so poll often; web and

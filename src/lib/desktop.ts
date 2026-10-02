@@ -112,10 +112,14 @@ export async function closeSticky(id: string): Promise<void> {
 }
 
 /** Open sticky windows for every pinned note (called once at startup). */
-export async function restoreStickies(notes: Note[]): Promise<void> {
+export async function restoreStickies(notes: Note[], opts: { onlyMissing?: boolean } = {}): Promise<void> {
   if (!isDesktop()) return;
+  const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
   for (const n of notes) {
-    if (n.pinned) await openSticky(n);
+    if (!n.pinned) continue;
+    // A second pass must not re-show and re-focus stickies already up.
+    if (opts.onlyMissing && (await WebviewWindow.getByLabel(stickyLabel(n.id)))) continue;
+    await openSticky(n);
   }
 }
 

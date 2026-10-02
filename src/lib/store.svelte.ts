@@ -167,6 +167,11 @@ class AppStore {
     if (!isTauri()) {
       const { hasPriorAuth } = await import('./drive/auth'); // static elsewhere: no fetch
       if (hasPriorAuth()) this.#paintCache();
+    } else {
+      // The apps the same: signed in (tokens on this device, a local check,
+      // no network) means a Drive user whose notes are cached here. Before,
+      // the PC showed nothing until the whole Drive list had arrived.
+      await this.paintCachedNow();
     }
     // Choosing a backend does dynamic imports, which are network fetches: on a
     // phone waking with the radio asleep — or on a page restored from cache
@@ -263,18 +268,37 @@ class AppStore {
     return this.#ready;
   }
 
+  /**
+   * The app (PC, Android): paint the cached notes now if this device is
+   * signed in to Drive. Cheap and safe to call more than once; the page
+   * calls it first so pinned stickies can open from the cache at once.
+   */
+  async paintCachedNow(): Promise<boolean> {
+    if (!isTauri() || this.notes.length) return this.notes.length > 0;
+    try {
+      const { desktopAccount } = await import('./drive/desktopAuth');
+      if (await desktopAccount()) this.#paintCache();
+    } catch {
+      /* no account: the load decides */
+    }
+    return this.notes.length > 0;
+  }
+
   /** Show the last known notes and settings from this device's cache. */
   #paintCache() {
     if (this.notes.length) return;
     try {
+      // Settings first: the order lives there.
+      const cachedSettings = localStorage.getItem(SETTINGS_CACHE_KEY);
+      if (cachedSettings) this.settings = { ...this.settings, ...JSON.parse(cachedSettings) };
       const cached = JSON.parse(localStorage.getItem(CACHE_KEY) ?? '[]') as Note[];
       if (cached.length) {
-        this.notes = dedupeById(cached);
+        // In the order the list settles on after the load, so the load only
+        // adds and updates; it never reshuffles what is already showing.
+        this.notes = dedupeById(cached).sort(orderedBy(this.settings.noteOrder ?? []));
         if (!this.activeId) this.activeId = this.notes[0]?.id ?? null;
         this.loaded = true;
       }
-      const cachedSettings = localStorage.getItem(SETTINGS_CACHE_KEY);
-      if (cachedSettings) this.settings = { ...this.settings, ...JSON.parse(cachedSettings) };
     } catch {
       /* corrupt cache — the network load will rebuild it */
     }

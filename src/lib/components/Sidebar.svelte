@@ -670,6 +670,7 @@
   .item {
     position: relative;
     isolation: isolate; /* the fill sits behind the row's contents */
+    overflow: hidden; /* the fill waits off to the left */
     display: flex;
     align-items: stretch;
     width: 100%;
@@ -682,18 +683,24 @@
   /* Selection in the note's own colour: the fill grows out of the swatch
      on the left to the full row, and the text takes the note's ink. A
      pattern note's fill is its pattern, like the swatch. */
+  /* The fill is the full row, slid left until only the bar's 10px show;
+     selected, it slides in. A slide, not a growing width: the graphics
+     layer animates it by itself, so it runs even while the PC is busy
+     building the note just opened (where a width change skipped straight
+     to the end), and the same on every device. */
   .fill {
     position: absolute;
     left: 0;
     top: 0;
     bottom: 0;
-    width: 10px; /* the swatch's width: at rest the fill is the colour bar */
+    width: 100%;
     z-index: -1;
     pointer-events: none;
-    transition: width 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transform: translateX(calc(10px - 100%));
+    transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
   .item.active .fill {
-    width: 100%;
+    transform: none;
   }
   .item.active,
   .item.active .pick,
@@ -706,7 +713,6 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .item,
-    .fill,
     .pick,
     .pin {
       transition: none;

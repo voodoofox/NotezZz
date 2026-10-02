@@ -1790,24 +1790,32 @@ test('a list with more below shades its bottom edge into the note; at the end it
 });
 
 test('the selected row fills with its note colour, grown out of the colour bar', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' }); // no growth animation to wait for
   await createNote(page);
   await menu(page, 'color');
   await page.locator('[data-testid="palette-chip"][data-palette="sunflower"]').click();
   await createNote(page); // selected now; the sunflower note is not
   const [selected, other] = [page.getByTestId('note-item').nth(0), page.getByTestId('note-item').nth(1)];
-  const fill = (row: typeof selected) =>
+  // What shows of the fill: from the row's left edge to the fill's right edge.
+  const shown = (row: typeof selected) =>
     row.evaluate((el) => {
-      const f = el.querySelector('[data-testid="note-fill"]')!;
-      return { w: f.getBoundingClientRect().width, row: el.getBoundingClientRect().width, bg: getComputedStyle(f).backgroundColor };
+      const f = el.querySelector('[data-testid="note-fill"]')!.getBoundingClientRect();
+      const r = el.getBoundingClientRect();
+      return { w: f.right - r.left, row: r.width, bg: getComputedStyle(el.querySelector('[data-testid="note-fill"]')!).backgroundColor };
     });
-  expect((await fill(other)).w).toBe(10); // just the bar
+  await page.waitForTimeout(400);
+  expect(Math.round((await shown(other)).w)).toBe(10); // just the bar
   await other.getByTestId('note-pick').click();
-  const f = await fill(other);
+  // It animates (a slide), even with reduced motion asked for.
+  await page.waitForTimeout(80);
+  const mid = (await shown(other)).w;
+  expect(mid).toBeGreaterThan(10);
+  expect(mid).toBeLessThan((await shown(other)).row - 1);
+  await page.waitForTimeout(400);
+  const f = await shown(other);
   expect(Math.abs(f.w - f.row)).toBeLessThan(0.5);
   expect(f.bg).toBe('rgb(240, 231, 194)'); // Sunflower
   expect(await other.evaluate((el) => getComputedStyle(el).color)).toBe('rgb(69, 62, 33)'); // its ink
-  expect((await fill(selected)).w).toBe(10);
+  expect(Math.round((await shown(selected)).w)).toBe(10);
 });
 
 test.describe('phone: one line of buttons down the right', () => {
@@ -2367,4 +2375,3 @@ test.describe('phone: the alarm sits in a button column', () => {
     expect(Math.abs(alarm!.x + alarm!.width / 2 - (search!.x + search!.width / 2))).toBeLessThan(0.5);
   });
 });
-

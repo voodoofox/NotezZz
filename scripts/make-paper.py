@@ -109,6 +109,9 @@ v = (
 )
 v = v - v.mean()
 v = v / v.std()
+# Inverted (the user's call, 2026-10-02): the fibres read as darker strands
+# in the sheet and the formation's clumps as lighter patches.
+v = -v
 grey = np.clip(128 + v * 26, 0, 255).astype(np.uint8)
 
 out_dir = os.path.join(os.path.dirname(__file__), "..", "static", "textures")
