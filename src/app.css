@@ -129,8 +129,8 @@ textarea {
 /* ---- Mono (a theme with ui: 'mono'): the app in black and white only. The
    notes keep their colours (and their own ink); everything around them is
    black or white: no greys, no soft shadows, no dimmed backdrops. Hover and
-   press invert; fields and quiet buttons are a ring instead of a grey fill;
-   balloons and panels have no edge at all. Loud on purpose: it is a mode. */
+   press invert; nothing has an outline: fields and quiet buttons are plain
+   text, balloons and panels have no edge. Loud on purpose: it is a mode. */
 :root[data-ui='mono'] {
   --app-bg: #ffffff;
   --app-panel: #ffffff;
@@ -155,7 +155,12 @@ textarea {
 :root[data-ui='mono'] .row :is(select, input[type='number']),
 :root[data-ui='mono'] .panel button:not(.close):not(.tpick) {
   background: transparent !important;
-  box-shadow: inset 0 0 0 1.5px var(--app-fg) !important;
+  box-shadow: none !important;
+}
+/* The chosen theme: inverted, not a grey tile. */
+:root[data-ui='mono'] .theme.cur .tpick {
+  background: var(--app-fg) !important;
+  color: var(--app-panel) !important;
 }
 :root[data-ui='mono'] .panel .seg button {
   box-shadow: none !important;

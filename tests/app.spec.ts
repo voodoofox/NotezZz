@@ -2446,7 +2446,7 @@ test('the custom lightness slider reaches pure black and pure white', async ({ p
   await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', 'custom:#ffffff');
 });
 
-test('Mono: menus and balloons have no outline', async ({ page }) => {
+test('Mono: no outlines on menus, balloons or fields', async ({ page }) => {
   await createNote(page);
   await page.getByTestId('open-settings').click();
   await page.getByTestId('theme-pick').filter({ hasText: 'Mono' }).click();
@@ -2458,5 +2458,15 @@ test('Mono: menus and balloons have no outline', async ({ page }) => {
   });
   expect(edge.shadow).toBe('none');
   expect(edge.border).toBe('none');
+  // Fields too: the search box has no ring, light or dark.
+  await page.keyboard.press('Escape');
+  await page.mouse.click(5, 790);
+  await page.getByTestId('search-toggle').click();
+  const field = await page.locator('.search').evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return { shadow: cs.boxShadow, border: cs.borderTopStyle };
+  });
+  expect(field.shadow).toBe('none');
+  expect(field.border).toBe('none');
 });
 
