@@ -126,9 +126,9 @@ export const BUILTIN_THEMES: ThemeDef[] = [
       spread: 3.5,
       center: 0.75,
       lightOnDark: 1,
-      grain: 0.035, // the layer at 14%: felt more than seen
+      grain: 0.015, // the layer at 6%: a hint of paper, not an effect
       texture: 'paper',
-      wear: 0.45,
+      wear: 0.22,
       header: 0.075,
       strip: { color: '#000000', strength: 0.075 },
       toolbar: 0,
