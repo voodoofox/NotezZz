@@ -375,6 +375,7 @@
     <header
       class="bar {pal.pattern ? `nz-pat-${pal.pattern}` : ''}"
       class:patterned={!!pal.pattern}
+      class:lead={hasWin && tucked && tuckSide === 'right'}
       style={pal.pattern ? `--pat-exact-base: ${pal.header}; --pat-exact-ink: ${pal.inkStrong ?? pal.ink ?? pal.fg}` : undefined}
       data-tauri-drag-region
     >
@@ -581,6 +582,11 @@
   /* A pattern's title bar: its exact colours (as in its list row), opaque
      over the note's shade, without the adhesive tint. Contrast is the
      pattern's own (a custom one sets both of its colours). */
+  /* Tucked right, the way back leads the bar: in the corner, --edge from
+     both sides like the right-hand buttons, not at the title's inset. */
+  .bar.lead {
+    padding-left: var(--edge);
+  }
   .bar.patterned {
     --pat-base: var(--pat-exact-base);
     --pat-ink: var(--pat-exact-ink);

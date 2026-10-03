@@ -260,6 +260,16 @@
       </div>
 
       <label class="row">
+        <span>Animate patterns</span>
+        <input
+          type="checkbox"
+          data-testid="set-animate"
+          checked={store.settings.animatePatterns !== false}
+          onchange={(e) => store.saveSettings({ animatePatterns: (e.currentTarget as HTMLInputElement).checked })}
+        />
+      </label>
+
+      <label class="row">
         <span>Default palette</span>
         <select
           data-testid="set-palette"

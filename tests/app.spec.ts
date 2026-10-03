@@ -2546,3 +2546,63 @@ test.describe('phone: the note title bar and a list row are the same height', ()
   });
 });
 
+test('a small window keeps list rows full height, in columns too', async ({ page }) => {
+  await page.setViewportSize({ width: 640, height: 450 });
+  for (let i = 0; i < 14; i++) await page.getByTestId('new-note').click();
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('set-layout').locator('[data-value="top"]').click();
+  await page.getByTestId('set-columns').selectOption('2');
+  await page.getByTestId('settings-close').click();
+  const [row, bar] = await Promise.all([
+    page.getByTestId('note-item').first().boundingBox(),
+    page.locator('.toolbar').boundingBox(),
+  ]);
+  expect(Math.abs(row!.height - bar!.height)).toBeLessThan(0.5);
+});
+
+test('patterns animate even when the system asks for reduced motion; Settings can still them', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' }); // what Windows' "animation effects: off" reports
+  await createNote(page);
+  await menu(page, 'color');
+  await page.locator('[data-testid="palette-chip"][data-palette="pattern:checker"]').click();
+  const anim = () => page.locator('.topbar').evaluate((el) => getComputedStyle(el).animationName);
+  expect(await anim()).toBe('nz-drift-diag');
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('set-animate').uncheck();
+  await page.getByTestId('settings-close').click();
+  expect(await anim()).toBe('none');
+});
+
+
+test.describe('a tilted desktop sticky: the format balloon stays whole', () => {
+  test.use({ viewport: { width: 420, height: 460 } });
+  test('not cut off at the note edge, and its buttons work', async ({ page }) => {
+    await createNote(page);
+    await page.waitForTimeout(500); // per-note save debounce
+    const id = await page.evaluate(() => {
+      const key = Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!;
+      const note = JSON.parse(localStorage.getItem(key)!);
+      localStorage.setItem(key, JSON.stringify({ ...note, tilt: 3 }));
+      const s = JSON.parse(localStorage.getItem('notezzz:settings') ?? '{}');
+      localStorage.setItem('notezzz:settings', JSON.stringify({ ...s, stickyTilt: true }));
+      return key.slice('notezzz:note:'.length);
+    });
+    await page.goto(`/sticky?id=${id}`);
+    await expect(page.locator('.sticky.tilted')).toBeVisible();
+    await page.locator('.ProseMirror').click();
+    await page.keyboard.type('Do we use generated sounds? MUSIC YES');
+    await page.keyboard.press('Shift+Control+ArrowLeft');
+    const bubble = page.getByTestId('format-bubble');
+    await expect(bubble).toBeVisible();
+    const box = await bubble.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      // Fixed to the window, not to the rotated note (which clips).
+      return { left: r.left, right: r.right, inBody: el.parentElement === document.body, vw: innerWidth };
+    });
+    expect(box.inBody).toBe(true);
+    expect(box.left).toBeGreaterThanOrEqual(0);
+    expect(box.right).toBeLessThanOrEqual(box.vw);
+    await bubble.getByRole('button', { name: 'Bold' }).click();
+    await expect(page.locator('.ProseMirror strong')).toHaveText('YES');
+  });
+});

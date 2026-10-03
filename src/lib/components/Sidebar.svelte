@@ -670,7 +670,11 @@
   .item {
     position: relative;
     isolation: isolate; /* the fill sits behind the row's contents */
-    overflow: hidden; /* the fill waits off to the left */
+    /* The fill waits off to the left. clip, not hidden: a row that is a
+       scroll container may shrink below its content in the column grid,
+       which squashed the rows of a small window; and never below a bar. */
+    overflow: clip;
+    min-height: var(--bar-h);
     display: flex;
     align-items: stretch;
     width: 100%;

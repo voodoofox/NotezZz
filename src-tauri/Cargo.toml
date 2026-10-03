@@ -46,6 +46,9 @@ tauri-plugin-global-shortcut = "2.3.2"
 
 [target."cfg(windows)".dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_Graphics_Dwm"] }
+# The taskbar jump list ("New note" on right-click) is COM; the same version
+# tauri already builds.
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_UI_Shell_PropertiesSystem", "Win32_Storage_EnhancedStorage"] }
 
 [dev-dependencies]
 # Unit tests (src/tests.rs, backup.rs) run the file logic on temp dirs.

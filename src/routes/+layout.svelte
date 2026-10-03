@@ -205,6 +205,12 @@
     bridge?.setDarkTheme(note ? !!getPalette(note.paletteId).dark : dark);
   });
 
+  // Patterns drift unless switched off in Settings (app.css, data-motion).
+  $effect(() => {
+    if (store.settings.animatePatterns === false) document.documentElement.dataset.motion = 'still';
+    else delete document.documentElement.dataset.motion;
+  });
+
   // The note theme (light, shade, grain, title strip, buttons): CSS
   // custom properties on the root, in every window, stickies included.
   $effect(() => {

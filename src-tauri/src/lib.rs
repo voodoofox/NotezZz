@@ -538,6 +538,83 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Taskbar right-click: a "New note" task (a Windows jump list). It starts
+/// the app with --new-note; a running app hears of it through
+/// single-instance, a starting one asks take_launch_new_note.
+#[cfg(windows)]
+mod jumplist {
+    use windows::core::{Interface, HSTRING};
+    use windows::Win32::System::Com::StructuredStorage::PROPVARIANT;
+    use windows::Win32::Storage::EnhancedStorage::PKEY_Title;
+    use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED};
+    use windows::Win32::UI::Shell::Common::{IObjectArray, IObjectCollection};
+    use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
+    use windows::Win32::UI::Shell::{
+        DestinationList, EnumerableObjectCollection, ICustomDestinationList, IShellLinkW, SetCurrentProcessExplicitAppUserModelID,
+        ShellLink,
+    };
+
+    /// The installer's Start-menu shortcut carries the bundle identifier as
+    /// its app id (Tauri's NSIS template): the process, a pinned icon and
+    /// the jump list use the same one, so they are one app on the taskbar.
+    const APP_ID: &str = "com.administrator.notezzz";
+
+    pub fn set_app_id() {
+        unsafe {
+            let _ = SetCurrentProcessExplicitAppUserModelID(&HSTRING::from(APP_ID));
+        }
+    }
+
+    pub fn install() -> windows::core::Result<()> {
+        install_for(APP_ID)
+    }
+
+    fn install_for(app_id: &str) -> windows::core::Result<()> {
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+            let list: ICustomDestinationList = CoCreateInstance(&DestinationList, None, CLSCTX_INPROC_SERVER)?;
+            list.SetAppID(&HSTRING::from(app_id))?;
+            let mut slots = 0u32;
+            let _removed: IObjectArray = list.BeginList(&mut slots)?;
+            let tasks: IObjectCollection = CoCreateInstance(&EnumerableObjectCollection, None, CLSCTX_INPROC_SERVER)?;
+            let exe = HSTRING::from(std::env::current_exe().unwrap_or_default().as_os_str());
+            let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)?;
+            link.SetPath(&exe)?;
+            link.SetArguments(&HSTRING::from("--new-note"))?;
+            link.SetIconLocation(&exe, 0)?;
+            link.SetDescription(&HSTRING::from("New note"))?;
+            let props: IPropertyStore = link.cast()?;
+            props.SetValue(&PKEY_Title, &PROPVARIANT::from("New note"))?;
+            props.Commit()?;
+            tasks.AddObject(&link)?;
+            list.AddUserTasks(&tasks.cast::<IObjectArray>()?)?;
+            list.CommitList()?;
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn the_jump_list_builds() {
+        // Under its own id, so the installed app's list is left alone.
+        let id = "com.administrator.notezzz.test";
+        install_for(id).expect("jump list");
+        unsafe {
+            let list: ICustomDestinationList = CoCreateInstance(&DestinationList, None, CLSCTX_INPROC_SERVER).unwrap();
+            let _ = list.DeleteList(&HSTRING::from(id));
+        }
+    }
+}
+
+/// Started from the jump list's "New note" (no window was up to hear it).
+static NEW_NOTE_AT_LAUNCH: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Asked once by the page when it's ready: was the app started to make a note?
+#[tauri::command]
+fn take_launch_new_note() -> bool {
+    NEW_NOTE_AT_LAUNCH.swap(false, std::sync::atomic::Ordering::SeqCst)
+}
+
 /// Link schemes a note may open: the web, mail, phone. Never files or app
 /// schemes: a note's content must not be able to launch anything else.
 fn is_link_scheme(url: &tauri::Url) -> bool {
@@ -585,6 +662,11 @@ fn nav_guard<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
 pub fn run() {
     #[cfg(desktop)]
     remove_stale_service_worker();
+    #[cfg(windows)]
+    jumplist::set_app_id();
+    if std::env::args().any(|a| a == "--new-note") {
+        NEW_NOTE_AT_LAUNCH.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
 
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default();
@@ -593,8 +675,12 @@ pub fn run() {
     #[cfg(desktop)]
     {
         builder = builder
-            .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
                 show_main(app);
+                // The jump list's "New note", while the app is running.
+                if argv.iter().any(|a| a == "--new-note") {
+                    let _ = app.emit("tray-new-note", ());
+                }
             }))
             // Registered here, but no shortcut is bound in Rust: the frontend
             // registers the combo through the JS API (it also owns the "place
@@ -617,6 +703,7 @@ pub fn run() {
         .plugin(nav_guard())
         .invoke_handler(tauri::generate_handler![
             open_link,
+            take_launch_new_note,
             list_notes,
             save_note,
             delete_note,
@@ -654,6 +741,13 @@ pub fn run() {
 #[cfg(desktop)]
 fn desktop_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     build_tray(app.handle())?;
+    // Taskbar right-click -> "New note". COM, on its own thread.
+    #[cfg(windows)]
+    std::thread::spawn(|| {
+        if let Err(e) = jumplist::install() {
+            eprintln!("jump list: {e}");
+        }
+    });
     // Stickies step aside for fullscreen video/games (see fullscreen.rs).
     fullscreen::watch(app.handle().clone());
 

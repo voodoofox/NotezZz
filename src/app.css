@@ -374,13 +374,10 @@ textarea {
 @keyframes nz-drift-bricks {
   to { background-position: 12px 0, 12px 0, 18px 6px; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .nz-pat-checker,
-  .nz-pat-stripes,
-  .nz-pat-dots,
-  .nz-pat-stairs,
-  .nz-pat-bricks,
-  .nz-pat-custom {
-    animation: none;
-  }
+/* Still patterns: Settings -> "Animate patterns" off. Not the system's
+   reduced-motion: Windows turns that on with its "animation effects" switch
+   (often off without anyone deciding about this app), which stopped every
+   pattern on the PC. The setting is the app's own choice, on by default. */
+:root[data-motion='still'] :is(.nz-pat-checker, .nz-pat-stripes, .nz-pat-dots, .nz-pat-stairs, .nz-pat-bricks, .nz-pat-custom) {
+  animation: none;
 }

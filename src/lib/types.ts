@@ -66,6 +66,9 @@ export interface Settings {
   syncFolder: string | null;
   /** Tilt pinned stickies by a small per-note angle (desktop only). */
   stickyTilt?: boolean;
+  /** Patterns drift (on unless switched off; independent of the system's
+   *  reduced-motion, which Windows ties to its animation-effects switch). */
+  animatePatterns?: boolean;
   /** Note ids in the order the user arranged them; unlisted notes lead. */
   noteOrder?: string[];
   /** First-run welcome notes have been written; never write them again. */

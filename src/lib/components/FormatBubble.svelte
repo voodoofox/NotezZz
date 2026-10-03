@@ -31,6 +31,14 @@
     return { left: Math.round(left), s };
   });
 
+  // Lives on <body>: a tilted desktop sticky is rotated (a transform),
+  // which turns position:fixed into "fixed to the note" and let the note's
+  // rounded clip cut the balloon off at its edge.
+  function onBody(node: HTMLElement) {
+    document.body.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
+
   function isActive(name: string) {
     void tick;
     return editor?.isActive(name) ?? false;
@@ -54,6 +62,7 @@
   data-testid="format-bubble"
   style="left: {place.left}px; top: {y}px; transform: scale({1 / place.s})"
   bind:offsetWidth={w}
+  use:onBody
   onpointerdown={(e) => e.preventDefault()}
 >
   <button aria-label="Bold" aria-pressed={isActive('bold')} class:active={isActive('bold')} onclick={() => editor?.chain().focus().toggleBold().run()}><Icon name="bold" /></button>
@@ -71,6 +80,8 @@
      inverted. Floats below the selection (Android's own menu sits above). */
   .bubble {
     position: fixed;
+    /* Its own width wherever it lands (measured to keep it on screen). */
+    width: max-content;
     transform-origin: 0 0;
     z-index: 40;
     display: flex;

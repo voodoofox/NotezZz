@@ -128,6 +128,9 @@
       // of it exists on Android, which is Tauri too — hence isDesktop().
       const { listen } = await import('@tauri-apps/api/event');
       await listen('tray-new-note', () => store.create());
+      // Started from the taskbar's "New note" (jump list): make it now.
+      const { invoke } = await import('@tauri-apps/api/core');
+      if (await invoke<boolean>('take_launch_new_note').catch(() => false)) store.create();
       window.addEventListener('focus', () => void store.reload());
       // "Updates itself" has to mean it looks without being asked.
       scheduleUpdateChecks();
