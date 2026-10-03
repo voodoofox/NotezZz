@@ -2624,3 +2624,17 @@ test("a sticky's ⋯ menu has undo and redo", async ({ page }) => {
   await page.getByTestId('sticky-redo').click(); // the menu stays open
   await expect(ed).toContainText('typed on a sticky');
 });
+
+test('format buttons leave the focus in the text, so no keystroke falls between', async ({ page }) => {
+  await createNote(page);
+  const ed = page.locator('.ProseMirror');
+  await ed.click();
+  await ed.evaluate((el) => {
+    (window as unknown as { blurs: number }).blurs = 0;
+    el.addEventListener('focusout', () => (window as unknown as { blurs: number }).blurs++);
+  });
+  for (const b of ['fmt-bold', 'fmt-italic', 'fmt-underline', 'fmt-strike', 'fmt-bullet', 'fmt-checklist']) {
+    await page.getByTestId(b).click();
+  }
+  expect(await page.evaluate(() => (window as unknown as { blurs: number }).blurs)).toBe(0);
+});

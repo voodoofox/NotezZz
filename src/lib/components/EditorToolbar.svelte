@@ -56,6 +56,13 @@
     void tick;
     return (editor?.getAttributes('textStyle').fontSize ?? '').replace('px', '');
   }
+
+  // Format buttons leave the focus in the text. Taking it, they handed it
+  // back a frame later (TipTap's focus()), and keys typed in that gap were
+  // lost; on a phone the keyboard bounced.
+  function keepFocus(e: MouseEvent) {
+    e.preventDefault();
+  }
 </script>
 
 <svelte:window onpointerdown={onGlobalPointerDown} />
@@ -63,6 +70,7 @@
 <div class="toolbar" bind:this={barEl}>
   <button
     data-testid="fmt-bold"
+    onmousedown={keepFocus}
     class:active={isActive('bold')}
     aria-pressed={isActive('bold')}
     title="Bold (Ctrl+B)"
@@ -71,6 +79,7 @@
   ><Icon name="bold" /></button>
   <button
     data-testid="fmt-italic"
+    onmousedown={keepFocus}
     class:active={isActive('italic')}
     aria-pressed={isActive('italic')}
     title="Italic (Ctrl+I)"
@@ -79,6 +88,7 @@
   ><Icon name="italic" /></button>
   <button
     data-testid="fmt-underline"
+    onmousedown={keepFocus}
     class:active={isActive('underline')}
     aria-pressed={isActive('underline')}
     title="Underline (Ctrl+U)"
@@ -87,6 +97,7 @@
   ><Icon name="underline" /></button>
   <button
     data-testid="fmt-strike"
+    onmousedown={keepFocus}
     class:active={isActive('strike')}
     aria-pressed={isActive('strike')}
     title="Strikethrough"
@@ -98,6 +109,7 @@
 
   <button
     data-testid="fmt-bullet"
+    onmousedown={keepFocus}
     class:active={isActive('bulletList')}
     aria-pressed={isActive('bulletList')}
     title="Bullet list"
@@ -106,6 +118,7 @@
   ><Icon name="bulletList" /></button>
   <button
     data-testid="fmt-checklist"
+    onmousedown={keepFocus}
     class:active={isActive('taskList')}
     aria-pressed={isActive('taskList')}
     title="Checklist"
