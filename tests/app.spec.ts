@@ -2606,3 +2606,21 @@ test.describe('a tilted desktop sticky: the format balloon stays whole', () => {
     await expect(page.locator('.ProseMirror strong')).toHaveText('YES');
   });
 });
+
+test("a sticky's ⋯ menu has undo and redo", async ({ page }) => {
+  await createNote(page);
+  await page.waitForTimeout(500); // per-note save debounce
+  const id = await page.evaluate(
+    () => Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!.slice('notezzz:note:'.length)
+  );
+  await page.goto(`/sticky?id=${id}`);
+  const ed = page.locator('.ProseMirror');
+  await ed.click();
+  await page.keyboard.type('typed on a sticky');
+  await page.getByTestId('sticky-more').click();
+  await expect(page.getByTestId('sticky-redo')).toBeDisabled();
+  await page.getByTestId('sticky-undo').click();
+  await expect(ed).not.toContainText('typed on a sticky');
+  await page.getByTestId('sticky-redo').click(); // the menu stays open
+  await expect(ed).toContainText('typed on a sticky');
+});

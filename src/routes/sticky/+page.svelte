@@ -318,6 +318,12 @@
   // live behind it (each opens in its place), so the bar keeps the same few
   // buttons the note's header has.
   let pop = $state<null | 'menu' | 'color' | 'opacity'>(null);
+
+  // The editor, for undo / redo from the ⋯ menu (as in the main window).
+  let edit = $state<{ history(dir: 'undo' | 'redo'): void; canHistory(dir: 'undo' | 'redo'): boolean } | undefined>();
+  let histTick = $state(0);
+  const canUndo = $derived.by(() => (void histTick, void pop, edit?.canHistory('undo') ?? false));
+  const canRedo = $derived.by(() => (void histTick, void pop, edit?.canHistory('redo') ?? false));
   let moreWrap = $state<HTMLElement | null>(null);
   function closeColorsOutside(e: PointerEvent) {
     if (pop && moreWrap && !moreWrap.contains(e.target as Node)) pop = null;
@@ -449,6 +455,27 @@
           ><Icon name="more" /></button>
           {#if pop === 'menu'}
             <div class="smenu" role="menu">
+              <!-- Undo, then Redo beneath it; the menu stays open for another step. -->
+              <button
+                class="mi"
+                role="menuitem"
+                data-testid="sticky-undo"
+                disabled={!canUndo}
+                onclick={() => {
+                  edit?.history('undo');
+                  histTick++;
+                }}
+              ><Icon name="undo" /><span>Undo</span></button>
+              <button
+                class="mi"
+                role="menuitem"
+                data-testid="sticky-redo"
+                disabled={!canRedo}
+                onclick={() => {
+                  edit?.history('redo');
+                  histTick++;
+                }}
+              ><Icon name="redo" /><span>Redo</span></button>
               <button class="mi" role="menuitem" data-testid="sticky-color" onclick={() => (pop = 'color')}>
                 <Icon name="palette" /><span>Note color</span>
               </button>
@@ -494,6 +521,7 @@
     <div class="body">
       {#key note.id}
         <Editor
+          bind:this={edit}
           html={note.contentHtml}
           baseSize={note.fontSize}
           onChange={(html) => noteId && store.update(noteId, { contentHtml: html })}
@@ -676,6 +704,11 @@
   .mi:hover,
   .mi:active {
     background: var(--app-bg);
+  }
+  .mi:disabled {
+    opacity: 0.4;
+    cursor: default;
+    background: transparent;
   }
   .mi .mv {
     margin-left: auto;
