@@ -741,8 +741,24 @@ class AppStore {
   fireDueReminders(now = Date.now()) {
     for (const n of this.notes) {
       if (!n.remindAt || n.remindAt > now || n.archived) continue;
-      this.update(n.id, n.pinned ? { remindAt: undefined } : { pinned: true, remindAt: undefined });
+      if (!n.pinned) {
+        this.update(n.id, { pinned: true, remindAt: undefined });
+        continue;
+      }
+      // Already a sticky: bring it out of its tuck and to the front, so the
+      // reminder is seen either way.
+      this.update(n.id, n.tucked ? { remindAt: undefined, tucked: false } : { remindAt: undefined });
+      void openSticky(n);
     }
+  }
+
+  /** The earliest reminder set (past or not); what the PC's alarm waits for. */
+  get nextReminderAt(): number | null {
+    let at: number | null = null;
+    for (const n of this.notes) {
+      if (n.remindAt && !n.archived && (at === null || n.remindAt < at)) at = n.remindAt;
+    }
+    return at;
   }
 
   /**

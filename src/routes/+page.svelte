@@ -134,8 +134,11 @@
       window.addEventListener('focus', () => void store.reload());
       // "Updates itself" has to mean it looks without being asked.
       scheduleUpdateChecks();
-      // Reminders pin their note when due (store.fireDueReminders). Checked
-      // now, for any that came due while the PC was off, then every 20s.
+      // Reminders pin their note when due (store.fireDueReminders). On the
+      // second: the app's native side wakes us (see the effect arming it);
+      // checked now too, for any that came due while the PC was off, and
+      // every 20s as a backstop.
+      await listen('reminder-due', () => store.fireDueReminders());
       store.fireDueReminders();
       setInterval(() => store.fireDueReminders(), 20_000);
       // Ctrl+Alt+N from anywhere, when enabled (see hotkey.svelte.ts). Released on the
@@ -303,6 +306,18 @@
     // A share that arrived while the chooser was up is waiting in the file.
     void pullMobileShare();
   }
+
+  // PC: hand the next reminder's time to the native side, which wakes this
+  // window the second it's due. A window hidden in the tray has its own
+  // timers held back to about once a minute, so the phone rang first and
+  // the sticky turned up a minute later.
+  $effect(() => {
+    if (!isDesktop()) return;
+    const at = store.nextReminderAt;
+    void import('@tauri-apps/api/core')
+      .then(({ invoke }) => invoke('arm_reminder', { at }))
+      .catch(() => {});
+  });
 
   onMount(() => {
     if (authed) void boot();

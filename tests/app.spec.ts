@@ -2638,3 +2638,28 @@ test('format buttons leave the focus in the text, so no keystroke falls between'
   }
   expect(await page.evaluate(() => (window as unknown as { blurs: number }).blurs)).toBe(0);
 });
+
+test('a due reminder on a note already pinned brings it out of its tuck', async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Water the plants');
+  await page.waitForTimeout(600); // save debounce
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!;
+    const note = JSON.parse(localStorage.getItem(key)!);
+    Object.assign(note, { pinned: true, tucked: true, remindAt: Date.now() - 1000, updatedAt: Date.now() + 60_000 });
+    localStorage.setItem(key, JSON.stringify(note));
+  });
+  await syncAndSettle(page);
+  await expect(page.getByTestId('note-remind')).toHaveCount(1);
+  await page.evaluate(() => (window as unknown as { __nzFireReminders: () => void }).__nzFireReminders());
+  await expect(page.getByTestId('note-remind')).toHaveCount(0);
+  await page.waitForTimeout(600);
+  const stored = await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!;
+    return JSON.parse(localStorage.getItem(key)!);
+  });
+  expect(stored.pinned).toBe(true);
+  expect(stored.tucked).toBe(false);
+  expect(stored.remindAt).toBeUndefined();
+});
+

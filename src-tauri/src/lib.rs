@@ -606,6 +606,15 @@ mod jumplist {
     }
 }
 
+/// When the next reminder is due, ms since the epoch (0: none). Set by the
+/// main window; a native thread wakes it on the second (see desktop_setup).
+static NEXT_REMINDER: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+
+#[tauri::command]
+fn arm_reminder(at: Option<i64>) {
+    NEXT_REMINDER.store(at.unwrap_or(0), std::sync::atomic::Ordering::SeqCst);
+}
+
 /// Started from the jump list's "New note" (no window was up to hear it).
 static NEW_NOTE_AT_LAUNCH: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
@@ -704,6 +713,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             open_link,
             take_launch_new_note,
+            arm_reminder,
             list_notes,
             save_note,
             delete_note,
@@ -741,6 +751,29 @@ pub fn run() {
 #[cfg(desktop)]
 fn desktop_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     build_tray(app.handle())?;
+    // Reminders on the second. The page's own timers are held back to about
+    // once a minute while the window sits hidden in the tray; this thread
+    // isn't. It polls the clock (a long sleep would not count time the PC
+    // spent asleep) and tells the page, which pins the note.
+    let handle = app.handle().clone();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        let at = NEXT_REMINDER.load(std::sync::atomic::Ordering::SeqCst);
+        if at == 0 {
+            continue;
+        }
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+        if now >= at
+            && NEXT_REMINDER
+                .compare_exchange(at, 0, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst)
+                .is_ok()
+        {
+            let _ = handle.emit("reminder-due", ());
+        }
+    });
     // Taskbar right-click -> "New note". COM, on its own thread.
     #[cfg(windows)]
     std::thread::spawn(|| {
