@@ -2686,3 +2686,23 @@ test('turning arrows beside the logo while a sync is under way, not for a blink'
   await expect(arrows).toHaveCount(0);
 });
 
+test("tapping a note's reminder opens that note, full screen", async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('The one with the alarm');
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Another');
+  await page.waitForTimeout(600); // save debounce
+  const id = await page.evaluate(() => {
+    for (const k of Object.keys(localStorage)) {
+      if (!k.startsWith('notezzz:note:')) continue;
+      const n = JSON.parse(localStorage.getItem(k)!);
+      if (n.title === 'The one with the alarm') return n.id as string;
+    }
+    return '';
+  });
+  expect(id).not.toBe('');
+  await page.evaluate((id) => (window as unknown as { __nzTap: (a: { action: string; id: string }) => void }).__nzTap({ action: 'open', id }), id);
+  await expect(page.getByTestId('title-input')).toHaveValue('The one with the alarm');
+  await expect(page.getByTestId('exit-fullscreen')).toHaveCount(1);
+});
+

@@ -3,7 +3,7 @@
   import { store } from '$lib/store.svelte';
   import { isTauri, isDesktop, isMobile } from '$lib/storage/backend';
   import { restoreStickies } from '$lib/desktop';
-  import { scheduleWidgetSnapshot, takeWidgetAction } from '$lib/widget';
+  import { scheduleWidgetSnapshot, takeWidgetAction, type WidgetAction } from '$lib/widget';
   import { pushState } from '$app/navigation';
   // Static, like desktop.ts's: a dynamic import of a module that is also
   // imported statically makes Vite warn, and warnings abort deploys.
@@ -154,6 +154,9 @@
         void pullMobileShare();
         void pullWidgetAction();
       });
+      // A tap while the app is already on screen (a reminder, say) brings no
+      // return to the foreground to notice; MainActivity calls this instead.
+      (window as unknown as { __nzPullAction?: () => void }).__nzPullAction = () => void pullWidgetAction();
       // Updates come from GitHub Releases here too (updater.ts).
       scheduleUpdateChecks();
     } else if (!localMode) {
@@ -193,18 +196,41 @@
   }
 
   /**
-   * Android only: a tap on a home-screen widget. MainActivity stashes it like
-   * a share; this takes it once the notes are loaded. Every action ends on the
+   * Android only: a tap on a home-screen widget or a reminder notification.
+   * MainActivity stashes it like a share; this takes it and carries it out
+   * once its note is on screen (see runWidgetAction). Every action ends on the
    * note, fullscreen, because that is what the tap was for: reading it, or
    * writing, speaking or drawing into a fresh one.
    */
   async function pullWidgetAction() {
     const act = await takeWidgetAction();
-    if (!act || act.action === 'show') return; // "show" just brings the app up
+    if (act) pendingAct = act;
+    runWidgetAction();
+  }
+
+  // The tap being carried out, kept while its note may still be on its way:
+  // a reminder's note opens from the cache at once, without waiting for
+  // Drive, and one the cache doesn't have yet waits for the full load.
+  let pendingAct: WidgetAction | null = null;
+  let notesLoaded = false;
+
+  function runWidgetAction() {
+    const act = pendingAct;
+    if (!act) return;
+    if (act.action === 'show') {
+      pendingAct = null; // "show" just brings the app up
+      return;
+    }
     if (act.action === 'open') {
-      if (!act.id || !store.notes.some((n) => n.id === act.id)) return; // deleted since
+      if (!act.id || !store.notes.some((n) => n.id === act.id)) {
+        if (notesLoaded) pendingAct = null; // deleted since
+        return;
+      }
+      pendingAct = null;
       store.activeId = act.id;
     } else {
+      if (!notesLoaded) return; // a new note belongs in the real list
+      pendingAct = null;
       const note = store.create();
       if (act.action === 'voice' || act.action === 'draw') {
         store.requestedTool = { id: note.id, tool: act.action };
@@ -242,8 +268,11 @@
     // whole load, after a long blank pause.)
     if (await store.paintCachedNow()) {
       void restoreStickies(store.notes).catch((e) => console.error('restoreStickies', e));
+      // Android: a reminder or widget tap opens its note from the cache now.
+      await pullWidgetAction();
     }
     await store.init();
+    notesLoaded = true;
     // A brand-new account gets a few notes explaining the app. Skipped under
     // ?local, which is the E2E suite's bypass and expects a clean slate.
     if (!localMode) await store.seedWelcome().catch((e) => console.error('seedWelcome', e));
@@ -327,6 +356,11 @@
       w.__nzSyncNow = () => store.syncNow();
       // The desktop's reminder tick, callable where the desktop loop doesn't run.
       w.__nzFireReminders = () => store.fireDueReminders();
+      // A widget or reminder tap, as MainActivity hands it over.
+      (w as unknown as { __nzTap: (a: WidgetAction) => void }).__nzTap = (a) => {
+        pendingAct = a;
+        runWidgetAction();
+      };
       // Sync progress, which ?local never shows on its own.
       (w as unknown as { __nzPulling: (on: boolean) => void }).__nzPulling = (on) => (store.pulling = on);
     }

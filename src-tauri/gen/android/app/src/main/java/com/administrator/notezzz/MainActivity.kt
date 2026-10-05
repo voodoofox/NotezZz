@@ -175,7 +175,11 @@ class MainActivity : TauriActivity() {
     super.onNewIntent(intent)
     setIntent(intent)
     stashShare(intent)
-    stashAction(intent)
+    // Already on screen (a reminder tapped with the app open): there is no
+    // return to the foreground for the page to notice, so tell it.
+    if (stashAction(intent)) {
+      webView?.post { webView?.evaluateJavascript("window.__nzPullAction && window.__nzPullAction()", null) }
+    }
   }
 
   /**
@@ -242,13 +246,14 @@ class MainActivity : TauriActivity() {
    * A widget tap: open a note, or start a new / voice / draw note. Same hand-
    * off as a share — a file the frontend takes through `take_pending_action`.
    */
-  private fun stashAction(intent: Intent?) {
-    val action = intent?.getStringExtra(EXTRA_ACTION) ?: return
+  private fun stashAction(intent: Intent?): Boolean {
+    val action = intent?.getStringExtra(EXTRA_ACTION) ?: return false
     val json = JSONObject().put("action", action)
     intent.getStringExtra(EXTRA_NOTE)?.let { json.put("id", it) }
     runCatching { File(WidgetData.dir(this), "pending-action.json").writeText(json.toString()) }
     intent.removeExtra(EXTRA_ACTION)
     intent.removeExtra(EXTRA_NOTE)
+    return true
   }
 
   // Widgets render from widget.json, which the app rewrites as notes change.

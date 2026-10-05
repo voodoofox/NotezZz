@@ -749,7 +749,9 @@ class AppStore {
     for (const n of this.notes) {
       if (!n.remindAt || n.remindAt > now || n.archived) continue;
       if (!n.pinned) {
-        this.update(n.id, { pinned: true, remindAt: undefined });
+        // Up in full, whatever its window remembers (a note from before the
+        // tucked flag would otherwise reopen tucked).
+        this.update(n.id, { pinned: true, tucked: false, remindAt: undefined });
         continue;
       }
       // Already a sticky: bring it out of its tuck and to the front, so the
