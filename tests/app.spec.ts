@@ -1062,7 +1062,8 @@ test('a pixel pattern paints the title bar and the selected row', async ({ page 
   const topbar = pane.locator('.topbar');
   await expect(topbar).toHaveClass(/nz-pat-checker/);
   expect(await topbar.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('conic-gradient');
-  expect(await topbar.evaluate((el) => getComputedStyle(el).animationName)).toBe('nz-drift-diag');
+  // Drifting: patternMotion.ts steps it a pixel at a time.
+  await expect.poll(() => topbar.evaluate((el) => (el as HTMLElement).style.getPropertyValue('--pat-step'))).not.toBe('');
   // ...and on the note's row in the list, which is selected right now: its
   // fill (the full row while selected) is the pattern.
   const row = page.getByTestId('note-item').first();
@@ -1240,7 +1241,8 @@ test('a painted pattern lands in a slot, styles the note, and survives a reload'
   const topbar = pane.locator('.topbar');
   await expect(topbar).toHaveClass(/nz-pat-custom/);
   expect(await topbar.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('data:image/svg+xml');
-  expect(await topbar.evaluate((el) => getComputedStyle(el).animationName)).toBe('nz-drift-diag16');
+  // Drifting: patternMotion.ts steps it a pixel at a time.
+  await expect.poll(() => topbar.evaluate((el) => (el as HTMLElement).style.getPropertyValue('--pat-step'))).not.toBe('');
 
   await page.waitForTimeout(500); // per-note save debounce
   await page.goto('/?local');
@@ -2565,12 +2567,21 @@ test('patterns animate even when the system asks for reduced motion; Settings ca
   await createNote(page);
   await menu(page, 'color');
   await page.locator('[data-testid="palette-chip"][data-palette="pattern:checker"]').click();
-  const anim = () => page.locator('.topbar').evaluate((el) => getComputedStyle(el).animationName);
-  expect(await anim()).toBe('nz-drift-diag');
+  const pos = () => page.locator('.topbar').evaluate((el) => getComputedStyle(el).backgroundPosition);
+  // Moving: a pixel at a time, a few times a second.
+  const seen = new Set<string>();
+  for (let i = 0; i < 8; i++) {
+    seen.add(await pos());
+    await page.waitForTimeout(150);
+  }
+  expect(seen.size).toBeGreaterThan(2);
+  for (const p of seen) expect(p).toMatch(/^\d+px \d+px$/); // whole pixels
   await page.getByTestId('open-settings').click();
   await page.getByTestId('set-animate').uncheck();
   await page.getByTestId('settings-close').click();
-  expect(await anim()).toBe('none');
+  const still = await pos();
+  await page.waitForTimeout(700);
+  expect(await pos()).toBe(still);
 });
 
 

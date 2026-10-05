@@ -271,8 +271,8 @@ textarea {
 /* ---- Pixel patterns ------------------------------------------------------
    Five textures for the picker's third row. Every one is built from
    hard-stop gradients on a 2px pixel unit, so edges stay crisp at any zoom,
-   and animates by drifting background-position by exactly one tile — the
-   loop is seamless because the tile repeats.
+   and drifts its background-position across one tile, a pixel at a time
+   (patternMotion.ts) — the loop is seamless because the tile repeats.
 
    Two tones, supplied by whatever is painting the pattern:
      --pat-base  the surface (a note's header, or the selected row)
@@ -303,7 +303,7 @@ textarea {
 .nz-pat-checker {
   background-image: conic-gradient(var(--pat-ink) 25%, transparent 0 50%, var(--pat-ink) 0 75%, transparent 0);
   background-size: 8px 8px;
-  animation: nz-drift-diag 2.4s linear infinite;
+  background-position: calc(var(--pat-step, 0) * 1px) calc(var(--pat-step, 0) * 1px);
 }
 /* Stripes: a barcode of 2px and 1px bars, marching right. */
 .nz-pat-stripes {
@@ -315,7 +315,7 @@ textarea {
     transparent 6px 10px
   );
   background-size: 10px 100%;
-  animation: nz-drift-x10 1.6s linear infinite;
+  background-position: calc(var(--pat-step, 0) * 1px) 0;
 }
 /* Dots: 2px pixels on a diamond lattice, rising slowly. */
 .nz-pat-dots {
@@ -323,8 +323,7 @@ textarea {
     conic-gradient(at 2px 2px, transparent 75%, var(--pat-ink) 0),
     conic-gradient(at 2px 2px, transparent 75%, var(--pat-ink) 0);
   background-size: 8px 8px;
-  background-position: 0 0, 4px 4px;
-  animation: nz-drift-up 3s linear infinite;
+  background-position: 0 calc(var(--pat-step, 0) * -1px), 4px calc(4px - var(--pat-step, 0) * 1px);
 }
 /* Stairs: a 45° pixel line as four stacked steps, sliding along itself. */
 .nz-pat-stairs {
@@ -334,8 +333,11 @@ textarea {
     conic-gradient(at 2px 2px, transparent 75%, var(--pat-ink) 0),
     conic-gradient(at 2px 2px, transparent 75%, var(--pat-ink) 0);
   background-size: 8px 8px;
-  background-position: 0 0, 2px 2px, 4px 4px, 6px 6px;
-  animation: nz-drift-stairs 2s linear infinite;
+  background-position:
+    calc(var(--pat-step, 0) * 1px) calc(var(--pat-step, 0) * 1px),
+    calc(2px + var(--pat-step, 0) * 1px) calc(2px + var(--pat-step, 0) * 1px),
+    calc(4px + var(--pat-step, 0) * 1px) calc(4px + var(--pat-step, 0) * 1px),
+    calc(6px + var(--pat-step, 0) * 1px) calc(6px + var(--pat-step, 0) * 1px);
 }
 /* Bricks: 1px mortar, courses offset by half a brick, creeping right. */
 .nz-pat-bricks {
@@ -344,8 +346,7 @@ textarea {
     conic-gradient(at 1px 5px, transparent 75%, var(--pat-ink) 0),
     conic-gradient(at 1px 5px, transparent 75%, var(--pat-ink) 0);
   background-size: 12px 6px, 12px 12px, 12px 12px;
-  background-position: 0 0, 0 0, 6px 6px;
-  animation: nz-drift-bricks 4s linear infinite;
+  background-position: calc(var(--pat-step, 0) * 1px) 0, calc(var(--pat-step, 0) * 1px) 0, calc(6px + var(--pat-step, 0) * 1px) 6px;
 }
 
 /* Custom: an 8×8 tile the user painted, as an SVG in --pat-img (patterns.ts).
@@ -353,31 +354,9 @@ textarea {
 .nz-pat-custom {
   background-image: var(--pat-img, none);
   background-size: 16px 16px;
-  animation: nz-drift-diag16 3.2s linear infinite;
+  background-position: calc(var(--pat-step, 0) * 1px) calc(var(--pat-step, 0) * 1px);
 }
 
-@keyframes nz-drift-diag16 {
-  to { background-position: 16px 16px; }
-}
-@keyframes nz-drift-diag {
-  to { background-position: 8px 8px; }
-}
-@keyframes nz-drift-x10 {
-  to { background-position: 10px 0; }
-}
-@keyframes nz-drift-up {
-  to { background-position: 0 -8px, 4px -4px; }
-}
-@keyframes nz-drift-stairs {
-  to { background-position: 8px 8px, 10px 10px, 12px 12px, 14px 14px; }
-}
-@keyframes nz-drift-bricks {
-  to { background-position: 12px 0, 12px 0, 18px 6px; }
-}
-/* Still patterns: Settings -> "Animate patterns" off. Not the system's
-   reduced-motion: Windows turns that on with its "animation effects" switch
-   (often off without anyone deciding about this app), which stopped every
-   pattern on the PC. The setting is the app's own choice, on by default. */
-:root[data-motion='still'] :is(.nz-pat-checker, .nz-pat-stripes, .nz-pat-dots, .nz-pat-stairs, .nz-pat-bricks, .nz-pat-custom) {
-  animation: none;
-}
+/* They drift a pixel at a time: patternMotion.ts sets --pat-step on each
+   one when its next pixel is due (never every frame, which kept a CPU core
+   busy), unless Settings -> "Animate patterns" is off. */

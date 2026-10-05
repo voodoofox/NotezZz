@@ -7,6 +7,7 @@
   import { isTauri } from '$lib/storage/backend';
   import { initDiag } from '$lib/diag';
   import { setCustomPatterns } from '$lib/patterns.svelte';
+  import { startPatternMotion } from '$lib/patternMotion';
   import { applyTheme, findTheme } from '$lib/theme';
   import { getPalette } from '$lib/palettes';
   import { isDesktop } from '$lib/storage/backend';
@@ -205,10 +206,16 @@
     bridge?.setDarkTheme(note ? !!getPalette(note.paletteId).dark : dark);
   });
 
-  // Patterns drift unless switched off in Settings (app.css, data-motion).
+  // Patterns drift unless switched off in Settings (patternMotion.ts). Not
+  // the system's reduced motion: Windows turns that on with its "animation
+  // effects" switch, often without anyone deciding about this app.
   $effect(() => {
-    if (store.settings.animatePatterns === false) document.documentElement.dataset.motion = 'still';
-    else delete document.documentElement.dataset.motion;
+    if (store.settings.animatePatterns === false) {
+      document.documentElement.dataset.motion = 'still';
+      return;
+    }
+    delete document.documentElement.dataset.motion;
+    return startPatternMotion();
   });
 
   // The note theme (light, shade, grain, title strip, buttons): CSS
