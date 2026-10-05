@@ -6,6 +6,7 @@
   import Settings from './Settings.svelte';
   import Icon from './Icon.svelte';
   import Lockup from './Lockup.svelte';
+  import { fade } from 'svelte/transition';
   import { updates } from '$lib/update.svelte';
   import { installUpdate } from '$lib/updater';
   import { isDesktop } from '$lib/storage/backend';
@@ -272,6 +273,25 @@
   $effect(() => {
     if (searching) searchInput?.focus();
   });
+
+  // The arrows beside the logo while anything syncs. They wait 300ms before
+  // showing, so a quick background poll (every few seconds on the PC) never
+  // blinks them, and once up they stay 700ms so a short sync reads as one turn.
+  let syncShown = $state(false);
+  let shownAt = 0;
+  $effect(() => {
+    const on = store.syncing;
+    let t: ReturnType<typeof setTimeout> | undefined;
+    if (on && !syncShown) {
+      t = setTimeout(() => {
+        syncShown = true;
+        shownAt = Date.now();
+      }, 300);
+    } else if (!on && syncShown) {
+      t = setTimeout(() => (syncShown = false), Math.max(0, 700 - (Date.now() - shownAt)));
+    }
+    return () => clearTimeout(t);
+  });
 </script>
 
 <svelte:window
@@ -283,7 +303,14 @@
 
 <aside class="sidebar">
   <div class="head">
-    <span class="brand"><Lockup height={24} /></span>
+    <span class="brand">
+      <Lockup height={24} />
+      {#if syncShown}
+        <span class="syncing" data-testid="sync-arrows" role="status" aria-label="Syncing" title="Syncing" transition:fade={{ duration: 150 }}>
+          <Icon name="sync" size={18} />
+        </span>
+      {/if}
+    </span>
     <div class="head-actions">
       <button
         class="ico"
@@ -494,7 +521,21 @@
   .brand {
     display: inline-flex;
     align-items: center;
+    gap: 8px;
     color: var(--app-fg);
+  }
+  /* Sync in progress: the arrows turn the way they point (anticlockwise).
+     On even with reduced motion: it says something is happening, and
+     Windows with its animation effects off asks for reduced motion too. */
+  .syncing {
+    display: inline-flex;
+    color: var(--app-muted);
+    animation: sync-turn 1.2s linear infinite;
+  }
+  @keyframes sync-turn {
+    to {
+      transform: rotate(-360deg);
+    }
   }
   .head-actions {
     display: flex;

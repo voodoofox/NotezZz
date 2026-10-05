@@ -327,6 +327,8 @@
       w.__nzSyncNow = () => store.syncNow();
       // The desktop's reminder tick, callable where the desktop loop doesn't run.
       w.__nzFireReminders = () => store.fireDueReminders();
+      // Sync progress, which ?local never shows on its own.
+      (w as unknown as { __nzPulling: (on: boolean) => void }).__nzPulling = (on) => (store.pulling = on);
     }
   });
 

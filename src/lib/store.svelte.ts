@@ -113,6 +113,8 @@ class AppStore {
   // Sync status for the UI. 'local' = this-browser/device only (no cloud);
   // 'loading'/'saving'/'synced' = Drive; 'error' = last op failed.
   syncStatus = $state<'local' | 'loading' | 'saving' | 'synced' | 'error'>('local');
+  /** A refresh from storage is under way (the background poll included). */
+  pulling = $state(false);
   syncError = $state<string>('');
 
   /** Phone layout: true while the note is expanded fullscreen (over the 40/60 split). */
@@ -150,6 +152,11 @@ class AppStore {
   #ready = new Promise<void>((resolve) => (this.#markReady = resolve));
 
   active = $derived(this.notes.find((n) => n.id === this.activeId) ?? null);
+
+  /** Anything travelling to or from storage right now: the header's arrows. */
+  get syncing(): boolean {
+    return this.pulling || this.syncStatus === 'loading' || this.syncStatus === 'saving';
+  }
 
   get isCloud(): boolean {
     return this.#backend?.kind === 'drive';
@@ -921,6 +928,7 @@ class AppStore {
     if (Date.now() - this.#lastReload < 3000) return;
     this.#lastReload = Date.now();
     this.#reloading = true;
+    this.pulling = true;
     try {
       await this.#doReload();
       this.#pollFailures = 0;
@@ -934,6 +942,7 @@ class AppStore {
       this.#fail(e, true);
     } finally {
       this.#reloading = false;
+      this.pulling = false;
     }
   }
 

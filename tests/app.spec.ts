@@ -2663,3 +2663,26 @@ test('a due reminder on a note already pinned brings it out of its tuck', async 
   expect(stored.remindAt).toBeUndefined();
 });
 
+test('turning arrows beside the logo while a sync is under way, not for a blink', async ({ page }) => {
+  await expect(page.getByTestId('sync-arrows')).toHaveCount(0);
+  const pull = (on: boolean) => page.evaluate((v) => (window as unknown as { __nzPulling: (on: boolean) => void }).__nzPulling(v), on);
+  // A quick one never shows them.
+  await pull(true);
+  await page.waitForTimeout(100);
+  await pull(false);
+  await page.waitForTimeout(400);
+  await expect(page.getByTestId('sync-arrows')).toHaveCount(0);
+  // A longer one does, turning, beside the logo.
+  await pull(true);
+  const arrows = page.getByTestId('sync-arrows');
+  await expect(arrows).toBeVisible();
+  expect(await arrows.evaluate((el) => getComputedStyle(el).animationName)).toMatch(/sync-turn$/);
+  const [logo, a] = await Promise.all([
+    page.locator('.brand svg').first().boundingBox(),
+    arrows.boundingBox(),
+  ]);
+  expect(a!.x).toBeGreaterThan(logo!.x + logo!.width - 1);
+  await pull(false);
+  await expect(arrows).toHaveCount(0);
+});
+
