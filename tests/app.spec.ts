@@ -2996,3 +2996,40 @@ test.describe('settings sync while the app runs', () => {
     }).toEqual([false, '#000000']);
   });
 });
+
+test.describe('share a note as a picture', () => {
+  test.use({ viewport: { width: 412, height: 915 } });
+  test('the whole note, however long, as one JPEG named after it', async ({ page }) => {
+    // The share sheet, stood in for: keep what it was handed.
+    await page.addInitScript(() => {
+      const w = window as unknown as { __shared?: unknown };
+      const nav = navigator as unknown as { canShare: () => boolean; share: (d: { files: File[] }) => Promise<void> };
+      nav.canShare = () => true;
+      nav.share = async (d) => {
+        const f = d.files[0];
+        const bmp = await createImageBitmap(f);
+        w.__shared = { name: f.name, type: f.type, w: bmp.width, h: bmp.height };
+      };
+    });
+    await page.reload();
+    await createNote(page);
+    await page.getByTestId('title-input').fill('Groceries');
+    await page.locator('.ProseMirror').click();
+    for (let i = 1; i <= 40; i++) {
+      await page.keyboard.type(`Line ${i} of a long note`);
+      await page.keyboard.press('Enter');
+    }
+    await page.keyboard.type('The very last line.');
+    const content = await page.locator('.ProseMirror').evaluate((el) => el.scrollHeight);
+    await page.getByTestId('note-more').click();
+    await page.getByTestId('menu-share').click();
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __shared?: unknown }).__shared), { timeout: 15_000 }).toBeTruthy();
+    const s = (await page.evaluate(() => (window as unknown as { __shared: unknown }).__shared)) as { name: string; type: string; w: number; h: number };
+    expect(s.name).toBe('Groceries.jpg');
+    expect(s.type).toBe('image/jpeg');
+    // All of it: taller than the screen, as tall as the text and the title bar.
+    const scale = s.w / 412;
+    expect(s.h / scale).toBeGreaterThan(content);
+    expect(s.h / scale).toBeGreaterThan(915);
+  });
+});

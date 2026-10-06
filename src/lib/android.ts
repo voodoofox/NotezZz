@@ -12,6 +12,8 @@ export interface AndroidBridge {
   googleToken?(id: number, interactive: boolean, invalidate: string): void;
   googleSignOut?(id: number, token: string): void;
   installApk?(id: number, url: string): void;
+  /** A JPEG (base64) into Android's share sheet, named after the note. */
+  shareImage?(id: number, base64: string, name: string): void;
 }
 
 type Pending = {

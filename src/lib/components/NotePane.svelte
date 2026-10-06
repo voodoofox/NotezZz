@@ -60,6 +60,28 @@
   }
 
   /** A ⋯ menu entry that opens a panel: the panel takes the menu's place. */
+  // ---- share as a picture (phone and browser; the PC has no share sheet) ----
+  let paneEl = $state<HTMLElement>();
+  let sharing = $state<'' | 'making' | 'failed'>('');
+  async function sharePicture() {
+    if (!note || !paneEl || sharing === 'making') return;
+    sharing = 'making';
+    try {
+      const img = await import('$lib/noteImage');
+      const url = await img.noteToJpeg(paneEl);
+      openPop = null;
+      await img.sharePicture(url, note.title);
+      sharing = '';
+    } catch (e) {
+      // Backing out of the share sheet isn't a failure.
+      if ((e as { name?: string } | null)?.name === 'AbortError') sharing = '';
+      else {
+        console.error('[NotezZz] share as picture', e);
+        sharing = 'failed';
+      }
+    }
+  }
+
   function fromMenu(which: 'pal' | 'size' | 'opacity' | 'remind') {
     openPop = null;
     togglePop(which);
@@ -176,6 +198,7 @@
 
 {#if note}
   <section
+    bind:this={paneEl}
     class="pane"
     data-testid="note-pane"
     data-palette={note.paletteId}
@@ -379,6 +402,13 @@
                 <button class="mi" role="menuitem" data-testid="menu-opacity" onclick={() => fromMenu('opacity')}>
                   <Icon name="opacity" /><span>Transparency</span>
                   <span class="mv">{Math.round(note.opacity * 100)}%</span>
+                </button>
+              {/if}
+              {#if !desktop}
+                <!-- The whole note as one picture, into the share sheet. -->
+                <button class="mi" role="menuitem" data-testid="menu-share" disabled={sharing === 'making'} onclick={sharePicture}>
+                  <Icon name="share" />
+                  <span>{sharing === 'making' ? 'Making the picture…' : sharing === 'failed' ? "Couldn't share — try again" : 'Share as image'}</span>
                 </button>
               {/if}
               <button class="mi" role="menuitem" data-testid="menu-archive" onclick={toggleArchive}>

@@ -1,6 +1,9 @@
 package com.administrator.notezzz
 
 import android.Manifest
+import android.content.ClipData
+import android.util.Base64
+import androidx.core.content.FileProvider
 import android.appwidget.AppWidgetManager
 import android.content.pm.PackageManager
 import android.os.Build
@@ -149,6 +152,36 @@ class MainActivity : TauriActivity() {
     /** Download a release APK and open Android's installer (ApkUpdater.kt). */
     @JavascriptInterface
     fun installApk(id: Int, url: String) = updater.install(id, url)
+
+    /**
+     * A note drawn as a JPEG (base64, from the page) into Android's share
+     * sheet, named after the note. Written to the cache (file_paths.xml
+     * shares it through the FileProvider); earlier pictures are cleared out
+     * once they are old enough that no app is still reading them.
+     */
+    @JavascriptInterface
+    fun shareImage(id: Int, base64: String, name: String) {
+      Thread {
+        try {
+          val dir = File(cacheDir, "shared").apply { mkdirs() }
+          val stale = System.currentTimeMillis() - 10 * 60_000
+          dir.listFiles()?.forEach { if (it.lastModified() < stale) it.delete() }
+          val safe = name.replace(Regex("[^\\p{L}\\p{N} _.-]"), "").trim().take(60).ifBlank { "Note" }
+          val file = File(dir, "$safe.jpg")
+          file.writeBytes(Base64.decode(base64, Base64.DEFAULT))
+          val uri = FileProvider.getUriForFile(this@MainActivity, "$packageName.fileprovider", file)
+          val send = Intent(Intent.ACTION_SEND)
+            .setType("image/jpeg")
+            .putExtra(Intent.EXTRA_STREAM, uri)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+          send.clipData = ClipData.newRawUri(safe, uri)
+          runOnUiThread { startActivity(Intent.createChooser(send, null)) }
+          reply(id, true, "")
+        } catch (e: Exception) {
+          reply(id, false, e.message ?: "Couldn't share the picture")
+        }
+      }.start()
+    }
 
     /** The app theme itself (not a note's), kept for the next launch's
      *  first frame (see startColor). */
