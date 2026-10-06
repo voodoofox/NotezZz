@@ -74,7 +74,10 @@ export function widgetNotes(notes: Note[]): WidgetNote[] {
 /** Every named colour, plus the painted pattern slots, as the widgets draw them. */
 function paletteTable(): Record<string, { bg: string; fg: string }> {
   const table: Record<string, { bg: string; fg: string }> = {};
-  for (const p of [...PALETTES, ...PATTERNS]) table[p.id] = { bg: p.bg, fg: p.fg };
+  for (const { id } of [...PALETTES, ...PATTERNS]) {
+    const p = getPalette(id); // as restyled, if it is
+    table[id] = { bg: p.bg, fg: p.fg };
+  }
   for (let i = 0; i < PATTERN_SLOTS; i++) {
     const id = customPatternId(i);
     const p = getPalette(id);

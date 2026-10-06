@@ -11,7 +11,8 @@ export const COLOR_SLOTS = 5;
 export const TILE = 8;
 
 export interface CustomPattern {
-  /** 64 chars of '0'/'1', row-major, top-left first. */
+  /** 64 chars of '0'/'1', row-major, top-left first. Empty on a restyled
+   *  built-in pattern that keeps its own drawing (see BUILTIN_SHAPES). */
   px: string;
   /** #rrggbb. Older patterns' single colour, their palette derived from it;
    *  kept (= bg) on new ones so older app versions still read them. */
@@ -86,6 +87,31 @@ export function getCustomPattern(i: number): CustomPattern | null {
 
 export function customPatternId(i: number): string {
   return `upat:${i}`;
+}
+
+/**
+ * The built-in patterns on the editor's 8×8 grid, for repainting one. Checker,
+ * dots and stairs are exact; stripes (a 5-cell barcode) and bricks (6-cell
+ * courses) don't fit eight cells, so these are their nearest. Restyling only
+ * the colours keeps the original drawing; painting a cell switches to this.
+ */
+export const BUILTIN_SHAPES: Record<string, string> = {
+  checker: '00110011'.repeat(2) + '11001100'.repeat(2) + '00110011'.repeat(2) + '11001100'.repeat(2),
+  dots: ('10001000' + '00000000' + '00100010' + '00000000').repeat(2),
+  stairs: ('10001000' + '01000100' + '00100010' + '00010001').repeat(2),
+  stripes: '11001000'.repeat(8),
+  bricks: '11111111' + '10000000'.repeat(3) + '11111111' + '00001000'.repeat(3),
+};
+
+// ---- the picker's own colours, restyled (settings.paletteEdits) ----
+let edits = $state<Record<string, CustomPattern>>({});
+
+export function setPaletteEdits(e: Record<string, CustomPattern> | undefined): void {
+  edits = { ...(e ?? {}) };
+}
+
+export function getPaletteEdit(id: string): CustomPattern | null {
+  return edits[id] ?? null;
 }
 
 /** Slot index for a `upat:<n>` id, or -1. */

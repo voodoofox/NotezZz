@@ -1,25 +1,33 @@
 <script lang="ts">
-  // Edit one of the five slots: paint an 8x8 tile, choose its background and
-  // its dots (the same sliders as the colour picker, black to white), watch
-  // it animate, save. No dots painted = a plain colour kept in the slot.
+  // Edit one of the five slots, or one of the picker's own colours and
+  // patterns: paint an 8x8 tile, choose its background and its dots (the same
+  // sliders as the colour picker, black to white), watch it animate, save.
+  // No dots painted = a plain colour. A built-in pattern keeps its own
+  // drawing in the new colours until a cell is painted.
   // Click or drag over cells; the first cell you press decides whether the
   // drag paints or erases, so a stroke never flickers.
   import { untrack } from 'svelte';
   import Modal from './Modal.svelte';
   import { hslToHex, hexToHsl } from '$lib/palettes';
-  import { TILE, EMPTY_PX, patternSvg, paletteFromSlot, textOn, type CustomPattern } from '$lib/patterns.svelte';
+  import { TILE, EMPTY_PX, BUILTIN_SHAPES, patternSvg, paletteFromSlot, textOn, type CustomPattern } from '$lib/patterns.svelte';
 
   let {
-    slot,
+    slot = 0,
+    name,
+    builtinPattern,
     initial,
     onSave,
     onRemove,
     onClose,
   }: {
-    slot: number;
+    slot?: number;
+    /** One of the picker's own (its name): Reset rather than Remove. */
+    name?: string;
+    /** A built-in pattern ('checker'…): its drawing, until a cell is painted. */
+    builtinPattern?: string;
     initial: CustomPattern | null;
     onSave: (p: CustomPattern) => void;
-    /** Only for a filled slot: empty it. */
+    /** A filled slot: empty it. One of the picker's own: back to the original. */
     onRemove?: () => void;
     onClose: () => void;
   } = $props();
@@ -27,8 +35,12 @@
   // Read once, deliberately: the editor starts from the slot and then owns
   // its cells and colours; re-seeding on prop changes would fight the paint.
   const start = untrack(() => initial);
+  const own = untrack(() => (builtinPattern ? BUILTIN_SHAPES[builtinPattern] : undefined));
+  const startsOwn = !!own && !start?.px;
+  // Still the built-in drawing (nothing painted since): saved as that.
+  let ownShape = $state(startsOwn);
   let cells = $state<boolean[]>(
-    (start?.px ?? EMPTY_PX)
+    ((startsOwn ? own : start?.px) || EMPTY_PX)
       .padEnd(TILE * TILE, '0')
       .split('')
       .map((c) => c === '1')
@@ -64,6 +76,7 @@
 
   let painting: boolean | null = null; // what the current drag sets cells to
   function press(i: number) {
+    ownShape = false;
     painting = !cells[i];
     cells[i] = painting;
   }
@@ -76,10 +89,12 @@
   }
 
   function clear() {
+    ownShape = false;
     cells = cells.map(() => false);
   }
   function save() {
     // tint = bg keeps the slot readable by older app versions.
+    if (ownShape) return onSave({ px: '', tint: bg, bg, ink });
     onSave(lit ? { px, tint: bg, bg, ink } : { px: EMPTY_PX, tint: bg, bg, solid: true });
   }
 </script>
@@ -89,7 +104,7 @@
 <Modal labelledby="pat-title" {onClose} testid="pattern-editor">
   <div class="card">
     <div class="head">
-      <h2 id="pat-title">Slot {slot + 1}</h2>
+      <h2 id="pat-title">{name ?? `Slot ${slot + 1}`}</h2>
       <button class="x" aria-label="Close" onclick={onClose}>✕</button>
     </div>
 
@@ -116,7 +131,7 @@
       <!-- The preview is the real thing: the same class and variables the
            title bar uses, in exactly these two colours. -->
       <div
-        class="preview nz-pat-custom"
+        class="preview nz-pat-{ownShape ? builtinPattern : 'custom'}"
         data-testid="pat-preview"
         style="--pat-base: {bg}; --pat-ink: {ink}; --pat-img: {lit ? patternSvg(px, ink) : 'none'}; --pat-tile-bg: {bg}"
       >
@@ -154,11 +169,11 @@
 
     <div class="acts">
       {#if onRemove}
-        <button class="ghost" data-testid="pat-remove" onclick={onRemove}>Remove</button>
+        <button class="ghost" data-testid="pat-remove" onclick={onRemove}>{name ? 'Reset to default' : 'Remove'}</button>
       {/if}
       <span class="grow"></span>
       <button class="ghost" onclick={clear} disabled={lit === 0}>Clear</button>
-      <button class="solid" data-testid="pat-save" onclick={save}>Save to slot {slot + 1}</button>
+      <button class="solid" data-testid="pat-save" onclick={save}>{name ? 'Save' : `Save to slot ${slot + 1}`}</button>
     </div>
   </div>
 </Modal>

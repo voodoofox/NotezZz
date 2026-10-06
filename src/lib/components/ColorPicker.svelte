@@ -1,14 +1,17 @@
 <script lang="ts">
   // The note colour picker: ten palettes, five pixel patterns, five slots of
   // your own (a colour or a pattern each), and a custom colour from three
-  // sliders. One component, used by the note pane and by the sticky window's
-  // title bar, so the two can never drift apart.
-  import { PALETTES, PATTERNS, getPalette, hslToHex, hexToHsl } from '$lib/palettes';
+  // sliders. Every one of them can be restyled in the same editor: tap the
+  // one in use (or its pencil). The picker's own go back to their originals
+  // with Reset. One component, used by the note pane and by the sticky
+  // window's title bar, so the two can never drift apart.
+  import { PALETTES, PATTERNS, builtinStart, getPalette, hslToHex, hexToHsl, type Palette } from '$lib/palettes';
   import {
     EMPTY_PX,
     PATTERN_SLOTS,
     customPatternId,
     getCustomPattern,
+    getPaletteEdit,
     patternSvg,
     paletteFromSlot,
     type CustomPattern,
@@ -76,6 +79,32 @@
     editing = null;
   }
 
+  // ---- the picker's own colours and patterns, restyled like a slot ----
+  const BUILTINS: Palette[] = [...PALETTES, ...PATTERNS];
+  let editingBuiltin = $state<Palette | null>(null);
+  /** Pick it; pick it again (it's the note's already) to restyle it. */
+  function pickBuiltin(p: Palette) {
+    if (paletteId === p.id) editingBuiltin = p;
+    else onPick(p.id);
+  }
+  /** A chip as it looks now: restyled, or the original. */
+  function builtinChip(id: string): string {
+    const e = getPalette(id);
+    if (!e.pattern) return `background: ${e.bg}`;
+    return `--pat-base: ${e.header}; --pat-ink: ${e.inkStrong ?? e.fg}${e.patternImage ? `; --pat-img: ${e.patternImage}` : ''}`;
+  }
+  function saveEdit(id: string, p: CustomPattern) {
+    void store.saveSettings({ paletteEdits: { ...(store.settings.paletteEdits ?? {}), [id]: p } });
+    editingBuiltin = null;
+    onPick(id);
+  }
+  function resetEdit(id: string) {
+    const rest = { ...(store.settings.paletteEdits ?? {}) };
+    delete rest[id];
+    void store.saveSettings({ paletteEdits: rest });
+    editingBuiltin = null;
+  }
+
   // The note's custom colour, kept in the first free slot.
   let currentHex = $derived(isCustom ? paletteId.slice(7) : null);
   let alreadySaved = $derived(!!currentHex && slots.some((p) => p?.solid && (p.bg ?? p.tint) === currentHex));
@@ -89,36 +118,28 @@
 </script>
 
 <div class="pgrid">
-  {#each PALETTES as p}
-    <button
-      class="pchip"
-      data-testid="palette-chip"
-      data-palette={p.id}
-      style="background: {p.bg}"
-      title={p.name}
-      aria-label={p.name}
-      onclick={() => onPick(p.id)}
-    >
-      {#if paletteId === p.id}
-        <span class="pcheck" style="color: {p.fg}"><Icon name="check" size={15} /></span>
-      {/if}
-    </button>
-  {/each}
-
-  {#each PATTERNS as p}
-    <button
-      class="pchip nz-pat-{p.pattern}"
-      data-testid="palette-chip"
-      data-palette={p.id}
-      style="--pat-base: {p.header}; --pat-ink: {p.inkStrong}"
-      title={p.name}
-      aria-label={p.name}
-      onclick={() => onPick(p.id)}
-    >
-      {#if paletteId === p.id}
-        <span class="pcheck" style="color: {p.fg}"><Icon name="check" size={15} /></span>
-      {/if}
-    </button>
+  <!-- The picker's own: ten colours, then five patterns. Each as restyled. -->
+  {#each BUILTINS as p (p.id)}
+    {@const e = getPalette(p.id)}
+    <span class="slot">
+      <button
+        class="pchip {e.pattern ? `nz-pat-${e.pattern}` : ''}"
+        data-testid="palette-chip"
+        data-palette={p.id}
+        data-edited={getPaletteEdit(p.id) ? '' : undefined}
+        style={builtinChip(p.id)}
+        title={p.name}
+        aria-label={p.name}
+        onclick={() => pickBuiltin(p)}
+      >
+        {#if paletteId === p.id}
+          <span class="pcheck" style="color: {e.fg}"><Icon name="check" size={15} /></span>
+        {/if}
+      </button>
+      <button class="edit" data-testid="palette-edit" title="Restyle {p.name}" aria-label="Restyle {p.name}" onclick={() => (editingBuiltin = p)}>
+        <Icon name="draw" size={11} />
+      </button>
+    </span>
   {/each}
   <!-- Fourth row: your five slots, a colour or a pattern each. Tap to use;
        tap the one in use (or its pencil) to edit; + makes a new one. -->
@@ -220,6 +241,17 @@
     onSave={(p) => savePattern(editing!, p)}
     onRemove={slots[editing] ? () => removeSlot(editing!) : undefined}
     onClose={() => (editing = null)}
+  />
+{/if}
+{#if editingBuiltin}
+  {@const base = editingBuiltin}
+  <PatternEditor
+    name={base.name}
+    builtinPattern={base.pattern}
+    initial={getPaletteEdit(base.id) ?? builtinStart(base)}
+    onSave={(p) => saveEdit(base.id, p)}
+    onRemove={getPaletteEdit(base.id) ? () => resetEdit(base.id) : undefined}
+    onClose={() => (editingBuiltin = null)}
   />
 {/if}
 

@@ -6,7 +6,7 @@
   import { store } from '$lib/store.svelte';
   import { isTauri } from '$lib/storage/backend';
   import { initDiag } from '$lib/diag';
-  import { setCustomPatterns } from '$lib/patterns.svelte';
+  import { setCustomPatterns, setPaletteEdits } from '$lib/patterns.svelte';
   import { startPatternMotion } from '$lib/patternMotion';
   import { applyTheme, findTheme } from '$lib/theme';
   import { getPalette } from '$lib/palettes';
@@ -17,6 +17,7 @@
   // registry so it can stay a plain function. Every route (main, sticky) runs
   // this layout, so every window's registry follows its store.
   $effect(() => setCustomPatterns(store.settings.customPatterns));
+  $effect(() => setPaletteEdits(store.settings.paletteEdits));
   // Vite resolves these to hashed, base-path-aware URLs.
   import fontRegular from '$lib/assets/SofiaSansCondensed.ttf';
   import fontItalic from '$lib/assets/SofiaSansCondensed-Italic.ttf';

@@ -77,6 +77,12 @@ export interface Settings {
   /** Patterns drift (on unless switched off; independent of the system's
    *  reduced-motion, which Windows ties to its animation-effects switch). */
   animatePatterns?: boolean;
+  /**
+   * The picker's own colours and patterns, restyled: by palette id ('coral',
+   * 'pattern:checker'), in the same form as a slot. Every note on that colour
+   * follows; removing the entry puts the original back.
+   */
+  paletteEdits?: Record<string, import('./patterns.svelte').CustomPattern>;
   /** Note ids in the order the user arranged them; unlisted notes lead. */
   noteOrder?: string[];
   /** First-run welcome notes have been written; never write them again. */

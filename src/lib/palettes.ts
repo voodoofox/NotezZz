@@ -1,7 +1,15 @@
 // Sticky-note color palettes. Each note picks one by id. Colors are chosen to be
 // legible with dark text; `dark` palettes carry light text via `fg`.
 
-import { customPatternSlot, getCustomPattern, paletteFromSlot, patternSvg } from './patterns.svelte';
+import {
+  customPatternSlot,
+  getCustomPattern,
+  getPaletteEdit,
+  paletteFromSlot,
+  patternSvg,
+  textOn,
+  type CustomPattern,
+} from './patterns.svelte';
 
 export interface Palette {
   id: string;
@@ -88,7 +96,38 @@ export function getPalette(id: string): Palette {
   if (id?.startsWith('custom:')) return customPalette(id.slice(7));
   if (id?.startsWith('upat:')) return customPatternPalette(id);
   // Retired ids (mint) fall back to Paper rather than breaking old notes.
-  return PALETTE_MAP.get(id) ?? PATTERN_MAP.get(id) ?? PALETTES[0];
+  const base = PALETTE_MAP.get(id) ?? PATTERN_MAP.get(id);
+  if (!base) return id === PALETTES[0].id ? PALETTES[0] : getPalette(PALETTES[0].id);
+  const edit = getPaletteEdit(base.id);
+  return edit ? editedPalette(base, edit) : base;
+}
+
+/** The picker's own colour as restyled, the way a slot would be: a plain
+ *  colour, its pattern in new colours, or a pattern painted anew. */
+function editedPalette(base: Palette, e: CustomPattern): Palette {
+  const bg = e.bg ?? e.tint;
+  if (e.solid || !e.ink) return { ...customPalette(bg), id: base.id, name: base.name };
+  const fg = textOn(bg);
+  const own = !e.px && base.pattern; // its own drawing, in the new colours
+  return {
+    id: base.id,
+    name: base.name,
+    pattern: own ? base.pattern : 'custom',
+    ...(own ? {} : { patternImage: patternSvg(e.px, e.ink) }),
+    dark: fg === '#ECEDEF',
+    bg,
+    header: bg,
+    fg,
+    accent: fg,
+    ink: e.ink,
+    inkStrong: e.ink,
+  };
+}
+
+/** What the editor starts from for a picker colour never restyled. */
+export function builtinStart(base: Palette): CustomPattern {
+  if (base.pattern) return { px: '', tint: base.header, bg: base.header, ink: base.inkStrong ?? base.fg };
+  return { px: '0'.repeat(64), tint: base.bg, bg: base.bg, ink: mixHex(base.fg, base.bg, 0.6), solid: true };
 }
 
 /** Any hex from the color picker becomes a full note palette: contrast-safe

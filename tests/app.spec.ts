@@ -2867,3 +2867,65 @@ test.describe('sync between devices', () => {
     expect(await ed.innerText()).toMatch(/^Links\s+shared link\s+second link$/);
   });
 });
+
+test.describe("restyling the picker's own colours and patterns", () => {
+  const chip = (page: Page, id: string) => page.locator(`[data-testid="palette-chip"][data-palette="${id}"]`);
+  /** Open the picker (if it closed on the last pick) and tap this chip. */
+  async function tap(page: Page, id: string) {
+    if (!(await chip(page, id).isVisible())) await menu(page, 'color');
+    await chip(page, id).click();
+  }
+  const paneBg = (page: Page) => page.getByTestId('note-pane').evaluate((el) => getComputedStyle(el).backgroundColor);
+
+  test('a colour: tap it in use, restyle it, every note on it follows; Reset brings it back', async ({ page }) => {
+    await createNote(page);
+    await menu(page, 'color');
+    await tap(page, 'coral');
+    await createNote(page);
+    await tap(page, 'coral');
+    await tap(page, 'coral'); // in use: restyle it
+    await expect(page.getByTestId('pattern-editor')).toContainText('Coral');
+    await page.getByTestId('pat-light').fill('0'); // all the way to black
+    await page.getByTestId('pat-save').click();
+    await expect.poll(() => paneBg(page)).toBe('rgb(0, 0, 0)');
+    // The other coral note too.
+    await page.getByTestId('note-pick').nth(1).click();
+    await expect.poll(() => paneBg(page)).toBe('rgb(0, 0, 0)');
+    await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', 'coral');
+    // Back to the original.
+    await tap(page, 'coral');
+    await expect(chip(page, 'coral')).toHaveAttribute('data-edited', '');
+    await page.getByTestId('pat-remove').click();
+    await expect.poll(() => paneBg(page)).toBe('rgb(240, 205, 194)'); // #F0CDC2
+  });
+
+  test('a pattern keeps its drawing in new colours, until a cell is painted', async ({ page }) => {
+    await createNote(page);
+    await menu(page, 'color');
+    await tap(page, 'pattern:checker');
+    await tap(page, 'pattern:checker');
+    await expect(page.getByTestId('pattern-editor')).toContainText('Checker');
+    await expect(page.getByTestId('pat-preview')).toHaveClass(/nz-pat-checker/);
+    await page.getByTestId('pat-which-bg').click();
+    await page.getByTestId('pat-light').fill('100'); // a white background
+    await page.getByTestId('pat-save').click();
+    const bar = page.locator('.topbar');
+    await expect(bar).toHaveClass(/nz-pat-checker/);
+    await expect.poll(() => bar.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(255, 255, 255)');
+    let edit = await page.evaluate(() => JSON.parse(localStorage.getItem('notezzz:settings')!).paletteEdits['pattern:checker']);
+    expect(edit.px).toBe('');
+    // Painting a cell makes it a drawing of your own.
+    await tap(page, 'pattern:checker');
+    await page.getByTestId('pat-cell').first().click();
+    await expect(page.getByTestId('pat-preview')).toHaveClass(/nz-pat-custom/);
+    await page.getByTestId('pat-save').click();
+    await expect(bar).toHaveClass(/nz-pat-custom/);
+    edit = await page.evaluate(() => JSON.parse(localStorage.getItem('notezzz:settings')!).paletteEdits['pattern:checker']);
+    expect(edit.px).toHaveLength(64);
+    // Reset: the original checker, in its own colours.
+    await tap(page, 'pattern:checker');
+    await page.getByTestId('pat-remove').click();
+    await expect(bar).toHaveClass(/nz-pat-checker/);
+    await expect.poll(() => bar.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(195, 174, 230)'); // #C3AEE6
+  });
+});
