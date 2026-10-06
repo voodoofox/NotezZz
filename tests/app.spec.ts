@@ -2929,3 +2929,26 @@ test.describe("restyling the picker's own colours and patterns", () => {
     await expect.poll(() => bar.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(195, 174, 230)'); // #C3AEE6
   });
 });
+
+test("dark theme: a pattern near the list's own colour still matches its title bar exactly", async ({ page }) => {
+  await page.evaluate(() =>
+    localStorage.setItem(
+      'notezzz:settings',
+      JSON.stringify({ appTheme: 'dark', paletteEdits: { 'pattern:bricks': { px: '', tint: '#2b1f1b', bg: '#2b1f1b', ink: '#463530' } } })
+    )
+  );
+  await page.reload();
+  await createNote(page);
+  await menu(page, 'color');
+  await page.locator('[data-testid="palette-chip"][data-palette="pattern:bricks"]').click();
+  await page.mouse.click(5, 790);
+  const look = (sel: string) =>
+    page.locator(sel).first().evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return [cs.backgroundColor, cs.backgroundImage];
+    });
+  const bar = await look('.topbar');
+  expect(bar[0]).toBe('rgb(43, 31, 27)'); // #2b1f1b, as chosen
+  expect(await look('[data-testid="note-fill"]')).toEqual(bar);
+  expect((await look('[data-testid="note-swatch"]'))[0]).toBe(bar[0]);
+});

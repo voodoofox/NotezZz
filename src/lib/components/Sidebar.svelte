@@ -178,9 +178,10 @@
   let lastThumbTop = -1;
 
   /**
-   * A note colour that nearly matches the list's own background (Paper on
-   * the white panel, Graphite or Black on the dark one) gets a little of the
-   * app's ink, so its bar and its selection still show.
+   * A plain note colour that nearly matches the list's own background (Paper
+   * on the white panel, Graphite or Black on the dark one) gets a little of
+   * the app's ink, so its bar and its selection still show. (Not patterns:
+   * see the row.)
    */
   function rowTone(c: string): string {
     const panel = store.settings.appTheme === 'dark' ? [0x1e, 0x21, 0x27] : [0xff, 0xff, 0xff];
@@ -359,7 +360,10 @@
     {/if}
     {#each visibleNotes as note (note.id)}
       {@const pal = getPalette(note.paletteId)}
-      {@const tone = rowTone(pal.pattern ? pal.header : pal.bg)}
+      <!-- A pattern in exactly its own colours, as on its title bar: its
+           pixels are what make it show, and lifting only its background
+           (rowTone, for a dark one on the dark list) changed how it looked. -->
+      {@const tone = pal.pattern ? pal.header : rowTone(pal.bg)}
       <div
         class="item"
         data-testid="note-item"
