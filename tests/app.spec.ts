@@ -2717,3 +2717,153 @@ test("tapping a note's reminder opens that note, full screen", async ({ page }) 
   await expect(page.getByTestId('exit-fullscreen')).toHaveCount(1);
 });
 
+
+test.describe('notes merge field by field', () => {
+  type M = typeof import('../src/lib/noteMerge');
+  const run = <T>(page: Page, fn: (m: M) => T) =>
+    page.evaluate(async (src) => {
+      const m = (await import(/* @vite-ignore */ String('/src/lib/noteMerge.ts'))) as M;
+      return new Function('m', `return (${src})(m)`)(m) as T;
+    }, fn.toString());
+
+  test('a stale copy cannot undo a change it never made', async ({ page }) => {
+    const r = await run(page, (m) => {
+      const base = { id: 'n', title: 't', contentHtml: '<p>a</p>', paletteId: 'p', fontSize: 22, pinned: true, opacity: 1, win: null, createdAt: 1, updatedAt: 1000, tucked: true };
+      const pc = m.patchNote(base, { tucked: false }, 2000); // brought back on the PC
+      const phone = m.patchNote(base, { contentHtml: '<p>b</p>' }, 1500); // typed on the phone, before it saw that
+      const x = m.mergeNotes(pc, phone);
+      const y = m.mergeNotes(phone, pc);
+      return [x.tucked, x.contentHtml, y.tucked, y.contentHtml];
+    });
+    expect(r).toEqual([false, '<p>b</p>', false, '<p>b</p>']);
+  });
+
+  test('older app versions still win whole, as they always did', async ({ page }) => {
+    const r = await run(page, (m) => {
+      const base = { id: 'n', title: 't', contentHtml: '<p>a</p>', paletteId: 'p', fontSize: 22, pinned: true, opacity: 1, win: null, createdAt: 1, updatedAt: 1000, tucked: false };
+      const mine = m.patchNote(base, { paletteId: 'q' }, 2000);
+      // An old app spreads the note (stamps and all) and rewrites it later.
+      const old = { ...mine, contentHtml: '<p>old app</p>', tucked: true, updatedAt: 3000 };
+      const x = m.mergeNotes(mine, old);
+      return [x.contentHtml, x.tucked];
+    });
+    expect(r).toEqual(['<p>old app</p>', true]);
+  });
+
+  test('a field one copy never had, and a cleared one, merge right', async ({ page }) => {
+    const r = await run(page, (m) => {
+      const base = m.patchNote({ id: 'n', title: 't', contentHtml: '', paletteId: 'p', fontSize: 22, pinned: false, opacity: 1, win: null, createdAt: 1, updatedAt: 1000 }, { title: 't0' }, 1100);
+      const a = m.patchNote(base, { remindAt: 5 }, 2000);
+      const b = m.patchNote(base, { title: 'x' }, 3000);
+      const ab = m.mergeNotes(b, a);
+      const cleared = m.patchNote(a, { remindAt: undefined }, 4000);
+      return [ab.remindAt, ab.title, 'remindAt' in m.mergeNotes(a, cleared)];
+    });
+    expect(r).toEqual([5, 'x', false]);
+  });
+
+  test("a change is stamped after the copy it was made on, whatever this device's clock says", async ({ page }) => {
+    const t = await run(page, (m) => m.patchNote({ id: 'n', title: '', contentHtml: '', paletteId: 'p', fontSize: 22, pinned: false, opacity: 1, win: null, createdAt: 1, updatedAt: 10_000 }, { title: 'x' }, 5000).updatedAt);
+    expect(t).toBe(10_001);
+  });
+
+  test('a share is recorded, and both copies keep it', async ({ page }) => {
+    const r = await run(page, (m) => {
+      const base = { id: 'n', title: '', contentHtml: '<p>a</p>', paletteId: 'p', fontSize: 22, pinned: false, opacity: 1, win: null, createdAt: 1, updatedAt: 1000 };
+      const shared = m.withShare(base, '<p>link</p>', 's1', false, () => 0, 2000);
+      const other = m.patchNote(base, { title: 'x' }, 2500);
+      const x = m.mergeNotes(other, shared);
+      return [x.contentHtml, x.title, x.appliedShares];
+    });
+    expect(r).toEqual(['<p>a</p><p>link</p>', 'x', ['s1']]);
+  });
+});
+
+test.describe('sync between devices', () => {
+  const stored = (page: Page) =>
+    page.evaluate(() => {
+      const key = Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!;
+      return JSON.parse(localStorage.getItem(key)!);
+    });
+  /** Write the stored note the way another device on this version would:
+   *  `patch` applied to the copy it read (`from`, default: what is stored). */
+  const writeElsewhere = (page: Page, patch: Record<string, unknown>, from?: string) =>
+    page.evaluate(
+      async ([patch, from]) => {
+        const m = await import(/* @vite-ignore */ String('/src/lib/noteMerge.ts'));
+        const key = Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!;
+        const read = JSON.parse((from as string | undefined) ?? localStorage.getItem(key)!);
+        localStorage.setItem(key, JSON.stringify(m.patchNote(read, patch as never)));
+      },
+      [patch, from] as const
+    );
+
+  test('changes made on two devices at once both survive, and storage ends up with both', async ({ page }) => {
+    await createNote(page);
+    await page.getByTestId('title-input').fill('Shopping');
+    await page.waitForTimeout(600); // save debounce
+    // What the phone read, before this PC changed the colour.
+    const phoneRead = JSON.stringify(await stored(page));
+    await menu(page, 'color');
+    await page.locator('[data-testid="palette-chip"][data-palette="pattern:checker"]').click();
+    await expect.poll(async () => (await stored(page)).paletteId).toBe('pattern:checker');
+    // The phone's write lands last, made from what it read: a new title, the old colour.
+    await writeElsewhere(page, { title: 'Shopping list' }, phoneRead);
+    await syncAndSettle(page);
+    await expect(page.getByTestId('title-input')).toHaveValue('Shopping list');
+    await expect(page.getByTestId('note-pane')).toHaveAttribute('data-palette', 'pattern:checker');
+    // This PC writes its colour back, so every device ends up with both.
+    await expect.poll(async () => {
+      const n = await stored(page);
+      return [n.title, n.paletteId];
+    }).toEqual(['Shopping list', 'pattern:checker']);
+  });
+
+  test('a switch like colour is saved at once, not after the typing pause', async ({ page }) => {
+    await createNote(page);
+    await page.waitForTimeout(600);
+    await menu(page, 'color');
+    await page.locator('[data-testid="palette-chip"][data-palette="pattern:dots"]').click();
+    await expect.poll(async () => (await stored(page)).paletteId, { timeout: 250, intervals: [20] }).toBe('pattern:dots');
+  });
+
+  test('coming back to the app looks for changes at once', async ({ page }) => {
+    await createNote(page);
+    await page.getByTestId('title-input').fill('Before');
+    await page.waitForTimeout(600);
+    await writeElsewhere(page, { title: 'Changed on the PC' });
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    // Well before the next 10s tick.
+    await expect(page.getByTestId('title-input')).toHaveValue('Changed on the PC', { timeout: 2500 });
+  });
+
+  test('a share retried after the app closed mid-write lands once', async ({ page }) => {
+    await createNote(page);
+    await typeInEditor(page, 'Links');
+    await page.waitForTimeout(600);
+    // The share landed (and is recorded in the note), but the app closed
+    // before it could cross it off: it is still in the queue on next start.
+    await page.evaluate(async () => {
+      const m = await import(/* @vite-ignore */ String('/src/lib/noteMerge.ts'));
+      const key = Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!;
+      const note = JSON.parse(localStorage.getItem(key)!);
+      localStorage.setItem(key, JSON.stringify(m.withShare(note, '<p>shared link</p>', 'share-1', false, () => 0)));
+      localStorage.setItem(
+        'notezzz:outbox',
+        JSON.stringify([
+          { kind: 'append', id: note.id, html: '<p>shared link</p>', pin: false, shareId: 'share-1' },
+          { kind: 'append', id: note.id, html: '<p>second link</p>', pin: false, shareId: 'share-2' },
+        ])
+      );
+    });
+    await page.reload();
+    await page.getByTestId('note-pick').first().click();
+    const ed = page.locator('.ProseMirror');
+    await expect(ed).toContainText('second link');
+    await page.waitForTimeout(500);
+    const html = (await stored(page)).contentHtml as string;
+    expect(html.split('shared link').length - 1).toBe(1);
+    expect(html.split('second link').length - 1).toBe(1);
+    expect(await ed.innerText()).toMatch(/^Links\s+shared link\s+second link$/);
+  });
+});

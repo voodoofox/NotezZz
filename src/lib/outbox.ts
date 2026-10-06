@@ -25,7 +25,15 @@ export type OutboxOp =
    * the user taps instead of waiting for a full sync — and so appending on a
    * phone can never write yesterday's cached text back over today's edits.
    */
-  | { kind: 'append'; id: string; html: string; pin: boolean };
+  | {
+      kind: 'append';
+      id: string;
+      html: string;
+      pin: boolean;
+      /** This share, recorded in the note once applied: a retry after the
+       *  app closed mid-write sees it there and doesn't add it twice. */
+      shareId?: string;
+    };
 
 type Failed = { op: OutboxOp; attempts: number; nextAt: number };
 
@@ -35,7 +43,11 @@ const KEY = 'notezzz:outbox';
 const BACKOFF_MS = [5_000, 15_000, 45_000, 120_000];
 
 function opId(op: OutboxOp): string {
-  return op.kind === 'save' ? op.note.id : op.id;
+  if (op.kind === 'save') return op.note.id;
+  // Each share its own slot: sharing the note's, a save could replace a
+  // waiting share outright (or a share a waiting save).
+  if (op.kind === 'append') return `append:${op.shareId ?? op.id}`;
+  return op.id;
 }
 
 export class Outbox {
@@ -114,6 +126,23 @@ export class Outbox {
         void this.#drain(id);
       }
     }
+  }
+
+  /** A share for this note that hasn't landed yet (waiting, running or failed). */
+  appendPendingFor(noteId: string): boolean {
+    const isFor = (op: OutboxOp | undefined) => op?.kind === 'append' && op.id === noteId;
+    for (const op of this.#queued.values()) if (isFor(op)) return true;
+    for (const op of this.#active.values()) if (isFor(op)) return true;
+    for (const f of this.#failed.values()) if (isFor(f.op)) return true;
+    return false;
+  }
+
+  /** Retry this id's failed op now, whatever its backoff says. */
+  retryNow(id: string): void {
+    const f = this.#failed.get(id);
+    if (!f) return;
+    f.nextAt = 0;
+    this.retryDue();
   }
 
   /** Re-queue everything that failed, regardless of backoff (user pressed Reconnect). */

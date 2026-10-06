@@ -10,9 +10,10 @@
 
 import { isDriveAccessError } from './drive/driveAccess';
 import { UNKNOWN_ACCOUNT } from './drive/account';
-import { BASE_FONT_PX, DEFAULT_NOTE_PX, DEFAULT_SETTINGS, newNote, rollTilt, type Note, type Settings } from './types';
+import { BASE_FONT_PX, DEFAULT_NOTE_PX, DEFAULT_SETTINGS, cryptoId, newNote, rollTilt, type Note, type Settings } from './types';
 import { welcomeNotes } from './welcome';
 import { Outbox, type OutboxOp } from './outbox';
+import { mergeNotes, newerIn, noteRev, patchNote, withShare } from './noteMerge';
 import type { StorageBackend } from './storage/backend';
 import { isTauri, isDesktop } from './storage/backend';
 import { noteLabel } from './text';
@@ -135,6 +136,10 @@ class AppStore {
   );
   #reloading = false;
   #lastReload = 0;
+  /** Notes whose stored copy lacks a change made here (see #merge). */
+  #owedBack = new Set<string>();
+  /** Note fields that change in one click, so their saves don't wait. */
+  static #SWITCHES = new Set(['tucked', 'paletteId', 'archived', 'remindAt', 'tilt']);
   #autoTimer: ReturnType<typeof setInterval> | undefined;
   /** Refresh backoff after failed polls, so a rate limit isn't hammered. */
   #pollFailures = 0;
@@ -551,13 +556,48 @@ class AppStore {
     // sheet lets the user act on the first paint. Wait rather than drop.
     if (!this.#backend) await this.#ready;
     if (!this.#backend) throw new Error('No storage available');
-    if (op.kind === 'delete') return this.#backend.deleteNote(op.id);
+    // One note's writes run one at a time: each reads what is stored, merges
+    // and writes, and two at once would each miss what the other added.
+    return this.#inLane(op.kind === 'save' ? op.note.id : op.id, () => this.#performNow(op));
+  }
+
+  #lanes = new Map<string, Promise<unknown>>();
+  #inLane<T>(id: string, run: () => Promise<T>): Promise<T> {
+    const turn = (this.#lanes.get(id) ?? Promise.resolve()).catch(() => {}).then(run);
+    this.#lanes.set(id, turn);
+    void turn.then(
+      () => this.#lanes.get(id) === turn && this.#lanes.delete(id),
+      () => this.#lanes.get(id) === turn && this.#lanes.delete(id)
+    );
+    return turn;
+  }
+
+  async #performNow(op: OutboxOp) {
+    const backend = this.#backend!;
+    if (op.kind === 'delete') return backend.deleteNote(op.id);
     if (op.kind === 'append') return this.#performAppend(op);
     // A save that was queued before the note was deleted must not resurrect
     // it: this was the "deleted notes come back" bug in its original form.
     if (this.#isDeleted(op.note.id)) return;
+    // A share still on its way to this note goes first. The note on screen
+    // already shows it (painted the moment it was shared), so saved before
+    // the share lands, it would put the share there, and the share would
+    // then add itself a second time. Retried, quietly, the moment it lands.
+    if (this.#outbox.appendPendingFor(op.note.id)) {
+      throw Object.assign(new Error('Waiting for a share to land'), { name: 'Deferred' });
+    }
     this.#cacheNotes(); // instant-start cache stays current even if Drive lags
-    await this.#backend.saveNote(op.note);
+    // What this device knows now, which may be more than when the write was
+    // queued (a merge since, another window's change).
+    const local = this.notes.find((n) => n.id === op.note.id);
+    const mine = local ? mergeNotes($state.snapshot(local), op.note) : op.note;
+    // Read before writing: what is stored may hold changes made elsewhere
+    // (the phone, another window). Merged field by field, this write adds
+    // its own changes without undoing theirs.
+    const stored = await this.#storedCopy(op.note.id);
+    const merged = stored ? mergeNotes(mine, stored) : mine;
+    await backend.saveNote(merged);
+    if (merged !== op.note) this.#adopt(merged);
   }
 
   /**
@@ -571,21 +611,50 @@ class AppStore {
       ? await this.#backend.getNote(op.id)
       : ((await this.#backend.listNotes()).find((n) => n.id === op.id) ?? null);
     if (!fresh) return; // deleted elsewhere meanwhile: nothing to append to
-    const next: Note = {
-      ...$state.snapshot(fresh),
-      contentHtml: (fresh.contentHtml || '') + op.html,
-      pinned: fresh.pinned || op.pin,
-      updatedAt: Date.now(),
-    };
-    if (op.pin && !fresh.pinned) next.tilt = rollTilt();
-    await this.#backend.saveNote(next);
-    // Show the result and tell the other windows; a pin arriving this way
-    // needs its sticky opened, same as one that arrived from another device.
-    const idx = this.notes.findIndex((n) => n.id === op.id);
-    if (idx !== -1) this.notes[idx] = next;
+    // Landed already: the app closed after writing it but before it could
+    // note that, and this is the retry. Once is enough.
+    if (op.shareId && fresh.appliedShares?.includes(op.shareId)) {
+      this.#adopt(fresh);
+    } else {
+      const next = withShare($state.snapshot(fresh), op.html, op.shareId, op.pin, rollTilt);
+      await this.#backend.saveNote(next);
+      // Show the result and tell the other windows; a pin arriving this way
+      // needs its sticky opened, same as one that arrived from another device.
+      this.#adopt(next);
+      if (op.pin && !fresh.pinned) void openSticky(next);
+    }
+    // A save of this note that waited for the share can go now: on the next
+    // turn, once the queue has finished with the share.
+    setTimeout(() => this.#outbox.retryNow(op.id), 0);
+  }
+
+  /** What is stored for this note, when it may hold changes made elsewhere. */
+  async #storedCopy(id: string): Promise<Note | null> {
+    const backend = this.#backend!;
+    if (backend.storedCopy) {
+      const got = await backend.storedCopy(id);
+      return got === 'seen' ? null : got;
+    }
+    return backend.getNote ? backend.getNote(id) : null;
+  }
+
+  /**
+   * Changes that came back with a write (made elsewhere meanwhile): into the
+   * note on screen, field by field, and on to this app's other windows. A pin
+   * or unpin among them opens or closes the sticky, as a poll would.
+   */
+  #adopt(stored: Note) {
+    const idx = this.notes.findIndex((n) => n.id === stored.id);
+    if (idx === -1) return;
+    const prev = $state.snapshot(this.notes[idx]);
+    const next = mergeNotes(prev, stored);
+    if (noteRev(next) === noteRev(prev) && next.contentHtml === prev.contentHtml) return;
+    this.notes[idx] = next;
     this.#cacheNotes();
     void broadcastChange({ note: next });
-    if (op.pin && !fresh.pinned) void openSticky(next);
+    if (isDesktop() && !!next.pinned !== !!prev.pinned) {
+      void (next.pinned ? openSticky(next) : closeSticky(next.id));
+    }
   }
 
   /**
@@ -597,15 +666,20 @@ class AppStore {
     if (this.isCloud) this.syncStatus = 'saving';
     // Optimistic paint so the note reads right immediately; the queued op
     // re-derives from fresh content when it runs.
+    // (Unstamped: it shows the share at once but is no edit of its own, so a
+    // fresher copy of the note from elsewhere still wins until the share has
+    // landed on it.)
     const idx = this.notes.findIndex((n) => n.id === id);
     if (idx !== -1) {
       const n = this.notes[idx];
       this.notes[idx] = { ...n, contentHtml: (n.contentHtml || '') + html, pinned: n.pinned || pin };
     }
-    return this.#outbox.push({ kind: 'append', id, html, pin });
+    return this.#outbox.push({ kind: 'append', id, html, pin, shareId: cryptoId() });
   }
 
   #settled(ok: boolean, e?: unknown) {
+    // A save waiting its turn behind a share is no failure.
+    if (!ok && (e as { name?: string } | null)?.name === 'Deferred') return;
     if (!ok) return this.#fail(e, true);
     this.#recovered();
     // One success doesn't clear the error while other writes are still failed;
@@ -657,11 +731,15 @@ class AppStore {
     if (patch.pinned && !this.notes[idx].pinned) patch = { ...patch, tilt: rollTilt() };
     // Unpinned is untucked: pinning it again brings the sticky up in full.
     if ('pinned' in patch && !patch.pinned && this.notes[idx].tucked) patch = { ...patch, tucked: false };
-    const updated = { ...this.notes[idx], ...patch, updatedAt: Date.now() };
+    // Each changed field remembers when, so copies merge field by field.
+    const updated = patchNote($state.snapshot(this.notes[idx]), patch);
     this.notes[idx] = updated;
     // Pin/unpin spawns or closes the desktop sticky window (no-op on web and
     // Android: the window calls in desktop.ts return early off the desktop).
-    if (!('pinned' in patch)) return this.#persistNote(updated);
+    // A switch (tuck, colour, archive, reminder) goes out at once, to the
+    // other windows and to storage; only typing and sliders wait to settle.
+    const switchOnly = Object.keys(patch).every((k) => AppStore.#SWITCHES.has(k));
+    if (!('pinned' in patch)) return this.#persistNote(updated, switchOnly);
     void (patch.pinned ? this.#pin(updated) : this.#unpin(updated));
   }
 
@@ -707,9 +785,6 @@ class AppStore {
       if (change.settings) this.settings = { ...this.settings, ...change.settings };
       const n = change.note;
       if (!n) return;
-      // Same rule as the sync merge: never let an incoming copy clobber edits
-      // this window hasn't written yet.
-      if (this.#pending(n.id)) return;
       const idx = this.notes.findIndex((x) => x.id === n.id);
       // A note this window has never seen (created from a sticky's + button)
       // joins the list now rather than on the next poll.
@@ -717,8 +792,13 @@ class AppStore {
         if (!this.#isDeleted(n.id)) this.notes = [n, ...this.notes];
         return;
       }
-      if (n.updatedAt < this.notes[idx].updatedAt) return;
-      this.notes[idx] = n;
+      // Field by field, as everywhere: this window's unsaved typing keeps
+      // its text, and the other window's tuck or colour still lands. (It used
+      // to be skipped whole while this window had anything unsaved, and that
+      // save then put the old tuck back.)
+      const cur = $state.snapshot(this.notes[idx]);
+      const next = mergeNotes(cur, n);
+      if (noteRev(next) !== noteRev(cur) || next.contentHtml !== cur.contentHtml) this.notes[idx] = next;
     });
   }
 
@@ -922,6 +1002,14 @@ class AppStore {
     }, intervalMs);
   }
 
+  /** Look for changes now, not at the next tick: the app just came to the
+   *  front, or a share wants the current notes to choose from. */
+  syncSoon() {
+    if (!this.#backend || Date.now() < this.#pollBackoffUntil) return;
+    this.#lastReload = 0;
+    void this.reload();
+  }
+
   /** Re-read notes from the backend (e.g. after a sticky window edited a file). */
   async reload() {
     if (!this.#backend || this.#reloading) return;
@@ -970,8 +1058,15 @@ class AppStore {
       const recent = Date.now() - local.updatedAt < FRESH_MS;
       if (!remote) {
         if (unlanded || recent) merged.set(local.id, $state.snapshot(local));
-      } else if (unlanded || local.updatedAt > remote.updatedAt) {
-        merged.set(local.id, $state.snapshot(local));
+      } else {
+        // Field by field: what this device changed and what changed
+        // elsewhere both stay, whichever is newer per field.
+        const mine = $state.snapshot(local);
+        merged.set(local.id, mergeNotes(mine, remote));
+        // Writes that crossed (both read before either wrote) can leave the
+        // stored copy without a change this device made. Nothing is waiting
+        // to write it, so write it back once; the stores then agree.
+        if (!unlanded && newerIn(mine, remote)) this.#owedBack.add(local.id);
       }
     }
     // A manual arrangement wins; otherwise newest first. Never "where it was
@@ -988,16 +1083,17 @@ class AppStore {
     // abandoned every edit after it.)
     this.flush();
     const prevPinned = new Set(this.notes.filter((n) => n.pinned).map((n) => n.id));
-    const prevStamp = new Map(this.notes.map((n) => [n.id, n.updatedAt]));
+    const prevStamp = new Map(this.notes.map((n) => [n.id, noteRev(n)]));
     const prevIds = new Set(this.notes.map((n) => n.id));
     for (const [id, at] of this.#deleted) {
       if (Date.now() - at > AppStore.#TOMBSTONE_MS) this.#deleted.delete(id);
     }
+    this.#owedBack.clear();
     const notes = this.#merge(await this.#backend.listNotes());
 
     // Skip the update when nothing actually changed — reassigning the array
     // remounts the editor and steals focus mid-typing.
-    const sig = (list: Note[]) => list.map((n) => `${n.id}:${n.updatedAt}:${n.pinned}`).join('|');
+    const sig = (list: Note[]) => list.map((n) => `${n.id}:${noteRev(n)}:${n.pinned}`).join('|');
     if (sig(notes) !== sig(this.notes)) {
       this.notes = notes;
       if (this.activeId && !this.notes.some((n) => n.id === this.activeId)) {
@@ -1008,7 +1104,7 @@ class AppStore {
       // window notices a remote edit first updates the rest, so an open
       // sticky no longer depends on its own poll coming round.
       for (const n of this.notes) {
-        if (prevStamp.get(n.id) !== n.updatedAt) void broadcastChange({ note: $state.snapshot(n) });
+        if (prevStamp.get(n.id) !== noteRev(n)) void broadcastChange({ note: $state.snapshot(n) });
       }
       // Desktop: honor pin changes that arrived from other devices — a note
       // pinned on the phone becomes a sticky here on the next refresh. (The
@@ -1024,6 +1120,8 @@ class AppStore {
         for (const id of prevIds) if (!liveIds.has(id)) void closeSticky(id);
       }
     }
+    for (const id of this.#owedBack) this.#flushOne(id);
+    this.#owedBack.clear();
     // A successful poll with nothing unlanded means we're in sync — the error
     // badge used to stick until the next successful WRITE, however many polls
     // succeeded in between.

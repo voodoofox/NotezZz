@@ -151,6 +151,9 @@
       // to the foreground, not just at boot.
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState !== 'visible') return;
+        // Back on screen: catch up at once, not at the next tick (the phone
+        // used to show, and edit, its old copy for up to 45s).
+        store.syncSoon();
         void pullMobileShare();
         void pullWidgetAction();
       });
@@ -159,14 +162,15 @@
       (window as unknown as { __nzPullAction?: () => void }).__nzPullAction = () => void pullWidgetAction();
       // Updates come from GitHub Releases here too (updater.ts).
       scheduleUpdateChecks();
-    } else if (!localMode) {
-      // Renew the Google token when the user RETURNS to the app if it's close
-      // to expiry — the silent-refresh popup blink happens at open, not while
-      // they're mid-edit ("screen blinked like it was logging in").
+    } else {
       document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible' && isDriveAuthed() && tokenExpiringSoon()) {
-          void signIn(false).catch(() => {});
-        }
+        if (document.visibilityState !== 'visible') return;
+        // Back to the tab: catch up at once, not at the next tick.
+        store.syncSoon();
+        // Renew the Google token when the user RETURNS to the app if it's close
+        // to expiry — the silent-refresh popup blink happens at open, not while
+        // they're mid-edit ("screen blinked like it was logging in").
+        if (!localMode && isDriveAuthed() && tokenExpiringSoon()) void signIn(false).catch(() => {});
       });
     }
   }
@@ -190,6 +194,8 @@
         /* private mode: the chooser still shows; it just won't survive a reload */
       }
       sharedText = text;
+      // The list to choose from should be today's, not the last poll's.
+      store.syncSoon();
     } catch (e) {
       console.error('take_pending_share', e);
     }
@@ -282,10 +288,10 @@
     await restoreStickies(store.notes, { onlyMissing: true }).catch((e) => console.error('restoreStickies', e));
 
     // Background sync so changes from other devices (pins, new notes) appear
-    // on their own. Desktop reads local files — cheap, so poll often; web and
-    // Android hit the Drive API (or, signed out, a folder nobody else writes
-    // to), so keep it gentle. (Self-resetting: safe to re-run.)
-    store.startAutoSync(isDesktop() ? 6000 : 45000);
+    // on their own. One small listing request a tick (only changed notes are
+    // downloaded): every 3s on the PC, every 10s on a phone or in a browser,
+    // and only while it is on screen there. (Self-resetting: safe to re-run.)
+    store.startAutoSync(isDesktop() ? 3000 : 10_000);
 
     await wireListeners();
     // A widget tap that started the app. After the load, so "open" finds its

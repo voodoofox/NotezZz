@@ -345,6 +345,30 @@ export class DriveBackend implements StorageBackend {
     return note?.id ? note : null;
   }
 
+  /**
+   * Before a write: one small request for the file's modified time. Unchanged
+   * since this device last read or wrote it means we already hold everything
+   * in it; otherwise it is downloaded to merge with (a note with images can
+   * be megabytes, so only then).
+   */
+  async storedCopy(id: string): Promise<Note | null | 'seen'> {
+    const folderId = await this.#notesFolder();
+    const fileId = this.#ids.get(id) ?? (await this.#findByName(`${id}.json`, folderId));
+    if (!fileId) return null;
+    this.#ids.set(id, fileId);
+    const res = await authFetch(`${API}/files/${fileId}?fields=modifiedTime`);
+    const { modifiedTime } = (await res.json()) as { modifiedTime: string };
+    if (modifiedTime && this.#files.get(fileId)?.modifiedTime === modifiedTime) return 'seen';
+    const got = await this.#download({ id: fileId, modifiedTime });
+    if (got === 'corrupt') return null; // unreadable: ours replaces it
+    if (got !== 'ok') {
+      const err = new Error(`Couldn't read note ${id} before saving it — will retry`);
+      err.name = got === 'failed-net' ? 'NetworkError' : 'RetryableError';
+      throw err;
+    }
+    return this.#files.get(fileId)?.note ?? null;
+  }
+
   async saveNote(note: Note): Promise<void> {
     const folderId = await this.#notesFolder();
     let fileId = this.#ids.get(note.id) ?? (await this.#findByName(`${note.id}.json`, folderId));

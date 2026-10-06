@@ -45,6 +45,14 @@ export interface Note {
    * sticky and clears this; the Android app shows a notification.
    */
   remindAt?: number;
+  /**
+   * When each field last changed (epoch ms, by field name): copies merge
+   * field by field, so an old copy can't undo a newer change to something
+   * else (noteMerge.ts). Missing on notes saved before it existed.
+   */
+  fieldAt?: Record<string, number>;
+  /** The last few shares appended to this note, so a retried one lands once. */
+  appliedShares?: string[];
 }
 
 import type { ThemeDef } from './theme';
@@ -127,7 +135,7 @@ export function newNote(partial: Partial<Note> = {}): Note {
 }
 
 /** URL-safe unique id without external deps. */
-function cryptoId(): string {
+export function cryptoId(): string {
   const bytes = new Uint8Array(12);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');

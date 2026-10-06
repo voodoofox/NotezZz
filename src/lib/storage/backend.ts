@@ -13,6 +13,12 @@ export interface StorageBackend {
   listNotes(): Promise<Note[]>;
   /** One note, fresh from storage. Backends without a cheap single read may omit it. */
   getNote?(id: string): Promise<Note | null>;
+  /**
+   * Before a write: the stored copy if it may hold changes this device hasn't
+   * seen, 'seen' if it can't (nobody wrote it since we last read or wrote
+   * it), null if there is none. Backends without it use getNote.
+   */
+  storedCopy?(id: string): Promise<Note | null | 'seen'>;
   saveNote(note: Note): Promise<void>;
   deleteNote(id: string): Promise<void>;
   loadSettings(): Promise<Settings | null>;
