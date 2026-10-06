@@ -390,18 +390,41 @@ export class DriveBackend implements StorageBackend {
     this.#ids.delete(id);
   }
 
+  /** settings.json's modified time when this device last read or wrote it. */
+  #settingsSeen: string | null = null;
+
   async loadSettings(): Promise<Settings | null> {
     const folderId = await this.#folder();
     const id = this.#settingsId ?? (await this.#findByName('settings.json', folderId));
     if (!id) return null;
     this.#settingsId = id;
+    const meta = await authFetch(`${API}/files/${id}?fields=modifiedTime`);
+    const { modifiedTime } = (await meta.json()) as { modifiedTime?: string };
     const res = await authFetch(`${API}/files/${id}?alt=media`, {}, BIG);
-    return (await res.json()) as Settings;
+    const settings = (await res.json()) as Settings;
+    this.#settingsSeen = modifiedTime ?? null;
+    return settings;
+  }
+
+  /** One small request; the file itself only when someone else wrote it. */
+  async storedSettings(): Promise<Settings | null | 'seen'> {
+    const folderId = await this.#folder();
+    const id = this.#settingsId ?? (await this.#findByName('settings.json', folderId));
+    if (!id) return null;
+    this.#settingsId = id;
+    const meta = await authFetch(`${API}/files/${id}?fields=modifiedTime`);
+    const { modifiedTime } = (await meta.json()) as { modifiedTime?: string };
+    if (modifiedTime && modifiedTime === this.#settingsSeen) return 'seen';
+    return this.loadSettings();
   }
 
   async saveSettings(settings: Settings): Promise<void> {
     const folderId = await this.#folder();
-    if (this.#settingsId) await this.#update(this.#settingsId, settings);
-    else this.#settingsId = (await this.#create('settings.json', folderId, settings)).id;
+    if (this.#settingsId) this.#settingsSeen = await this.#update(this.#settingsId, settings);
+    else {
+      const made = await this.#create('settings.json', folderId, settings);
+      this.#settingsId = made.id;
+      this.#settingsSeen = made.modifiedTime;
+    }
   }
 }

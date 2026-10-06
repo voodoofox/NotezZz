@@ -19,6 +19,10 @@ export interface StorageBackend {
    * it), null if there is none. Backends without it use getNote.
    */
   storedCopy?(id: string): Promise<Note | null | 'seen'>;
+  /** The same for settings: the stored copy if it may have changed since this
+   *  device last read or wrote it, else 'seen'. Backends without it use
+   *  loadSettings. */
+  storedSettings?(): Promise<Settings | null | 'seen'>;
   saveNote(note: Note): Promise<void>;
   deleteNote(id: string): Promise<void>;
   loadSettings(): Promise<Settings | null>;

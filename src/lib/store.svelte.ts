@@ -14,6 +14,7 @@ import { BASE_FONT_PX, DEFAULT_NOTE_PX, DEFAULT_SETTINGS, cryptoId, newNote, rol
 import { welcomeNotes } from './welcome';
 import { Outbox, type OutboxOp } from './outbox';
 import { mergeNotes, newerIn, noteRev, patchNote, withShare } from './noteMerge';
+import { mergeSettings, patchSettings, sameSettings, settingsNewerIn } from './settingsMerge';
 import type { StorageBackend } from './storage/backend';
 import { isTauri, isDesktop } from './storage/backend';
 import { noteLabel } from './text';
@@ -246,9 +247,11 @@ class AppStore {
         setTimeout(() => rej(new Error('Loading timed out — check your connection and retry.')), 45_000)
       );
       const [notes, settings] = await Promise.race([load, watchdog]);
-      // Order lives here, so read it first. Not over changes of ours the
-      // network dropped (a reorder, say): those win and are sent again.
-      if (settings && !this.#settingsOwed) this.settings = settings;
+      // Order lives here, so read it first. What is stored is the truth for
+      // this account (what's in memory may be another account's: a sign-out
+      // re-inits here), except changes of ours the network dropped (a
+      // reorder, say): merged in, newer, and sent again.
+      if (settings) this.settings = this.#settingsOwed ? mergeSettings($state.snapshot(this.settings), settings) : settings;
       this.#migrateSettings();
       this.notes = this.#merge(notes);
       if (!this.activeId && this.notes.length) this.activeId = this.notes[0].id;
@@ -782,7 +785,7 @@ class AppStore {
   /** Mirror an edit made in another window of this app (desktop only). */
   listenForChanges() {
     void onRemoteChange((change) => {
-      if (change.settings) this.settings = { ...this.settings, ...change.settings };
+      if (change.settings) this.#adoptSettings(change.settings, false);
       const n = change.note;
       if (!n) return;
       const idx = this.notes.findIndex((x) => x.id === n.id);
@@ -899,11 +902,14 @@ class AppStore {
   }
 
   async saveSettings(patch: Partial<Settings>) {
-    this.settings = { ...this.settings, ...patch };
+    // Each changed setting remembers when, so copies merge setting by setting.
+    this.settings = patchSettings($state.snapshot(this.settings), patch);
     this.#cacheNotes();
     void broadcastChange({ settings: $state.snapshot(this.settings) });
     try {
-      await this.#backend?.saveSettings(this.settings);
+      // Read, merge, write, one at a time: a copy of the settings from before
+      // another device's change must not put the old value back.
+      await this.#inLane('settings', () => this.#writeSettings());
     } catch (e) {
       // Dropped by the network: kept here, sent again once Drive answers.
       if (isTransient(e)) this.#settingsOwed = true;
@@ -972,6 +978,7 @@ class AppStore {
   async syncNow() {
     this.#lastReload = 0;
     this.#pollBackoffUntil = 0;
+    this.#settingsCheckedAt = 0;
     await this.reload();
   }
 
@@ -1007,7 +1014,60 @@ class AppStore {
   syncSoon() {
     if (!this.#backend || Date.now() < this.#pollBackoffUntil) return;
     this.#lastReload = 0;
+    this.#settingsCheckedAt = 0;
     void this.reload();
+  }
+
+  async #writeSettings() {
+    const backend = this.#backend;
+    if (!backend) return;
+    const stored = await this.#storedSettings();
+    const mine = $state.snapshot(this.settings);
+    const merged = stored ? mergeSettings(mine, stored) : mine;
+    await backend.saveSettings(merged);
+    if (stored) this.#adoptSettings(merged);
+  }
+
+  async #storedSettings(): Promise<Settings | null> {
+    const backend = this.#backend!;
+    if (backend.storedSettings) {
+      const got = await backend.storedSettings();
+      return got === 'seen' ? null : got;
+    }
+    return backend.loadSettings();
+  }
+
+  /** Settings from elsewhere (another device, another window): setting by
+   *  setting into ours, the list re-sorted if its order changed. */
+  #adoptSettings(stored: Settings, tell = true) {
+    const cur = $state.snapshot(this.settings);
+    const next = mergeSettings(cur, stored);
+    if (sameSettings(next, cur)) return;
+    this.settings = next;
+    if (JSON.stringify(next.noteOrder ?? []) !== JSON.stringify(cur.noteOrder ?? [])) {
+      this.notes = [...this.notes].sort(orderedBy(next.noteOrder ?? []));
+    }
+    this.#cacheNotes();
+    if (tell) void broadcastChange({ settings: next });
+  }
+
+  /** While running, look for settings changed elsewhere: at most every 9s
+   *  (it's one small request when nothing changed), at once when asked. */
+  #settingsCheckedAt = 0;
+  async #pullSettings() {
+    if (!this.#backend || Date.now() - this.#settingsCheckedAt < 9_000) return;
+    this.#settingsCheckedAt = Date.now();
+    try {
+      const stored = await this.#storedSettings();
+      if (!stored) return;
+      const mine = $state.snapshot(this.settings);
+      this.#adoptSettings(stored);
+      // Writes that crossed can leave the stored copy without a change made
+      // here: write it back once.
+      if (settingsNewerIn(mine, stored)) void this.saveSettings({});
+    } catch (e) {
+      console.warn('[NotezZz sync] settings check', e); // the notes poll carries on
+    }
   }
 
   /** Re-read notes from the backend (e.g. after a sticky window edited a file). */
@@ -1122,6 +1182,7 @@ class AppStore {
     }
     for (const id of this.#owedBack) this.#flushOne(id);
     this.#owedBack.clear();
+    await this.#pullSettings();
     // A successful poll with nothing unlanded means we're in sync — the error
     // badge used to stick until the next successful WRITE, however many polls
     // succeeded in between.

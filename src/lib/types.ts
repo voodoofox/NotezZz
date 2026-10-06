@@ -87,6 +87,9 @@ export interface Settings {
   noteOrder?: string[];
   /** First-run welcome notes have been written; never write them again. */
   seeded?: boolean;
+  /** When each setting last changed (epoch ms, by name): copies merge
+   *  setting by setting (settingsMerge.ts). */
+  settingsAt?: Record<string, number>;
   /** Custom colours kept from the picker's sliders, up to five #rrggbb. */
   customColors?: string[];
   /** Five user-painted pattern slots (see patterns.ts); null = empty. */

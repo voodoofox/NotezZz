@@ -2952,3 +2952,47 @@ test("dark theme: a pattern near the list's own colour still matches its title b
   expect(await look('[data-testid="note-fill"]')).toEqual(bar);
   expect((await look('[data-testid="note-swatch"]'))[0]).toBe(bar[0]);
 });
+
+test.describe('settings sync while the app runs', () => {
+  const storedSettings = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem('notezzz:settings') ?? '{}'));
+  /** Another device on this version writes settings: `patch` on the copy it read. */
+  const writeElsewhere = (page: Page, patch: Record<string, unknown>, from?: string) =>
+    page.evaluate(
+      async ([patch, from]) => {
+        const m = await import(/* @vite-ignore */ String('/src/lib/settingsMerge.ts'));
+        const read = JSON.parse((from as string | undefined) ?? localStorage.getItem('notezzz:settings') ?? '{}');
+        localStorage.setItem('notezzz:settings', JSON.stringify(m.patchSettings(read, patch)));
+      },
+      [patch, from] as const
+    );
+  const BLACK = { px: '0'.repeat(64), tint: '#000000', bg: '#000000', solid: true };
+
+  test('a colour restyled on another device shows up without a restart', async ({ page }) => {
+    await createNote(page);
+    await menu(page, 'color');
+    await page.locator('[data-testid="palette-chip"][data-palette="coral"]').click();
+    await page.mouse.click(5, 790);
+    await writeElsewhere(page, { paletteEdits: { coral: BLACK } });
+    await syncAndSettle(page);
+    await expect.poll(() => page.getByTestId('note-pane').evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(0, 0, 0)');
+  });
+
+  test("an old copy of the settings can't undo a newer setting", async ({ page }) => {
+    await createNote(page);
+    const before = JSON.stringify(await storedSettings(page));
+    // Here: patterns stilled.
+    await page.getByTestId('open-settings').click();
+    await page.getByTestId('set-animate').uncheck();
+    await page.getByTestId('settings-close').click();
+    await expect.poll(async () => (await storedSettings(page)).animatePatterns).toBe(false);
+    // Elsewhere, from what it read before that: coral restyled. Lands last.
+    await writeElsewhere(page, { paletteEdits: { coral: BLACK } }, before);
+    await syncAndSettle(page);
+    // Both here, and both stored (written back).
+    await expect(page.locator('html')).toHaveAttribute('data-motion', 'still');
+    await expect.poll(async () => {
+      const s = await storedSettings(page);
+      return [s.animatePatterns, s.paletteEdits?.coral?.bg];
+    }).toEqual([false, '#000000']);
+  });
+});
