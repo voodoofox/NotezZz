@@ -49,13 +49,19 @@ export async function noteToJpeg(pane: HTMLElement): Promise<string> {
   });
   document.body.appendChild(copy);
   try {
-    // Every box that scrolled or clipped grows to its content instead.
+    // Every box that scrolled or clipped grows to its content instead, and
+    // the boxes stacked in a column (which shared out the screen's height)
+    // take their own. Only those: the title stretches along its row, and
+    // without that it shrank to its narrowest, a word a line.
     for (const el of [copy, ...copy.querySelectorAll<HTMLElement>('*')]) {
       if (el.closest('.ProseMirror')) continue;
       const cs = getComputedStyle(el);
-      if (/(auto|scroll|hidden|clip)/.test(cs.overflowY) || cs.flexGrow !== '0') {
-        Object.assign(el.style, { overflow: 'visible', height: 'auto', maxHeight: 'none', minHeight: '0', flex: 'none' });
+      const up = el.parentElement ? getComputedStyle(el.parentElement) : null;
+      const stacked = !!up && up.display.includes('flex') && up.flexDirection.startsWith('column');
+      if (/(auto|scroll|hidden|clip)/.test(cs.overflowY)) {
+        Object.assign(el.style, { overflow: 'visible', height: 'auto', maxHeight: 'none' });
       }
+      if (stacked) Object.assign(el.style, { flex: 'none', minHeight: '0' });
     }
     await document.fonts.ready;
     const height = Math.ceil(copy.scrollHeight);

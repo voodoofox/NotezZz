@@ -3013,7 +3013,7 @@ test.describe('share a note as a picture', () => {
     });
     await page.reload();
     await createNote(page);
-    await page.getByTestId('title-input').fill('Groceries');
+    await page.getByTestId('title-input').fill('Groceries for the whole week');
     await page.locator('.ProseMirror').click();
     for (let i = 1; i <= 40; i++) {
       await page.keyboard.type(`Line ${i} of a long note`);
@@ -3021,15 +3021,19 @@ test.describe('share a note as a picture', () => {
     }
     await page.keyboard.type('The very last line.');
     const content = await page.locator('.ProseMirror').evaluate((el) => el.scrollHeight);
+    const bar = await page.locator('.topbar').evaluate((el) => el.getBoundingClientRect().height);
     await page.getByTestId('note-more').click();
     await page.getByTestId('menu-share').click();
     await expect.poll(() => page.evaluate(() => (window as unknown as { __shared?: unknown }).__shared), { timeout: 15_000 }).toBeTruthy();
     const s = (await page.evaluate(() => (window as unknown as { __shared: unknown }).__shared)) as { name: string; type: string; w: number; h: number };
-    expect(s.name).toBe('Groceries.jpg');
+    expect(s.name).toBe('Groceries for the whole week.jpg');
     expect(s.type).toBe('image/jpeg');
     // All of it: taller than the screen, as tall as the text and the title bar.
     const scale = s.w / 412;
-    expect(s.h / scale).toBeGreaterThan(content);
+    expect(s.h / scale).toBeGreaterThan(content + bar);
     expect(s.h / scale).toBeGreaterThan(915);
+    // ...and no taller: the title on its one line, as in the app (it once
+    // came out a word a line, which added a line's height per word).
+    expect(s.h / scale).toBeLessThan(content + bar + 60);
   });
 });
