@@ -167,19 +167,47 @@
       .curl-line { fill: none; stroke: var(--arrow); stroke-width: .55; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1.4 1.4; }
       .curl marker path { fill: none; stroke: var(--arrow); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
       .curl-dot { fill: var(--arrow); }
+      .curl-mask { fill: none; stroke: #fff; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+      /* The intro: the arrow draws on, then the note lands. */
+      .scene.pre .s-dentist { opacity: 0; }
+      .s-dentist.lands { animation: land .55s cubic-bezier(.2, 1.4, .4, 1) backwards; }
+      @keyframes land { from { opacity: 0; transform: translateY(-.9cqw) scale(.9) rotate(var(--r)); } to { opacity: 1; transform: rotate(var(--r)); } }
+      .h-pin { cursor: pointer; }
+
+      /* Tuck away, as in the app: a sticky slides against the screen edge
+         until only a sliver shows; hovering peeks it out, a click brings it back. */
+      .screen .sticky .tk { all: unset; display: grid; place-items: center; width: 1.5em; height: 1.5em; margin: -.2em -.35em -.2em 0; border-radius: .35em; cursor: pointer; }
+      .screen .sticky .tk svg { width: 1em; height: 1em; fill: currentColor; opacity: .75; }
+      .screen .sticky .tk:hover { background: color-mix(in srgb, var(--fg) 12%, transparent); }
+      .screen .sticky .tk:focus-visible { outline: 2px solid var(--focus); }
+      .screen .sticky.glide { transition: left .55s cubic-bezier(.3, .1, .2, 1), transform .55s cubic-bezier(.3, .1, .2, 1); }
+      .screen .sticky[data-tucked="true"] { --r: 0deg; cursor: pointer; }
+      .screen .sticky[data-tucked="true"] header { cursor: pointer; }
+      .tuck-tip { position: absolute; right: 6.5%; top: var(--tip-y, 30%); margin: 0; padding: .35em .8em; border-radius: 99px; background: var(--paper); color: var(--ink);
+                  font-family: 'Mono', monospace; font-size: max(10px, 1.35cqw); letter-spacing: .02em; white-space: nowrap; box-shadow: var(--shadow); opacity: 0; transform: translateX(.8cqw);
+                  transition: opacity .3s, transform .3s; pointer-events: none; }
+      .tuck-tip::after { content: ''; position: absolute; right: -.45em; top: 50%; width: .9em; height: .9em; margin-top: -.45em; background: inherit; transform: rotate(45deg); border-radius: .15em; }
+      .screen:has(.s-groc[data-tucked="true"]:not(.peek)) .tuck-tip { opacity: 1; transform: none; }
+      .tuck-tip .tp { display: none; }
+      @media (hover: none) { .tuck-tip .hv { display: none; } .tuck-tip .tp { display: inline; } }
       @media (prefers-reduced-motion: no-preference) { .curl-line { animation: curlmarch 1.2s linear infinite; } }
       @keyframes curlmarch { to { stroke-dashoffset: -5.6; } }
 
-      .scene-cap { display: flex; justify-content: space-between; gap: 16px; margin-top: 16px; font-family: 'Mono', monospace; font-size: 12px;
-                   letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
-      .scene-cap span:last-child { text-align: right; }
+      /* The two steps, under the phone and under the PC. Numbered: it is a sequence. */
+      .scene-cap { display: flex; justify-content: space-between; gap: 16px; margin-top: 18px; font-family: 'Display', sans-serif; font-size: 22px; font-weight: 700;
+                   line-height: 1.15; color: var(--ink); }
+      .scene-cap .step { display: inline-flex; align-items: center; gap: 10px; }
+      .scene-cap .step:last-child { text-align: right; }
+      .scene-cap b { display: inline-grid; place-items: center; flex: none; width: 1.3em; height: 1.3em; border-radius: 50%; background: var(--arrow); color: #fff;
+                     font-family: 'Body', sans-serif; font-size: .72em; font-weight: 800; }
       @media (max-width: 700px) {
         .screen .sticky { font-size: 2.3cqw; }
         .h-phone { font-size: 2.3cqw; }
         .s-dentist { --x: 39%; --w: 30%; }
         .s-groc { --x: 67%; --y: 30%; --w: 31%; }
         .s-today { --x: 47%; --y: 58%; --w: 33%; }
-        .scene-cap { font-size: 11px; letter-spacing: .04em; }
+        .scene-cap { font-size: 17px; }
+        .scene-cap .step { gap: 7px; }
       }
 
       /* ---------- one note, three places ---------- */
@@ -344,10 +372,11 @@
                   <div class="w" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
                   <article class="sticky c-rose s-dentist"><header><b>Dentist</b><i aria-hidden="true">×</i></header>
                     <div class="body">3 pm Thursday. Bring the form.</div></article>
-                  <article class="sticky c-sun s-groc"><header><b>Groceries</b><i aria-hidden="true">×</i></header>
+                  <article class="sticky c-sun s-groc"><header><b>Groceries</b><button type="button" class="tk" aria-label="Tuck Groceries against the screen edge"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11h11.2l-3.6-3.6L12 6l6 6-6 6-1.4-1.4 3.6-3.6H3v-2zm16-6h2v14h-2V5z"/></svg></button></header>
                     <div class="body"><ul><li>Olive oil</li><li>Rye bread</li><li>Coffee beans</li></ul></div></article>
                   <article class="sticky c-sky s-today"><header><b>Today</b><i aria-hidden="true">×</i></header>
                     <div class="body"><ul class="check"><li class="done">Send the invoice</li><li>Call the landlord</li></ul></div></article>
+                  <p class="tuck-tip" aria-hidden="true"><span class="hv">Tucked away · hover to peek</span><span class="tp">Tucked · tap it</span></p>
                   <div class="bar" aria-hidden="true"></div>
                 </div>
               </div>
@@ -365,12 +394,16 @@
                 </div>
               </div>
               <svg class="curl" viewBox="0 0 100 68.75" aria-hidden="true">
-                <defs><marker id="curlhead" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto" markerUnits="strokeWidth"><path d="M1.5 1.5 L7.5 5 L1.5 8.5" /></marker></defs>
-                <path class="curl-line" d="" marker-end="url(#curlhead)" />
+                <defs>
+                  <marker id="curlhead" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto" markerUnits="strokeWidth"><path d="M1.5 1.5 L7.5 5 L1.5 8.5" /></marker>
+                  <!-- Draws the arrow on, from the pin to the note (see the script). -->
+                  <mask id="curlreveal" maskUnits="userSpaceOnUse" x="-20" y="-20" width="140" height="120"><path class="curl-mask" d="" /></mask>
+                </defs>
+                <g mask="url(#curlreveal)"><path class="curl-line" d="" marker-end="url(#curlhead)" /></g>
                 <circle class="curl-dot" cx="0" cy="0" r="0" />
               </svg>
             </div>
-            <figcaption class="scene-cap"><span>Pinned on your phone</span><span>On your PC seconds later</span></figcaption>
+            <figcaption class="scene-cap"><span class="step"><b>1</b>Pin it on your phone</span><span class="step"><b>2</b>It's on your PC, seconds later</span></figcaption>
           </figure>
         </div>
       </section>
@@ -552,49 +585,159 @@
 
     <script>
       // Hero: a curly arrow from the phone's pin to the sticky it put on the
-      // PC. One loop, drawn as a prolate cycloid along the line between them,
-      // bulging away from the phone; redrawn when a note moves or the page resizes.
+      // PC. A smooth curve that leaves the pin heading right and arrives at the
+      // side of the note facing it (below, above, or its left edge). The loop
+      // grows out of the curve's own motion: over the middle stretch the line
+      // is swung once around, easing in and out, so it crosses itself and
+      // flows on, the way a curly arrow is drawn by hand. Sized to the
+      // distance; redrawn whenever a note moves or the page resizes, so it
+      // follows a dragged note.
       const drawCurl = (() => {
         const scene = document.querySelector('.scene');
         const svg = scene && scene.querySelector('.curl');
         if (!svg) return () => {};
-        const line = svg.querySelector('.curl-line'), dot = svg.querySelector('.curl-dot');
+        const line = svg.querySelector('.curl-line'), mask = svg.querySelector('.curl-mask'), dot = svg.querySelector('.curl-dot');
         const pin = scene.querySelector('.h-pin'), target = scene.querySelector('.s-dentist');
         const f = (v) => v.toFixed(2);
+        const bez = (a, b, c, d, t) => {
+          const u = 1 - t;
+          return { x: u*u*u*a.x + 3*u*u*t*b.x + 3*u*t*t*c.x + t*t*t*d.x, y: u*u*u*a.y + 3*u*u*t*b.y + 3*u*t*t*c.y + t*t*t*d.y };
+        };
+        const tangent = (a, b, c, d, t) => {
+          const u = 1 - t;
+          const x = 3*u*u*(b.x - a.x) + 6*u*t*(c.x - b.x) + 3*t*t*(d.x - c.x), y = 3*u*u*(b.y - a.y) + 6*u*t*(c.y - b.y) + 3*t*t*(d.y - c.y);
+          const n = Math.hypot(x, y) || 1;
+          return { x: x / n, y: y / n };
+        };
+        // 0 → 1 with no jolt at either end (smootherstep).
+        const ease = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * x * (x * (x * 6 - 15) + 10));
         return () => {
           const r = scene.getBoundingClientRect();
           const k = 100 / r.width;
           svg.setAttribute('viewBox', `0 0 100 ${f(r.height * k)}`);
           const p = pin.getBoundingClientRect(), t = target.getBoundingClientRect();
-          const P = { x: (p.right - r.left) * k + 1, y: (p.top + p.height / 2 - r.top) * k };
-          const T = { x: (t.left - r.left) * k + t.width * k * 0.4, y: (t.bottom - r.top) * k + 1.4 };
-          dot.setAttribute('cx', f(P.x)); dot.setAttribute('cy', f(P.y)); dot.setAttribute('r', '0.7');
-          // Leave the pin heading right, make one round loop, then rise up
-          // into the bottom of the note.
-          const S = { x: P.x + 4, y: P.y - 1 }, E = { x: T.x - 7, y: T.y + 10 };
-          const dx = E.x - S.x, dy = E.y - S.y, L = Math.hypot(dx, dy);
-          if (L < 6) {
-            line.setAttribute('d', `M${f(P.x)} ${f(P.y)} C${f(P.x + 6)} ${f(P.y)} ${f(T.x)} ${f(T.y + 6)} ${f(T.x)} ${f(T.y)}`);
-            return;
+          const S = { x: (p.right - r.left) * k + 0.9, y: (p.top + p.height / 2 - r.top) * k };
+          const R = { l: (t.left - r.left) * k, r: (t.right - r.left) * k, t: (t.top - r.top) * k, b: (t.bottom - r.top) * k };
+          dot.setAttribute('cx', f(S.x)); dot.setAttribute('cy', f(S.y)); dot.setAttribute('r', '0.7');
+          // Where it arrives, and heading which way: the note's side that faces the pin.
+          const gap = 1.5;
+          let A, din;
+          if (R.b < S.y - 3) { A = { x: R.l + (R.r - R.l) * 0.42, y: R.b + gap }; din = { x: 0, y: -1 }; }
+          else if (R.t > S.y + 3) { A = { x: R.l + (R.r - R.l) * 0.42, y: R.t - gap }; din = { x: 0, y: 1 }; }
+          else if (R.l > S.x) { A = { x: R.l - gap, y: (R.t + R.b) / 2 }; din = { x: 1, y: 0 }; }
+          else { A = { x: R.r + gap, y: (R.t + R.b) / 2 }; din = { x: -1, y: 0 }; }
+          const L = Math.hypot(A.x - S.x, A.y - S.y);
+          const c1 = { x: S.x + L * 0.45, y: S.y }, c2 = { x: A.x - din.x * L * 0.4, y: A.y - din.y * L * 0.4 };
+          let d;
+          if (L < 12) {
+            d = `M${f(S.x)} ${f(S.y)} C${f(c1.x)} ${f(c1.y)} ${f(c2.x)} ${f(c2.y)} ${f(A.x)} ${f(A.y)}`;
+          } else {
+            // The loop: one turn over the stretch u0 ± w, on the curve's upper
+            // side there (its left side when it climbs straight up).
+            const rad = Math.min(7, Math.max(2.4, L * 0.13)), u0 = 0.45, w = 0.14;
+            const T0 = tangent(S, c1, c2, A, u0);
+            let N0 = { x: T0.y, y: -T0.x };
+            if (N0.y > 0.2 || (Math.abs(N0.y) <= 0.2 && N0.x > 0)) N0 = { x: -N0.x, y: -N0.y };
+            const pts = [];
+            for (let i = 0; i <= 240; i++) {
+              const u = i / 240, B = bez(S, c1, c2, A, u), T = tangent(S, c1, c2, A, u);
+              let N = { x: -T.y, y: T.x };
+              if (N.x * N0.x + N.y * N0.y < 0) N = { x: -N.x, y: -N.y };
+              const ph = 2 * Math.PI * ease((u - (u0 - w)) / (2 * w));
+              const along = rad * Math.sin(ph), side = rad * (1 - Math.cos(ph));
+              pts.push(`${f(B.x + T.x * along + N.x * side)} ${f(B.y + T.y * along + N.y * side)}`);
+            }
+            d = 'M' + pts.join(' L');
           }
-          const ux = dx / L, uy = dy / L;
-          let nx = uy, ny = -ux;
-          if (ny > 0) { nx = -nx; ny = -ny; }
-          const b = 0.48 * L, c = 0.42 * L, pts = [];
-          for (let i = 1; i <= 160; i++) {
-            const a = (i / 160) * 2 * Math.PI;
-            const along = (L * a) / (2 * Math.PI) + b * Math.sin(a);
-            const side = c * (1 - Math.cos(a));
-            pts.push(`${f(S.x + ux * along + nx * side)} ${f(S.y + uy * along + ny * side)}`);
-          }
-          const head = `M${f(P.x)} ${f(P.y)} C${f(P.x + 2)} ${f(P.y)} ${f(S.x - ux * 2)} ${f(S.y - uy * 2)} ${f(S.x)} ${f(S.y)}`;
-          const tail = `C${f(E.x + ux * 4)} ${f(E.y + uy * 4)} ${f(T.x)} ${f(T.y + 5)} ${f(T.x)} ${f(T.y)}`;
-          line.setAttribute('d', `${head} L${pts.join(' L')} ${tail}`);
+          line.setAttribute('d', d);
+          mask.setAttribute('d', d);
         };
       })();
       drawCurl();
       document.fonts && document.fonts.ready.then(drawCurl);
       addEventListener('resize', drawCurl);
+
+      // Hero intro: the arrow draws on from the pin, the note lands on the PC,
+      // and a moment later Groceries tucks itself away. Tapping the phone's
+      // pin plays it again. Without motion: the finished picture.
+      const tuck = (() => {
+        const note = document.querySelector('.s-groc');
+        if (!note) return { set() {} };
+        const box = note.parentElement, tip = box.querySelector('.tuck-tip'), btn = note.querySelector('.tk');
+        let home = null;
+        const glide = () => {
+          note.classList.add('glide');
+          clearTimeout(note._g);
+          note._g = setTimeout(() => note.classList.remove('glide'), 600);
+        };
+        const set = (on, animate = true) => {
+          if ((note.dataset.tucked === 'true') === on) return;
+          if (animate) glide();
+          note.classList.remove('peek');
+          if (on) {
+            home = note.style.getPropertyValue('--x') || getComputedStyle(note).getPropertyValue('--x');
+            note.style.setProperty('--x', 'calc(100% - 3.2%)');
+            const y = note.style.getPropertyValue('--y') || getComputedStyle(note).getPropertyValue('--y');
+            tip.style.setProperty('--tip-y', `calc(${y.trim()} + 1.2%)`);
+          } else if (home) {
+            note.style.setProperty('--x', home);
+          }
+          note.dataset.tucked = on;
+          btn.setAttribute('aria-label', on ? 'Bring Groceries back' : 'Tuck Groceries against the screen edge');
+        };
+        btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+        btn.addEventListener('click', (e) => { e.stopPropagation(); set(note.dataset.tucked !== 'true'); });
+        // Tucked: hover peeks it out, a click anywhere on it brings it back.
+        note.addEventListener('pointerenter', () => {
+          if (note.dataset.tucked !== 'true') return;
+          glide(); note.classList.add('peek'); note.style.setProperty('--x', 'calc(100% - var(--w) * .72)');
+        });
+        note.addEventListener('pointerleave', () => {
+          if (note.dataset.tucked !== 'true' || !note.classList.contains('peek')) return;
+          glide(); note.classList.remove('peek'); note.style.setProperty('--x', 'calc(100% - 3.2%)');
+        });
+        note.addEventListener('click', () => { if (note.dataset.tucked === 'true') set(false); });
+        return { set };
+      })();
+
+      (() => {
+        const scene = document.querySelector('.scene');
+        if (!scene) return;
+        const mask = scene.querySelector('.curl-mask'), note = scene.querySelector('.s-dentist');
+        const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        let timers = [];
+        // Arrow undrawn, note not there yet.
+        const hide = () => {
+          drawCurl();
+          const len = mask.getTotalLength();
+          scene.classList.add('pre');
+          note.classList.remove('lands');
+          mask.style.transition = 'none';
+          mask.style.strokeDasharray = `${len} ${len}`;
+          mask.style.strokeDashoffset = `${len}`;
+        };
+        const play = () => {
+          timers.forEach(clearTimeout);
+          timers = [];
+          if (still) { tuck.set(true, false); return; }
+          hide(); // again: the fonts may have moved things since
+          timers.push(setTimeout(() => {
+            mask.style.transition = 'stroke-dashoffset 1.3s cubic-bezier(.45, .05, .3, 1)';
+            mask.style.strokeDashoffset = '0';
+          }, 350));
+          timers.push(setTimeout(() => {
+            scene.classList.remove('pre');
+            void note.offsetWidth;
+            note.classList.add('lands');
+          }, 1550));
+          timers.push(setTimeout(() => { mask.style.strokeDasharray = 'none'; }, 1750));
+          timers.push(setTimeout(() => tuck.set(true), 3300));
+        };
+        const pin = scene.querySelector('.h-pin');
+        pin.addEventListener('click', () => { tuck.set(false, false); play(); });
+        if (!still) hide(); // at once, so nothing shows before the intro
+        (document.fonts ? document.fonts.ready : Promise.resolve()).then(play);
+      })();
 
       // Hero: drag a sticky around the PC screen by its top bar, like the real window.
       (() => {
@@ -603,6 +746,7 @@
           const note = bar.parentElement;
           const box = note.parentElement;
           bar.addEventListener('pointerdown', (e) => {
+            if (note.dataset.tucked === 'true') return;
             bar.setPointerCapture(e.pointerId);
             const r = box.getBoundingClientRect();
             const sx = e.clientX, sy = e.clientY, x0 = note.offsetLeft, y0 = note.offsetTop;
