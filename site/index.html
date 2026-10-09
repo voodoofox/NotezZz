@@ -81,8 +81,11 @@
       .top .wrap { display: flex; align-items: center; justify-content: space-between; height: 66px; }
       .top nav { display: flex; align-items: center; gap: 24px; font-size: 15px; }
       .top nav a { text-decoration: none; color: var(--muted); }
-      .top nav a:hover { color: var(--ink); }
-      .top nav .cta { color: var(--btn-ink); background: var(--btn); padding: 8px 16px; border-radius: 10px; font-weight: 600; }
+      /* Not the button: its text is --btn-ink on --btn, and in the dark theme
+         --ink is the button's own colour, so the hover blanked it out. */
+      .top nav a:not(.cta):hover { color: var(--ink); }
+      .top nav .cta { color: var(--btn-ink); background: var(--btn); padding: 8px 16px; border-radius: 10px; font-weight: 600; transition: background .15s; }
+      .top nav .cta:hover { background: color-mix(in srgb, var(--btn) 84%, var(--board)); }
       @media (max-width: 760px) { .top nav a:not(.cta) { display: none; } }
 
       .acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
