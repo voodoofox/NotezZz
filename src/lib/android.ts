@@ -12,6 +12,8 @@ export interface AndroidBridge {
   googleToken?(id: number, interactive: boolean, invalidate: string): void;
   googleSignOut?(id: number, token: string): void;
   installApk?(id: number, url: string): void;
+  /** "play" in the Google Play build (Play updates it), else "github". */
+  store?(): string;
   /** A JPEG (base64) into Android's share sheet, named after the note. */
   shareImage?(id: number, base64: string, name: string): void;
 }
@@ -70,4 +72,13 @@ export function androidCall(
       reject(e instanceof Error ? e : new Error(String(e)));
     }
   });
+}
+
+/** The Google Play build: Play updates it, so it never looks for updates itself. */
+export function fromPlay(): boolean {
+  try {
+    return androidBridge()?.store?.() === 'play';
+  } catch {
+    return false;
+  }
 }

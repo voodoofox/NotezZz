@@ -694,9 +694,11 @@ test('the share chooser appears without waiting for storage', async ({ page }) =
   // asked only after sign-in and a full Drive fetch had finished; the chooser
   // needs neither, so a storage layer that never loads must not delay it.
   await page.addInitScript(() => localStorage.setItem('notezzz:hasAuthed', '1'));
-  let release: (() => void) | undefined;
+  // Every request held, and every one let go at the end: a slow run can ask
+  // twice, and one left hanging stalled the test's teardown.
+  const held: (() => void)[] = [];
   await page.route('**/driveBackend*', async (r) => {
-    await new Promise<void>((resolve) => (release = resolve));
+    await new Promise<void>((resolve) => held.push(resolve));
     await r.abort();
   });
   await page.evaluate(() => localStorage.setItem('notezzz:pendingShare', 'shared while offline'));
@@ -705,7 +707,7 @@ test('the share chooser appears without waiting for storage', async ({ page }) =
   await expect(page.getByTestId('share-overlay')).toBeVisible({ timeout: 5000 });
   await expect(page.getByTestId('share-overlay')).toContainText('shared while offline');
 
-  release?.();
+  held.forEach((go) => go());
 });
 
 test('a note created from a share survives the load that lands after it', async ({ page }) => {

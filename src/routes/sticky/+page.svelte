@@ -142,6 +142,7 @@
       }
       document.addEventListener('pointerenter', onPointerEnter);
       document.addEventListener('pointerleave', onPointerLeave);
+      setInterval(() => void keepTucked(), 1500);
       // From here on the note's tucked flag steers this window (see below).
       tuckReady = true;
     })();
@@ -204,17 +205,71 @@
    */
   async function edgeSpot(visible: number): Promise<{ x: number; y: number } | null> {
     if (!winRef) return null;
-    const { currentMonitor } = await import('@tauri-apps/api/window');
-    const mon = await currentMonitor();
-    if (!mon) return null;
     const size = await winRef.outerSize();
     const base = home ?? (await winRef.outerPosition());
+    const mon = await screenFor({ x: base.x + size.width / 2, y: base.y + size.height / 2 });
+    if (!mon) return null;
     const onRight = base.x + size.width / 2 > mon.position.x + mon.size.width / 2;
     tuckSide = onRight ? 'right' : 'left';
+    // Its own height on that screen, even if the screen it was on has gone.
+    const y = Math.min(Math.max(base.y, mon.position.y), mon.position.y + mon.size.height - Math.min(size.height, 120));
     return {
       x: onRight ? mon.position.x + mon.size.width - visible : mon.position.x - size.width + visible,
-      y: base.y,
+      y,
     };
+  }
+
+  /**
+   * The screen a note belongs to: the one holding the point, else the nearest.
+   * Not "the window's current monitor": a tucked window hangs mostly off the
+   * edge, and after a display comes back Windows may have half pulled it in,
+   * with its middle on no monitor at all. That answered null, and the note
+   * stayed out.
+   */
+  async function screenFor(pt: { x: number; y: number }) {
+    const { availableMonitors, currentMonitor } = await import('@tauri-apps/api/window');
+    const all = await availableMonitors().catch(() => []);
+    if (!all.length) return currentMonitor();
+    let best = all[0];
+    let bestD = Infinity;
+    for (const m of all) {
+      const dx = Math.max(m.position.x - pt.x, 0, pt.x - (m.position.x + m.size.width));
+      const dy = Math.max(m.position.y - pt.y, 0, pt.y - (m.position.y + m.size.height));
+      const d = dx * dx + dy * dy;
+      if (d < bestD) {
+        bestD = d;
+        best = m;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Tucked means tucked, whatever happened meanwhile. Every 1.5s while tucked:
+   * a peek whose pointer has gone ends (the "left" event never comes when the
+   * display switched off under it), and a note that isn't where a tucked one
+   * sits slides back. Sleep and display power-off move windows without this
+   * window seeing it, or while it can't act; this catches it when it can.
+   */
+  async function keepTucked() {
+    if (!tucked || sliding || !winRef) return;
+    try {
+      scaleRef = await winRef.scaleFactor(); // a display can come back at another scale
+      if (peeking) {
+        const { cursorPosition } = await import('@tauri-apps/api/window');
+        const [c, pos, size] = await Promise.all([cursorPosition(), winRef.outerPosition(), winRef.outerSize()]);
+        const over = c.x >= pos.x && c.x < pos.x + size.width && c.y >= pos.y && c.y < pos.y + size.height;
+        if (over) return;
+        peeking = false;
+      }
+      if (!tucked || sliding) return;
+      const spot = await tuckedSpot();
+      if (!spot) return;
+      const pos = await winRef.outerPosition();
+      if (Math.abs(pos.x - spot.x) > 4 || Math.abs(pos.y - spot.y) > 4) await slideTo(spot.x, spot.y);
+    } catch {
+      /* the window is closing */
+    }
   }
   async function sliverPx(): Promise<number> {
     // A tilted card is inset from the window edge, so show that much more.

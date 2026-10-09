@@ -149,9 +149,16 @@ class MainActivity : TauriActivity() {
     @JavascriptInterface
     fun googleSignOut(id: Int, token: String) = google.signOut(id, token)
 
-    /** Download a release APK and open Android's installer (ApkUpdater.kt). */
+    /** Download a release APK and open Android's installer (ApkUpdater.kt).
+     *  Not in the Google Play build: Play updates it. */
     @JavascriptInterface
-    fun installApk(id: Int, url: String) = updater.install(id, url)
+    fun installApk(id: Int, url: String) {
+      if (BuildConfig.PLAY) reply(id, false, "Updated by Google Play") else updater.install(id, url)
+    }
+
+    /** Where this build came from: "play" (Google Play updates it) or "github". */
+    @JavascriptInterface
+    fun store(): String = if (BuildConfig.PLAY) "play" else "github"
 
     /**
      * A note drawn as a JPEG (base64, from the page) into Android's share

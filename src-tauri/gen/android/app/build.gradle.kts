@@ -21,6 +21,13 @@ val keystoreProperties = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+// The Google Play build (NOTEZZZ_PLAY=1, see scripts/build-play.sh): its own
+// application id, no self-updater and no install-packages permission (Play
+// updates it; its policy forbids an app updating itself). The APK on GitHub
+// stays com.administrator.notezzz with its updater, so phones that have it
+// keep updating; the two install side by side as separate apps.
+val playBuild = System.getenv("NOTEZZZ_PLAY") == "1"
+
 android {
     compileSdk = 36
     signingConfigs {
@@ -36,7 +43,8 @@ android {
     namespace = "com.administrator.notezzz"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
-        applicationId = "com.administrator.notezzz"
+        applicationId = if (playBuild) "com.flatvoxel.notezzz" else "com.administrator.notezzz"
+        buildConfigField("boolean", "PLAY", playBuild.toString())
         minSdk = 24
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
@@ -64,6 +72,8 @@ android {
             )
         }
     }
+    // Play: the release manifest overlay strips REQUEST_INSTALL_PACKAGES.
+    if (playBuild) sourceSets.getByName("release").manifest.srcFile("src/play/AndroidManifest.xml")
     kotlinOptions {
         jvmTarget = "1.8"
     }

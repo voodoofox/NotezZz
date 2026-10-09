@@ -8,7 +8,7 @@
 // reloads onto new deploys by itself.
 
 import { isDesktop, isMobile } from './storage/backend';
-import { androidBridge, androidCall } from './android';
+import { androidBridge, androidCall, fromPlay } from './android';
 
 export type UpdateState =
   | { kind: 'idle' }
@@ -40,7 +40,7 @@ export function isNewer(candidate: string, current: string): boolean {
 let androidApk: { version: string; url: string } | null = null;
 
 async function checkAndroid(): Promise<UpdateState> {
-  if (typeof androidBridge()?.installApk !== 'function') return { kind: 'idle' };
+  if (typeof androidBridge()?.installApk !== 'function' || fromPlay()) return { kind: 'idle' };
   try {
     const res = await fetch(`${LATEST_RELEASE}?ts=${Date.now()}`, {
       headers: { Accept: 'application/vnd.github+json' },

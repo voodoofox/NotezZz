@@ -3,6 +3,7 @@
   // module couldn't be split, and the warning (on stderr) aborted deploys.
   import { signInDesktopAndMigrate, signInSummary } from '$lib/desktopFlow';
   import UpdateCheck from './UpdateCheck.svelte';
+  import { fromPlay } from '$lib/android';
   import { onMount } from 'svelte';
   import { store } from '$lib/store.svelte';
   import { isTauri, isDesktop, isMobile } from '$lib/storage/backend';
@@ -406,7 +407,8 @@
       <p class="hint">A theme is how a note looks: light and shade, grain, the title strip and the buttons. It's a small text file you can share.</p>
     </section>
 
-    {#if tauri}
+    <!-- Not in the Google Play build: Play keeps it up to date. -->
+    {#if tauri && !fromPlay()}
       <UpdateCheck />
     {/if}
 

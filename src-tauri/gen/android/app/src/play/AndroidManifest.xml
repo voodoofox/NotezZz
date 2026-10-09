@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Merged over the main manifest in the Google Play build only (build.gradle.kts):
+     Play updates the app, so it has no use for installing packages, and Play's
+     policy doesn't allow the permission for self-updates. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />
+</manifest>

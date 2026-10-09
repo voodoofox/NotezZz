@@ -7,6 +7,7 @@
 import { checkForUpdate } from './updater';
 import { logDiag } from './diag';
 import { isTauri } from './storage/backend';
+import { fromPlay } from './android';
 
 export const updates = $state<{ available: { version: string } | null; dismissed: boolean }>({
   available: null,
@@ -29,7 +30,7 @@ export async function pollForUpdates(): Promise<void> {
 
 let scheduled = false;
 export function scheduleUpdateChecks(): void {
-  if (scheduled || !isTauri()) return;
+  if (scheduled || !isTauri() || fromPlay()) return; // Play updates its own build
   scheduled = true;
   setTimeout(() => void pollForUpdates(), 20_000);
   setInterval(() => void pollForUpdates(), 6 * 60 * 60 * 1000);
