@@ -11,8 +11,9 @@ import { store } from './store.svelte';
 // Not Ctrl+Shift+N: that is Chrome's incognito window, and a global
 // shortcut steals it from every app. Off by default for the same reason.
 export const NEW_NOTE_SHORTCUT = 'CommandOrControl+Alt+N';
-/** How the Settings row spells it (Windows is the only desktop build). */
-export const NEW_NOTE_SHORTCUT_LABEL = 'Ctrl+Alt+N';
+/** How the Settings row spells it: CommandOrControl is Cmd on a Mac. */
+export const NEW_NOTE_SHORTCUT_LABEL =
+  typeof navigator !== 'undefined' && /Macintosh/.test(navigator.userAgent) ? '⌘⌥N' : 'Ctrl+Alt+N';
 
 /** `unavailable`: another app owns the combo, so the OS refused it to us. */
 export type HotkeyStatus = 'off' | 'on' | 'unavailable';

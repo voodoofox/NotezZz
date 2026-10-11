@@ -1,0 +1,8 @@
+{
+  "identifier": "com.flatvoxel.notezzz",
+  "bundle": {
+    "macOS": {
+      "signingIdentity": "-"
+    }
+  }
+}
