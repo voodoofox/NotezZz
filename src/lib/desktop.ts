@@ -101,6 +101,8 @@ export async function openSticky(note: Note, near?: { x: number; y: number }): P
     // neither that nor Win+Up can.
     maximizable: false,
     skipTaskbar: true,
+    // Mac: on every desktop (Space), not only the one it opened on.
+    visibleOnAllWorkspaces: /Macintosh/.test(navigator.userAgent),
     shadow: false,
     width: geom?.w ?? STICKY_SIZE.w,
     height: geom?.h ?? STICKY_SIZE.h,

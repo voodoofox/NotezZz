@@ -741,8 +741,16 @@ pub fn run() {
             desktop_setup(app)?;
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, _event| {
+            // Mac: a click on the Dock icon brings the main window back from
+            // the menu-bar icon, the way a Mac app reopens.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _event {
+                show_main(_app);
+            }
+        });
 }
 
 /// Tray, fullscreen watcher, and the main window's cache-busting + hide-to-

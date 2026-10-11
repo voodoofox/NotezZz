@@ -1,0 +1,62 @@
+# Mac test build: push to the `mac` branch (or run by hand) -> an unsigned
+# (ad-hoc signed) universal .dmg as a run artifact, for trying the app on a
+# Mac. Nothing is released. On first open macOS asks for System Settings ->
+# Privacy & Security -> Open Anyway, since Apple hasn't notarized it.
+name: Mac test build
+
+on:
+  push:
+    branches: [mac]
+  workflow_dispatch:
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - name: Write .env.local
+        env:
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: |
+          if [ -z "$GOOGLE_CLIENT_SECRET" ]; then
+            echo "GOOGLE_CLIENT_SECRET secret is not set; the build would ship without desktop sign-in" >&2
+            exit 1
+          fi
+          printf 'GOOGLE_CLIENT_SECRET=%s\n' "$GOOGLE_CLIENT_SECRET" > .env.local
+
+      # One app for Apple-chip and Intel Macs. The updater key is needed only
+      # because createUpdaterArtifacts is on.
+      - name: Build the .dmg
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri build -- --target universal-apple-darwin --bundles app,dmg
+
+      - name: Check the signature
+        run: |
+          app="$(ls -d src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app)"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          lipo -archs "$app/Contents/MacOS/"*
+          ls -la src-tauri/target/universal-apple-darwin/release/bundle/dmg/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NotezZz-mac
+          path: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          retention-days: 14
