@@ -210,3 +210,16 @@ Client ID in `src/lib/googleConfig.ts` (public by design; PKCE, no secret).
 Scope `drive.file` = only files/folders the app created. The consent screen
 must either be published or list the account as a test user, otherwise Google
 shows "Access blocked… has not completed the verification process".
+
+## Licence
+
+NotezZz is free software under the **GNU Affero General Public License v3.0**
+(see `LICENSE`). You may use, study, modify and share it; if you distribute a
+modified version, or run one for others over a network, you must publish your
+changes under the same licence.
+
+The **NotezZz name and logo** are not covered by that licence. Builds you make
+from a modified source should not use them, or the `flatvoxel.com` domain, in
+a way that suggests they come from us.
+
+Copyright © 2026 voodoofox.
