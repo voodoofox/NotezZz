@@ -747,16 +747,27 @@ class AppStore {
   }
 
   /**
-   * A sticky window loads its own copy of the note from storage as it boots,
-   * so the note has to be written BEFORE the window is created. Under the
-   * usual debounced save the write is still pending when the sticky reads,
-   * and it opens showing the previous state — most visibly the old lean,
-   * which then snaps to the new one whenever its first sync lands.
+   * The sticky must boot into the pinned state (its new lean above all), not
+   * the previous one with a snap to follow. With Drive, it paints from this
+   * device's cache as it boots (paintCachedNow) and takes the write's result
+   * over the bus, so the cache is written and the window opened at once; the
+   * Drive round-trip (a read-merge-write, 1–3 s) runs alongside. It used to
+   * run first, and that was the whole wait between the click and the note.
+   * Local files are read straight from disk, so there the write still goes
+   * first: it is a local write, and quick.
    */
   async #pin(note: Note) {
     this.#cancelDebounce(note.id);
-    await this.#save($state.snapshot(note));
+    const copy = $state.snapshot(note);
+    if (this.#backend?.kind !== 'drive') {
+      await this.#save(copy);
+      await openSticky(note);
+      return;
+    }
+    this.#cacheNotes();
+    const saving = this.#save(copy);
     await openSticky(note);
+    await saving;
   }
 
   /**
