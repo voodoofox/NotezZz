@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>NotezZz</title>
-    <meta name="description" content="Free sticky notes for Windows, Android and the web. Pin a note on your phone and it's waiting on your PC desktop. Your notes stay in your own Google Drive." />
+    <meta name="description" content="Free sticky notes for Windows, Android, the web, and an early Mac build. Pin a note on your phone and it's waiting on your PC desktop. Your notes stay in your own Google Drive." />
     <meta name="theme-color" content="#eceef4" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#14121b" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
@@ -316,15 +316,21 @@
       .files .more { margin-top: 18px; font-size: 16px; color: var(--muted); }
 
       /* ---------- get it ---------- */
-      .get { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; margin-top: 48px; }
-      @media (max-width: 900px) { .get { grid-template-columns: minmax(0, 1fr); } }
+      .get { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 26px; margin-top: 48px; }
+      @media (max-width: 1100px) { .get { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+      @media (max-width: 700px) { .get { grid-template-columns: minmax(0, 1fr); } }
       .card { position: relative; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 34px 26px 26px; display: flex; flex-direction: column; gap: 10px; }
       .card::before { content: ''; position: absolute; top: -12px; left: 50%; width: 96px; height: 26px; margin-left: -48px; background: var(--tape); opacity: .85; transform: rotate(-2deg); border-radius: 2px; }
-      .card:nth-child(1) { --tape: #a8e6e1; } .card:nth-child(2) { --tape: #e6a8c7; } .card:nth-child(3) { --tape: #e6d9a8; }
+      .card:nth-child(1) { --tape: #a8e6e1; } .card:nth-child(2) { --tape: #e6a8c7; } .card:nth-child(3) { --tape: #e6d9a8; } .card:nth-child(4) { --tape: #c9c0ea; }
       .card .plat { font-family: 'Mono', monospace; font-size: 13px; color: var(--faint); }
       .card p { color: var(--muted); font-size: 16px; }
       .card .btn { margin-top: auto; }
-      .caveats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px; margin-top: 26px; font-size: 14px; color: var(--faint); }
+      /* The Mac build is an early test: a dashed outline in the arrow's
+         magenta instead of the solid button, and a tag that says so. */
+      .btn.trial { border: 2px dashed var(--arrow); color: var(--ink); background: var(--paper); box-shadow: none; padding: 12px 19px; }
+      .btn.trial .tag { font-family: 'Mono', monospace; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--arrow); border: 1px solid var(--arrow); border-radius: 999px; padding: 2px 8px; }
+      .card .early { font-size: 13px; color: var(--faint); margin-top: -4px; }
+      .caveats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; margin-top: 26px; font-size: 14px; color: var(--faint); }
       @media (max-width: 900px) { .caveats { grid-template-columns: minmax(0, 1fr); gap: 12px; } }
 
       footer { padding: 30px 0 48px; font-size: 14px; color: var(--faint); }
@@ -570,10 +576,18 @@
               <p>There's nothing to install, and you see the same notes from the same Drive folder. Add it to your home screen if you like.</p>
               <a class="btn" href="https://flatvoxel.com/NotezZz/">Open the web app</a>
             </div>
+            <div class="card">
+              <span class="plat">macOS 11 or newer · Apple silicon and Intel</span>
+              <h3>For your Mac</h3>
+              <p>An early build of the same desktop app: stickies, the tray, and ⌘⌥N for a new note. It's being tested by a few people and may have rough edges.</p>
+              <p class="early">No self-updating yet; come back here for new builds.</p>
+              <a class="btn trial" href="https://github.com/voodoofox/NotezZz/releases/latest/download/NotezZz-Mac.dmg"><span class="tag">Experimental</span> Download for Mac</a>
+            </div>
           </div>
           <div class="caveats">
             <p>First run on Windows: the installer isn't code-signed yet, so Windows may say it protected your PC. Choose More info, then Run anyway.</p>
             <p>First install on Android: the app comes from GitHub rather than the Play Store, so your browser asks once to allow it. After that, NotezZz offers its own updates.</p>
+            <p>First open on a Mac: the app isn't notarized by Apple yet, so macOS says it can't check it. Open System Settings → Privacy &amp; Security, scroll down, and choose Open Anyway.</p>
           </div>
         </div>
       </section>
