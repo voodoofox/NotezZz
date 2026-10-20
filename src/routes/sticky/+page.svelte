@@ -43,6 +43,88 @@
         ? label.slice('sticky-'.length)
         : new URLSearchParams(window.location.search).get('id');
 
+      // The window side first: the bar's + and tuck buttons hang off hasWin,
+      // and the store load below can take a while (the first launch after
+      // an update rebuilds the cache from Drive) — the buttons were missing
+      // until it finished. Nothing here needs the note; a tucked note is
+      // put back from this PC's saved spot.
+      if (win) {
+        winRef = win;
+        hasWin = true;
+
+        // Window geometry is device-local: where a sticky sits on THIS screen
+        // means nothing on a phone or another PC. It used to be saved onto the
+        // note, which meant a nudge of the window republished the sticky's
+        // whole (possibly stale) copy over newer edits from another device.
+        const scale = await win.scaleFactor();
+        scaleRef = scale;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const saveGeom = async () => {
+          if (!noteId) return;
+          const pos = await win.outerPosition();
+          const size = await win.innerSize();
+          try {
+            const key = `notezzz:win:${noteId}`;
+            const prev = JSON.parse(localStorage.getItem(key) ?? '{}'); // keeps tucked/home
+            localStorage.setItem(
+              key,
+              JSON.stringify({
+                ...prev,
+                x: Math.round(pos.x / scale),
+                y: Math.round(pos.y / scale),
+                w: Math.round(size.width / scale),
+                h: Math.round(size.height / scale),
+              })
+            );
+          } catch {
+            /* private mode — the sticky just opens at the default spot */
+          }
+        };
+        const debounced = () => {
+          clearTimeout(timer);
+          timer = setTimeout(saveGeom, 500);
+        };
+        // Windows moves any mostly-off-screen window back on-screen when
+        // displays reconnect (sleep, monitor wake). A tucked note is exactly
+        // that, and it came back fully revealed while the app still believed
+        // it was tucked — only a hover-and-leave put it away again. If we are
+        // tucked and something other than our own slide moved us, go back.
+        let retuck: ReturnType<typeof setTimeout> | undefined;
+        await win.onMoved(() => {
+          debounced();
+          if (!tucked || sliding || peeking) return;
+          clearTimeout(retuck);
+          retuck = setTimeout(async () => {
+            if (!tucked || sliding || peeking) return;
+            const spot = await tuckedSpot();
+            const pos = await win.outerPosition();
+            if (spot && (Math.abs(pos.x - spot.x) > 4 || Math.abs(pos.y - spot.y) > 4)) {
+              await slideTo(spot.x, spot.y);
+            }
+          }, 900);
+        });
+        await win.onResized(debounced);
+
+        // Reopen tucked if it was tucked when the app last closed.
+        try {
+          const saved = JSON.parse(localStorage.getItem(`notezzz:win:${noteId}`) ?? '{}');
+          if (saved.tucked && saved.home) {
+            home = { x: Math.round(saved.home.x * scale), y: Math.round(saved.home.y * scale) };
+            tucked = true;
+            const spot = await tuckedSpot();
+            if (spot) {
+              const { PhysicalPosition } = await import('@tauri-apps/api/dpi');
+              await win.setPosition(new PhysicalPosition(spot.x, spot.y));
+            }
+          }
+        } catch {
+          /* nothing saved */
+        }
+        document.addEventListener('pointerenter', onPointerEnter);
+        document.addEventListener('pointerleave', onPointerLeave);
+        setInterval(() => void keepTucked(), 1500);
+      }
+
       await store.init();
       // A sticky can sit open for hours. Without this it keeps whatever it
       // loaded at open time, and any write from it republishes that stale
@@ -68,81 +150,6 @@
         if (document.visibilityState === 'hidden') flush();
       });
 
-      if (!win) return; // plain browser: no window geometry to track
-      winRef = win;
-      hasWin = true;
-
-      // Window geometry is device-local: where a sticky sits on THIS screen
-      // means nothing on a phone or another PC. It used to be saved onto the
-      // note, which meant a nudge of the window republished the sticky's
-      // whole (possibly stale) copy over newer edits from another device.
-      const scale = await win.scaleFactor();
-      scaleRef = scale;
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const saveGeom = async () => {
-        if (!noteId) return;
-        const pos = await win.outerPosition();
-        const size = await win.innerSize();
-        try {
-          const key = `notezzz:win:${noteId}`;
-          const prev = JSON.parse(localStorage.getItem(key) ?? '{}'); // keeps tucked/home
-          localStorage.setItem(
-            key,
-            JSON.stringify({
-              ...prev,
-              x: Math.round(pos.x / scale),
-              y: Math.round(pos.y / scale),
-              w: Math.round(size.width / scale),
-              h: Math.round(size.height / scale),
-            })
-          );
-        } catch {
-          /* private mode — the sticky just opens at the default spot */
-        }
-      };
-      const debounced = () => {
-        clearTimeout(timer);
-        timer = setTimeout(saveGeom, 500);
-      };
-      // Windows moves any mostly-off-screen window back on-screen when
-      // displays reconnect (sleep, monitor wake). A tucked note is exactly
-      // that, and it came back fully revealed while the app still believed
-      // it was tucked — only a hover-and-leave put it away again. If we are
-      // tucked and something other than our own slide moved us, go back.
-      let retuck: ReturnType<typeof setTimeout> | undefined;
-      await win.onMoved(() => {
-        debounced();
-        if (!tucked || sliding || peeking) return;
-        clearTimeout(retuck);
-        retuck = setTimeout(async () => {
-          if (!tucked || sliding || peeking) return;
-          const spot = await tuckedSpot();
-          const pos = await win.outerPosition();
-          if (spot && (Math.abs(pos.x - spot.x) > 4 || Math.abs(pos.y - spot.y) > 4)) {
-            await slideTo(spot.x, spot.y);
-          }
-        }, 900);
-      });
-      await win.onResized(debounced);
-
-      // Reopen tucked if it was tucked when the app last closed.
-      try {
-        const saved = JSON.parse(localStorage.getItem(`notezzz:win:${noteId}`) ?? '{}');
-        if (saved.tucked && saved.home) {
-          home = { x: Math.round(saved.home.x * scale), y: Math.round(saved.home.y * scale) };
-          tucked = true;
-          const spot = await tuckedSpot();
-          if (spot) {
-            const { PhysicalPosition } = await import('@tauri-apps/api/dpi');
-            await win.setPosition(new PhysicalPosition(spot.x, spot.y));
-          }
-        }
-      } catch {
-        /* nothing saved */
-      }
-      document.addEventListener('pointerenter', onPointerEnter);
-      document.addEventListener('pointerleave', onPointerLeave);
-      setInterval(() => void keepTucked(), 1500);
       // From here on the note's tucked flag steers this window (see below).
       tuckReady = true;
     })();
@@ -153,8 +160,15 @@
   // main window's bus). Notes from before the flag existed adopt this
   // window's own state instead of being yanked back out.
   let tuckReady = $state(false);
+  /** The bar was used before the note loaded: that choice wins over the flag. */
+  let tuckedByHand = false;
   function reconcileTuck() {
     if (!tuckReady || !note || !noteId) return;
+    if (tuckedByHand) {
+      tuckedByHand = false;
+      if (!!note.tucked !== tucked) store.update(noteId, { tucked });
+      return;
+    }
     if (note.tucked === undefined) {
       if (tucked) store.update(noteId, { tucked: true });
       return;
@@ -311,6 +325,7 @@
     if (!spot) return;
     tucked = true;
     peeking = false;
+    if (!tuckReady) tuckedByHand = true;
     persistTuck();
     await slideTo(spot.x, spot.y);
   }
@@ -319,6 +334,7 @@
     if (!winRef || sliding || !home) return;
     tucked = false;
     peeking = false;
+    if (!tuckReady) tuckedByHand = true;
     persistTuck();
     await slideTo(home.x, home.y);
   }
