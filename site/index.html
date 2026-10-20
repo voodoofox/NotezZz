@@ -327,7 +327,7 @@
       .card .btn { margin-top: auto; }
       /* The Mac build is an early test: a dashed outline in the arrow's
          magenta instead of the solid button, and a tag that says so. */
-      .btn.trial { border: 2px dashed var(--arrow); color: var(--ink); background: var(--paper); box-shadow: none; padding: 12px 19px; }
+      .btn.trial { flex-direction: column; gap: 5px; border: 2px dashed var(--arrow); color: var(--ink); background: var(--paper); box-shadow: none; padding: 9px 19px 11px; }
       .btn.trial .tag { font-family: 'Mono', monospace; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--arrow); border: 1px solid var(--arrow); border-radius: 999px; padding: 2px 8px; }
       .card .early { font-size: 13px; color: var(--faint); margin-top: -4px; }
       .caveats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; margin-top: 26px; font-size: 14px; color: var(--faint); }
@@ -577,9 +577,9 @@
               <a class="btn" href="https://flatvoxel.com/NotezZz/">Open the web app</a>
             </div>
             <div class="card">
-              <span class="plat">macOS 11 or newer · Apple silicon and Intel</span>
+              <span class="plat">macOS 11 or newer</span>
               <h3>For your Mac</h3>
-              <p>An early build of the same desktop app: stickies, the tray, and ⌘⌥N for a new note. It's being tested by a few people and may have rough edges.</p>
+              <p>An early build of the same desktop app for Apple silicon and Intel Macs: stickies, the tray, and ⌘⌥N for a new note. A few people are testing it, so expect rough edges.</p>
               <p class="early">No self-updating yet; come back here for new builds.</p>
               <a class="btn trial" href="https://github.com/voodoofox/NotezZz/releases/latest/download/NotezZz-Mac.dmg"><span class="tag">Experimental</span> Download for Mac</a>
             </div>
