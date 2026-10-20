@@ -65,6 +65,9 @@ android {
         getByName("release") {
             signingConfigs.findByName("release")?.let { signingConfig = it }
             isMinifyEnabled = true
+            // Play wants native symbols for its crash reports; the symbol
+            // table alone is enough and keeps the bundle small.
+            ndk { debugSymbolLevel = "SYMBOL_TABLE" }
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
