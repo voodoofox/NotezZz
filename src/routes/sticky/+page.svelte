@@ -6,6 +6,7 @@
   import Icon from '$lib/components/Icon.svelte';
   import VSlider from '$lib/components/VSlider.svelte';
   import { inkOnWhite, luminance } from '$lib/theme';
+  import { hideSticky } from '$lib/desktop';
   import ColorPicker from '$lib/components/ColorPicker.svelte';
 
   let noteId = $state<string | null>(null);
@@ -49,6 +50,9 @@
       // until it finished. Nothing here needs the note; a tucked note is
       // put back from this PC's saved spot.
       if (win) {
+        // Its own write-queue mirror: the main window's must not be replayed
+        // (or overwritten) from here.
+        store.isolateOutbox(win.label);
         winRef = win;
         hasWin = true;
 
@@ -182,6 +186,12 @@
     void note?.tucked;
     void tuckReady;
     reconcileTuck();
+  });
+
+  // An unpinned note has no business on screen, whoever shows the window
+  // meanwhile (the main window closes it once the unpin has landed).
+  $effect(() => {
+    if (hasWin && noteId && note && note.pinned === false) void hideSticky(noteId);
   });
 
   // ---- tuck away -----------------------------------------------------------

@@ -295,6 +295,11 @@ class AppStore {
     this.#paintCache();
   }
 
+  /** A sticky window's queue is mirrored apart from the main window's (Outbox.isolate). */
+  isolateOutbox(label: string) {
+    this.#outbox.isolate(label);
+  }
+
   /** Resolves when init has settled (either way). */
   whenReady(): Promise<void> {
     return this.#ready;

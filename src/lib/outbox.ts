@@ -57,6 +57,15 @@ export class Outbox {
    *  persisted too: a page closed mid-upload has to redo this write). */
   #running = new Map<string, Promise<void>>();
   #active = new Map<string, OutboxOp>();
+  /**
+   * Where this queue is mirrored. localStorage is shared by every window of
+   * the app, so each window mirrors under its own key: with one key, a
+   * sticky booting while the main window's write was in flight replayed
+   * that write itself, and the two windows then overwrote each other's
+   * mirror. The main window keeps the bare key and, on launch, also replays
+   * what closed stickies left behind.
+   */
+  #key = KEY;
   /** Ops that threw, waiting for their retry window. */
   #failed = new Map<string, Failed>();
   #perform: (op: OutboxOp) => Promise<void>;
@@ -163,14 +172,34 @@ export class Outbox {
   }
 
   /** Bring back whatever a previous page load left unlanded. */
+  /** A sticky window: mirror under its own key (see #key). Call before restore(). */
+  isolate(label: string): void {
+    this.#key = `${KEY}:${label}`;
+  }
+
   restore(): void {
-    let ops: OutboxOp[] = [];
-    try {
-      ops = JSON.parse(localStorage.getItem(KEY) ?? '[]');
-    } catch {
-      return;
+    const keys = [this.#key];
+    // The main window also picks up what stickies closed mid-write left.
+    if (this.#key === KEY) {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k?.startsWith(`${KEY}:`)) keys.push(k);
+        }
+      } catch {
+        /* private mode */
+      }
     }
-    for (const op of ops) void this.push(op);
+    for (const key of keys) {
+      let ops: OutboxOp[] = [];
+      try {
+        ops = JSON.parse(localStorage.getItem(key) ?? '[]');
+        if (key !== this.#key) localStorage.removeItem(key);
+      } catch {
+        continue;
+      }
+      for (const op of ops) void this.push(op);
+    }
   }
 
   async #drain(id: string): Promise<void> {
@@ -215,8 +244,8 @@ export class Outbox {
     for (const op of this.#queued.values()) byId.set(opId(op), op);
     const ops = [...byId.values()];
     try {
-      if (ops.length) localStorage.setItem(KEY, JSON.stringify(ops));
-      else localStorage.removeItem(KEY);
+      if (ops.length) localStorage.setItem(this.#key, JSON.stringify(ops));
+      else localStorage.removeItem(this.#key);
     } catch {
       /* quota or private mode: the queue still works for this page's lifetime */
     }
