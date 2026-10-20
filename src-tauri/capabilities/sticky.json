@@ -12,6 +12,7 @@
   ],
   "permissions": [
     "core:default",
+    "core:window:deny-internal-toggle-maximize",
     "core:webview:allow-create-webview-window",
     "core:event:default",
     "core:window:allow-start-dragging",

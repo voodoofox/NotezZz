@@ -84,6 +84,11 @@ export async function openSticky(note: Note, near?: { x: number; y: number }): P
     decorations: false,
     transparent: true,
     alwaysOnTop: true,
+    // Tauri maximizes a window whose drag region is double-clicked, and the
+    // sticky's whole bar is one (the title too, where a double-click renames):
+    // a note blew up to the full screen mid-meeting. Not maximizable, so
+    // neither that nor Win+Up can.
+    maximizable: false,
     skipTaskbar: true,
     shadow: false,
     width: geom?.w ?? STICKY_SIZE.w,
