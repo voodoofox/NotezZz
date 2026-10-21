@@ -12,6 +12,7 @@
   import { AudioNote } from '../editor/audio';
   import { AtomDelete } from '../editor/atomDelete';
   import { VoiceRecorder } from '../editor/recorder.svelte';
+  import { imageFiles, imageToDataUrl } from '../editor/pasteImage';
   import { BASE_FONT_PX } from '$lib/types';
   import DrawPad from './DrawPad.svelte';
   import EditorToolbar from './EditorToolbar.svelte';
@@ -71,6 +72,22 @@
     if (req.tool === 'voice') void toggleRecord();
     else openDraw();
   });
+
+  async function insertImages(files: File[], at?: number) {
+    for (const f of files) {
+      let src: string;
+      try {
+        src = await imageToDataUrl(f);
+      } catch {
+        continue; // not something the browser can decode
+      }
+      if (!editor) return;
+      const node = { type: 'image', attrs: { src } };
+      if (at !== undefined) editor.chain().focus().insertContentAt(at, node).run();
+      else editor.chain().focus().insertContent(node).run();
+      at = undefined; // the rest follow the first
+    }
+  }
 
   function drawDone(svgDataUrl: string | null) {
     showDraw = false;
@@ -143,6 +160,26 @@
         TaskItem.configure({ nested: true }),
       ],
       content: html || '<p></p>',
+      editorProps: {
+        // A screenshot or picture pasted or dropped in lands in the note as a
+        // (shrunk) data URL. Files first: an image copied off a web page also
+        // comes as HTML pointing at the site, which the app's CSP won't load.
+        handlePaste: (_view, event) => {
+          const files = imageFiles(event.clipboardData);
+          if (files.length === 0) return false;
+          void insertImages(files);
+          return true;
+        },
+        handleDrop: (view, event, _slice, moved) => {
+          if (moved) return false;
+          const files = imageFiles(event.dataTransfer);
+          if (files.length === 0) return false;
+          event.preventDefault();
+          const at = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
+          void insertImages(files, at);
+          return true;
+        },
+      },
       onTransaction: () => {
         tick += 1;
         updateBubble();

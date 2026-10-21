@@ -187,7 +187,9 @@
       e.preventDefault();
       e.stopPropagation();
       if (isTauri()) {
-        void import('@tauri-apps/api/core').then(({ invoke }) => invoke('open_link', { url: url.href })).catch(() => {});
+        void import('@tauri-apps/api/core')
+          .then(({ invoke }) => invoke('open_link', { url: url.href }))
+          .catch((err) => console.error('open_link', err)); // lands in Diagnostics
       } else {
         window.open(url.href, '_blank', 'noopener,noreferrer');
       }

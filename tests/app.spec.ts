@@ -3039,3 +3039,35 @@ test.describe('share a note as a picture', () => {
     expect(s.h / scale).toBeLessThan(content + bar + 60);
   });
 });
+
+test('an image pasted into a note is kept in the note, shrunk to fit', async ({ page }) => {
+  await createNote(page);
+  const editor = page.locator('.ProseMirror').first();
+  await editor.click();
+  await page.evaluate(async () => {
+    // A 3200x200 picture: wider than any note should carry.
+    const c = document.createElement('canvas');
+    c.width = 3200;
+    c.height = 200;
+    const ctx = c.getContext('2d')!;
+    ctx.fillStyle = '#c33';
+    ctx.fillRect(0, 0, 3200, 200);
+    const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!), 'image/png'));
+    const dt = new DataTransfer();
+    dt.items.add(new File([blob], 'shot.png', { type: 'image/png' }));
+    const ev = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+    document.querySelector('.ProseMirror')!.dispatchEvent(ev);
+  });
+  const img = page.locator('.ProseMirror img[src^="data:image/"]');
+  await expect(img).toHaveCount(1);
+  await expect.poll(() => img.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBe(1600);
+  // Stored with the note, not just shown.
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const k = Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!;
+        return (JSON.parse(localStorage.getItem(k)!).contentHtml as string).includes('<img src="data:image/');
+      })
+    )
+    .toBe(true);
+});
