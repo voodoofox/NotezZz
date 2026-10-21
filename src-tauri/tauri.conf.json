@@ -18,7 +18,8 @@
         "minWidth": 640,
         "minHeight": 420,
         "center": true,
-        "visible": false
+        "visible": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --process-per-site"
       }
     ],
     "security": {

@@ -55,6 +55,17 @@ function savedGeometry(id: string): { x: number; y: number; w: number; h: number
 export const STICKY_SIZE = { w: 420, h: 460 };
 
 /**
+ * WebView2 runs every window of the app in one browser process, and refuses
+ * a new webview whose browser arguments differ from the ones that process
+ * started with (Tauri: windows with different `additionalBrowserArgs` need
+ * different data directories). So this is the exact string the main window
+ * is configured with in src-tauri/tauri.conf.json; the first three switches
+ * are wry's defaults, `--process-per-site` puts all windows in one renderer
+ * instead of one renderer process per sticky. Ignored off Windows.
+ */
+const BROWSER_ARGS = '--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --process-per-site';
+
+/**
  * `near` (logical px): where to put a sticky that has no remembered place —
  * a note created from another sticky's + button lands beside that sticky,
  * not wherever the default happens to be.
@@ -97,6 +108,8 @@ export async function openSticky(note: Note, near?: { x: number; y: number }): P
     y: geom?.y ?? near?.y,
     minWidth: 170,
     minHeight: 130,
+    // Accepted by the IPC (it deserializes a WindowConfig), missing from the TS type.
+    ...({ additionalBrowserArgs: BROWSER_ARGS } as object),
   });
   win.once('tauri://error', (e) => console.error('sticky window error', e.payload));
 }
