@@ -34,6 +34,13 @@ async function authFetch(url: string, opts: RequestInit = {}, timeoutMs = 20_000
     signal: AbortSignal.timeout(timeoutMs),
   });
   let res = await fetch(url, withAuth(tok));
+  // Google's own hiccups (a 500 "responsePreparationFailure", a 502/503
+  // from a bad backend) clear in a moment; a request bodied by a string or
+  // blob can simply go again. Two more tries before the banner.
+  for (let delay = 600; res.status >= 500 && delay <= 1800; delay *= 3) {
+    await new Promise((r) => setTimeout(r, delay));
+    res = await fetch(url, withAuth(tok));
+  }
   if (res.status === 401) {
     // Server says the token is dead (revoked / Testing-mode expiry) even if
     // its local timestamp looked fine. Drop it and retry ONCE silently.

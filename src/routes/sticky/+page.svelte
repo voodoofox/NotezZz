@@ -536,6 +536,17 @@
           ><Icon name="more" /></button>
           {#if pop === 'menu'}
             <div class="smenu" role="menu">
+              {#if hasWin}
+                <button
+                  class="mi"
+                  role="menuitem"
+                  data-testid="sticky-menu-add"
+                  onclick={() => {
+                    pop = null;
+                    void addPinned();
+                  }}
+                ><Icon name="add" /><span>New pinned note</span></button>
+              {/if}
               <!-- Undo, then Redo beneath it; the menu stays open for another step. -->
               <button
                 class="mi"

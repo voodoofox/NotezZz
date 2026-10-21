@@ -130,7 +130,7 @@ test('image import inserts a picture into the note', async ({ page }) => {
   });
   const img = page.locator('.ProseMirror img');
   await expect(img).toHaveCount(1);
-  expect(await img.getAttribute('src')).toContain('data:image/png');
+  expect(await img.getAttribute('src')).toContain('data:image/webp'); // smaller than PNG, keeps transparency
 });
 
 test('custom color sliders recolor the note', async ({ page }) => {
@@ -3070,4 +3070,40 @@ test('an image pasted into a note is kept in the note, shrunk to fit', async ({ 
       })
     )
     .toBe(true);
+});
+
+test('a narrow note folds the tools that do not fit into a ... at the end of the bar', async ({ page }) => {
+  await createNote(page);
+  await page.waitForTimeout(500);
+  const id = await page.evaluate(
+    () => Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!.slice('notezzz:note:'.length)
+  );
+  await page.setViewportSize({ width: 240, height: 400 });
+  await page.goto(`/sticky?id=${id}`);
+  const more = page.getByTestId('fmt-overflow');
+  await expect(more).toBeVisible();
+  await expect(page.getByTestId('fmt-bold')).toBeVisible();
+  await expect(page.getByTestId('fmt-record')).toHaveCount(0); // folded, not scrolled off
+  // Everything on the bar, the overflow button included, stays inside the note.
+  const card = (await page.locator('.sticky').boundingBox())!;
+  const m = (await more.boundingBox())!;
+  expect(m.x + m.width).toBeLessThanOrEqual(card.x + card.width + 0.5);
+  // The folded tools work from the menu: a list from there, text size from there.
+  await page.locator('.ProseMirror').click();
+  await page.keyboard.type('fold');
+  await page.keyboard.press('Control+a'); // the size applies to a selection
+  await more.click();
+  await expect(page.getByTestId('fmt-overflow-menu')).toBeVisible();
+  await page.getByTestId('fmt-record').waitFor();
+  await page.getByTestId('fmt-checklist').click();
+  await expect(page.locator('.ProseMirror ul[data-type="taskList"]')).toHaveCount(1);
+  await expect(page.getByTestId('fmt-overflow-menu')).toHaveCount(0); // closes after a pick
+  await more.click();
+  await page.getByTestId('fmt-size').click();
+  await page.getByTestId('size-menu').getByText('24', { exact: true }).click();
+  await expect(page.locator('.ProseMirror span[style*="font-size:"]')).toHaveCount(1); // sizes render in em
+  // Wide again: everything is back on the bar and the overflow button is gone.
+  await page.setViewportSize({ width: 700, height: 400 });
+  await expect(more).toHaveCount(0);
+  await expect(page.getByTestId('fmt-record')).toBeVisible();
 });

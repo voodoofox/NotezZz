@@ -1,12 +1,18 @@
 <script lang="ts">
-  // The formatting strip above (desktop) / below (phones) the note body.
-  // Owns the size menu, the image picker and the record button's UI; the
-  // TipTap instance and the recorder are the Editor's.
+  // The formatting strip at the bottom of the note. Owns the size menu, the
+  // image picker and the record button's UI; the TipTap instance and the
+  // recorder are the Editor's.
+  //
+  // The tools are a list, so a note too narrow for all of them (a small
+  // sticky, a squeezed pane) shows as many as fit and folds the rest into
+  // a ⋯ at the end, instead of scrolling them off the edge unseen.
+  import { onMount } from 'svelte';
   import type { Editor } from '@tiptap/core';
   import { FONT_SIZES } from '../editor/fontSize';
   import type { VoiceRecorder } from '../editor/recorder.svelte';
   import { downscaleImage } from '$lib/image';
   import { popoverStyle } from '$lib/popover';
+  import type { IconName } from '$lib/icons';
   import Icon from './Icon.svelte';
 
   interface Props {
@@ -25,14 +31,120 @@
   let sizeMenuStyle = $state('');
   let fileInput = $state<HTMLInputElement | null>(null);
 
+  /** How many tools the bar shows; the rest live in the ⋯ menu. */
+  let fit = $state(Number.MAX_SAFE_INTEGER);
+  let showMore = $state(false);
+  let moreWrap = $state<HTMLDivElement | null>(null);
+  let moreStyle = $state('');
+  /** The ⋯ menu lists the folded tools, or the sizes once "Text size" is picked there. */
+  let moreView = $state<'list' | 'size'>('list');
+
+  interface Tool {
+    id: string;
+    icon: IconName;
+    label: string;
+    title?: string;
+    /** A divider before this tool in the bar. */
+    sep?: boolean;
+    run: () => void;
+    active?: () => boolean;
+  }
+
+  function isActive(name: string, attrs?: Record<string, unknown>) {
+    void tick; // establish reactive dependency
+    return editor?.isActive(name, attrs) ?? false;
+  }
+
+  const tools: Tool[] = [
+    { id: 'bold', icon: 'bold', label: 'Bold', title: 'Bold (Ctrl+B)', run: () => editor?.chain().focus().toggleBold().run(), active: () => isActive('bold') },
+    { id: 'italic', icon: 'italic', label: 'Italic', title: 'Italic (Ctrl+I)', run: () => editor?.chain().focus().toggleItalic().run(), active: () => isActive('italic') },
+    { id: 'underline', icon: 'underline', label: 'Underline', title: 'Underline (Ctrl+U)', run: () => editor?.chain().focus().toggleUnderline().run(), active: () => isActive('underline') },
+    { id: 'strike', icon: 'strike', label: 'Strikethrough', run: () => editor?.chain().focus().toggleStrike().run(), active: () => isActive('strike') },
+    { id: 'bullet', icon: 'bulletList', label: 'Bullet list', sep: true, run: () => editor?.chain().focus().toggleBulletList().run(), active: () => isActive('bulletList') },
+    { id: 'checklist', icon: 'checklist', label: 'Checklist', run: () => editor?.chain().focus().toggleTaskList().run(), active: () => isActive('taskList') },
+    { id: 'draw', icon: 'draw', label: 'Draw', title: 'Draw a sketch', sep: true, run: () => onDraw() },
+    { id: 'size', icon: 'textSize', label: 'Text size', sep: true, run: () => toggleSizes(), active: () => showSizes },
+    { id: 'image', icon: 'image', label: 'Insert image', run: () => fileInput?.click() },
+    { id: 'record', icon: 'mic', label: 'Record voice memo', run: () => onRecord(), active: () => recorder.recording },
+  ];
+
+  // .sep is 1px with 5px margins; phones hide it (see the media query below).
+  const SEP_W = 11;
+
+  /** Count the tools that fit the bar, leaving room for ⋯ when not all do. */
+  function measure() {
+    if (!barEl) return;
+    const first = barEl.querySelector('button');
+    if (!first) return;
+    const cs = getComputedStyle(barEl);
+    const avail = barEl.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const gap = parseFloat(cs.columnGap) || 0;
+    const btn = first.getBoundingClientRect().width;
+    const sepW = matchMedia('(max-width: 700px)').matches ? 0 : SEP_W;
+    const width = (n: number) => {
+      let w = 0;
+      for (let i = 0; i < n; i++) {
+        if (i > 0) w += gap;
+        if (i > 0 && tools[i].sep) w += sepW + gap;
+        w += btn;
+      }
+      return w;
+    };
+    if (width(tools.length) <= avail + 0.5) {
+      fit = tools.length;
+      return;
+    }
+    let k = tools.length - 1;
+    while (k > 0 && width(k) + gap + btn > avail + 0.5) k--;
+    fit = k;
+  }
+
+  onMount(() => {
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (barEl) ro.observe(barEl);
+    return () => ro.disconnect();
+  });
+
+  // Nothing folded, nothing to show in ⋯.
+  $effect(() => {
+    if (fit >= tools.length) {
+      showMore = false;
+      moreView = 'list';
+    }
+  });
+
   function toggleSizes() {
     if (!showSizes && sizeWrap) sizeMenuStyle = popoverStyle(sizeWrap, 168, 'center', barEl);
     showSizes = !showSizes;
   }
 
-  // Tapping anywhere else (including the text) closes the size menu.
+  function toggleMore() {
+    if (!showMore && moreWrap) moreStyle = popoverStyle(moreWrap, 200, 'end', barEl);
+    moreView = 'list';
+    showMore = !showMore;
+  }
+
+  function pick(t: Tool) {
+    if (t.id === 'size') {
+      moreView = 'size';
+      return;
+    }
+    showMore = false;
+    t.run();
+  }
+
+  function closeSizes() {
+    showSizes = false;
+    showMore = false;
+    moreView = 'list';
+  }
+
+  // Tapping anywhere else (including the text) closes the menus.
   function onGlobalPointerDown(e: PointerEvent) {
-    if (showSizes && sizeWrap && !sizeWrap.contains(e.target as Node)) showSizes = false;
+    const t = e.target as Node;
+    if (showSizes && sizeWrap && !sizeWrap.contains(t)) showSizes = false;
+    if (showMore && moreWrap && !moreWrap.contains(t)) showMore = false;
   }
 
   /** Insert a photo/image, downscaled so notes stay reasonably sized. */
@@ -47,14 +159,16 @@
     }
   }
 
-  function isActive(name: string, attrs?: Record<string, unknown>) {
-    void tick; // establish reactive dependency
-    return editor?.isActive(name, attrs) ?? false;
-  }
-
   function currentSize(): string {
     void tick;
     return (editor?.getAttributes('textStyle').fontSize ?? '').replace('px', '');
+  }
+
+  function recordLabel(): string {
+    return recorder.recording ? 'Stop recording' : 'Record voice memo';
+  }
+  function recordTitle(): string {
+    return recorder.recording ? `Stop recording (${recorder.seconds}s)` : 'Record voice memo';
   }
 
   // Format buttons leave the focus in the text. Taking it, they handed it
@@ -67,124 +181,110 @@
 
 <svelte:window onpointerdown={onGlobalPointerDown} />
 
-<div class="toolbar" bind:this={barEl}>
-  <button
-    data-testid="fmt-bold"
-    onmousedown={keepFocus}
-    class:active={isActive('bold')}
-    aria-pressed={isActive('bold')}
-    title="Bold (Ctrl+B)"
-    aria-label="Bold"
-    onclick={() => editor?.chain().focus().toggleBold().run()}
-  ><Icon name="bold" /></button>
-  <button
-    data-testid="fmt-italic"
-    onmousedown={keepFocus}
-    class:active={isActive('italic')}
-    aria-pressed={isActive('italic')}
-    title="Italic (Ctrl+I)"
-    aria-label="Italic"
-    onclick={() => editor?.chain().focus().toggleItalic().run()}
-  ><Icon name="italic" /></button>
-  <button
-    data-testid="fmt-underline"
-    onmousedown={keepFocus}
-    class:active={isActive('underline')}
-    aria-pressed={isActive('underline')}
-    title="Underline (Ctrl+U)"
-    aria-label="Underline"
-    onclick={() => editor?.chain().focus().toggleUnderline().run()}
-  ><Icon name="underline" /></button>
-  <button
-    data-testid="fmt-strike"
-    onmousedown={keepFocus}
-    class:active={isActive('strike')}
-    aria-pressed={isActive('strike')}
-    title="Strikethrough"
-    aria-label="Strikethrough"
-    onclick={() => editor?.chain().focus().toggleStrike().run()}
-  ><Icon name="strike" /></button>
-
-  <span class="sep"></span>
-
-  <button
-    data-testid="fmt-bullet"
-    onmousedown={keepFocus}
-    class:active={isActive('bulletList')}
-    aria-pressed={isActive('bulletList')}
-    title="Bullet list"
-    aria-label="Bullet list"
-    onclick={() => editor?.chain().focus().toggleBulletList().run()}
-  ><Icon name="bulletList" /></button>
-  <button
-    data-testid="fmt-checklist"
-    onmousedown={keepFocus}
-    class:active={isActive('taskList')}
-    aria-pressed={isActive('taskList')}
-    title="Checklist"
-    aria-label="Checklist"
-    onclick={() => editor?.chain().focus().toggleTaskList().run()}
-  ><Icon name="checklist" /></button>
-
-  <span class="sep"></span>
-
-  <button data-testid="fmt-draw" title="Draw a sketch" aria-label="Draw" onclick={onDraw}>
-    <Icon name="draw" />
-  </button>
-
-  <span class="sep"></span>
-
-  <div class="sizewrap" bind:this={sizeWrap}>
+{#snippet sizes(inline: boolean)}
+  <div class="sizemenu" class:inline style={inline ? '' : sizeMenuStyle} data-testid="size-menu">
     <button
-      data-testid="fmt-size"
-      class:active={showSizes}
-      aria-pressed={showSizes}
-      aria-expanded={showSizes}
-      title="Text size"
-      aria-label="Text size"
-      onclick={toggleSizes}
-    ><Icon name="textSize" /></button>
-    {#if showSizes}
-      <div class="sizemenu" style={sizeMenuStyle} data-testid="size-menu">
-        <button
-          class="sopt"
-          class:cur={currentSize() === ''}
-          onclick={() => {
-            editor?.chain().focus().unsetFontSize().run();
-            showSizes = false;
-          }}
-        >Auto</button>
-        {#each FONT_SIZES as s}
-          <button
-            class="sopt"
-            class:cur={currentSize() === String(s)}
-            onclick={() => {
-              editor?.chain().focus().setFontSize(`${s}px`).run();
-              showSizes = false;
-            }}
-          >{s}</button>
-        {/each}
-      </div>
-    {/if}
+      class="sopt"
+      class:cur={currentSize() === ''}
+      onclick={() => {
+        editor?.chain().focus().unsetFontSize().run();
+        closeSizes();
+      }}
+    >Auto</button>
+    {#each FONT_SIZES as s}
+      <button
+        class="sopt"
+        class:cur={currentSize() === String(s)}
+        onclick={() => {
+          editor?.chain().focus().setFontSize(`${s}px`).run();
+          closeSizes();
+        }}
+      >{s}</button>
+    {/each}
   </div>
+{/snippet}
 
-  <button
-    data-testid="fmt-image"
-    title="Insert image"
-    aria-label="Insert image"
-    onclick={() => fileInput?.click()}
-  ><Icon name="image" /></button>
-  <button
-    data-testid="fmt-record"
-    class="rec"
-    class:recording={recorder.recording}
-    aria-pressed={recorder.recording}
-    title={recorder.recording ? `Stop recording (${recorder.seconds}s)` : 'Record voice memo'}
-    aria-label={recorder.recording ? 'Stop recording' : 'Record voice memo'}
-    onclick={onRecord}
-  >
-    <Icon name={recorder.recording ? 'stop' : 'mic'} />
-  </button>
+<div class="toolbar" bind:this={barEl}>
+  {#each tools as t, i (t.id)}
+    {#if i < fit}
+      {#if t.sep && i > 0}<span class="sep"></span>{/if}
+      {#if t.id === 'size'}
+        <div class="sizewrap" bind:this={sizeWrap}>
+          <button
+            data-testid="fmt-size"
+            class:active={showSizes}
+            aria-pressed={showSizes}
+            aria-expanded={showSizes}
+            title="Text size"
+            aria-label="Text size"
+            onclick={toggleSizes}
+          ><Icon name="textSize" /></button>
+          {#if showSizes}{@render sizes(false)}{/if}
+        </div>
+      {:else if t.id === 'record'}
+        <button
+          data-testid="fmt-record"
+          class="rec"
+          class:recording={recorder.recording}
+          aria-pressed={recorder.recording}
+          title={recordTitle()}
+          aria-label={recordLabel()}
+          onclick={onRecord}
+        >
+          <Icon name={recorder.recording ? 'stop' : 'mic'} />
+        </button>
+      {:else}
+        <button
+          data-testid="fmt-{t.id}"
+          onmousedown={keepFocus}
+          class:active={t.active?.() ?? false}
+          aria-pressed={t.active ? t.active() : undefined}
+          title={t.title ?? t.label}
+          aria-label={t.label}
+          onclick={t.run}
+        ><Icon name={t.icon} /></button>
+      {/if}
+    {/if}
+  {/each}
+
+  {#if fit < tools.length}
+    <div class="morewrap" bind:this={moreWrap}>
+      <button
+        data-testid="fmt-overflow"
+        onmousedown={keepFocus}
+        class:active={showMore}
+        class:recording={recorder.recording}
+        aria-expanded={showMore}
+        aria-haspopup="menu"
+        title="More tools"
+        aria-label="More tools"
+        onclick={toggleMore}
+      ><Icon name="more" /></button>
+      {#if showMore}
+        <div class="moremenu" style={moreStyle} role="menu" data-testid="fmt-overflow-menu">
+          {#if moreView === 'size'}
+            {@render sizes(true)}
+          {:else}
+            {#each tools.slice(fit) as t (t.id)}
+              <button
+                class="mi"
+                class:active={t.id !== 'size' && (t.active?.() ?? false)}
+                class:recording={t.id === 'record' && recorder.recording}
+                role="menuitem"
+                data-testid="fmt-{t.id}"
+                onmousedown={keepFocus}
+                onclick={() => pick(t)}
+              >
+                <Icon name={t.id === 'record' && recorder.recording ? 'stop' : t.icon} />
+                <span>{t.id === 'record' ? recordLabel() : t.label}</span>
+              </button>
+            {/each}
+          {/if}
+        </div>
+      {/if}
+    </div>
+  {/if}
+
   <input
     type="file"
     accept="image/*"
@@ -248,7 +348,8 @@
     background: var(--note-fg);
     color: var(--note-bg);
   }
-  .sizewrap {
+  .sizewrap,
+  .morewrap {
     position: relative;
     display: inline-flex;
   }
@@ -264,6 +365,13 @@
     border: 1px solid var(--app-border);
     border-radius: var(--sticker-radius);
     box-shadow: var(--sticker-shadow);
+  }
+  /* The same grid as a page of the ⋯ menu: no second balloon. */
+  .sizemenu.inline {
+    position: static;
+    border: none;
+    box-shadow: none;
+    padding: 0;
   }
   .sopt {
     font: inherit;
@@ -284,6 +392,37 @@
     background: var(--app-fg);
     color: var(--app-panel);
   }
+  /* The ⋯ menu: the folded tools as rows, icon then name, in the app's
+     panel colours like every other menu. */
+  .moremenu {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--edge);
+    background: var(--app-panel);
+    border: 1px solid var(--app-border);
+    border-radius: var(--sticker-radius);
+    box-shadow: var(--sticker-shadow);
+  }
+  .toolbar .mi {
+    width: 100%;
+    height: auto;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 8px 10px;
+    color: var(--app-fg);
+    text-align: left;
+    white-space: nowrap;
+  }
+  @media (hover: hover) {
+    .toolbar .mi:hover {
+      background: var(--app-bg);
+    }
+  }
+  .toolbar .mi.active {
+    background: var(--app-fg);
+    color: var(--app-panel);
+  }
   .sep {
     width: 1px;
     height: 20px;
@@ -292,10 +431,11 @@
     flex-shrink: 0;
   }
   /* Recording: the button turns red (functional colour, not decoration),
-     stays one button wide, and stays red under a touch's sticky :hover. */
-  .rec.recording,
-  .rec.recording:hover,
-  .rec.recording:active {
+     stays one button wide, and stays red under a touch's sticky :hover.
+     Folded into ⋯ while recording, the ⋯ carries the red instead. */
+  .toolbar .recording,
+  .toolbar .recording:hover,
+  .toolbar .recording:active {
     background: var(--app-danger);
     color: #fff;
   }
