@@ -2051,6 +2051,24 @@ test('the sticky header: add, pinned, tuck and ⋯ (colour and transparency insi
   await expect(page.getByTestId('palette-chip').first()).toBeVisible();
 });
 
+test('a sticky archives its note from the ⋯ menu: archived, unpinned, out of the list', async ({ page }) => {
+  await createNote(page);
+  await typeInEditor(page, 'put away');
+  await page.waitForTimeout(500);
+  const id = await page.evaluate(
+    () => Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!.slice('notezzz:note:'.length)
+  );
+  await page.goto(`/sticky?id=${id}`);
+  await page.getByTestId('sticky-more').click();
+  await page.getByTestId('sticky-archive').click();
+  await expect(page.locator('.smenu')).toHaveCount(0);
+  await expect
+    .poll(async () => page.evaluate((k) => JSON.parse(localStorage.getItem(k)!), `notezzz:note:${id}`))
+    .toMatchObject({ archived: true, pinned: false });
+  await page.goto('/');
+  await expect(page.getByTestId('note-item')).toHaveCount(0);
+});
+
 test("undo and redo from the note's ⋯ menu", async ({ page }) => {
   await createNote(page);
   await typeInEditor(page, 'first');

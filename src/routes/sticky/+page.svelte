@@ -436,6 +436,14 @@
   async function unpin() {
     if (noteId) store.update(noteId, { pinned: false }); // closes this window
   }
+
+  /** Archive from the desktop: the note leaves the list and comes down off
+   *  the desktop (setArchived unpins it, which closes this window). It is
+   *  found again, with its Undo, in the main window's archive. */
+  function archive() {
+    pop = null;
+    if (noteId) store.setArchived(noteId, true);
+  }
 </script>
 
 <svelte:window onpointerdown={closeColorsOutside} />
@@ -573,6 +581,9 @@
               </button>
               <button class="mi" role="menuitem" data-testid="sticky-opacity" onclick={() => (pop = 'opacity')}>
                 <Icon name="opacity" /><span>Transparency</span><span class="mv">{Math.round(note.opacity * 100)}%</span>
+              </button>
+              <button class="mi" role="menuitem" data-testid="sticky-archive" onclick={archive}>
+                <Icon name="archive" /><span>Archive</span>
               </button>
             </div>
           {:else if pop === 'color'}
