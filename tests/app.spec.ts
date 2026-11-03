@@ -2738,6 +2738,34 @@ test("tapping a note's reminder opens that note, full screen", async ({ page }) 
 });
 
 
+test("the widget's + makes the note at once from the cached list, before the load has finished", async ({ page }) => {
+  await createNote(page);
+  await page.getByTestId('title-input').fill('Already here');
+  await page.waitForTimeout(600);
+  const w = (fn: string) => page.evaluate(fn);
+  // The load is still under way, but this device's cache has painted a list.
+  await w('window.__nzLoaded(false)');
+  await w("window.__nzTap({ action: 'new' })");
+  await expect(page.getByTestId('note-item')).toHaveCount(2);
+  await expect(page.getByTestId('exit-fullscreen')).toHaveCount(1);
+  await expect(page.getByTestId('title-input')).toHaveValue('');
+  // The load finishing must not make a second one.
+  await w('window.__nzLoaded(true)');
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('note-item')).toHaveCount(2);
+});
+
+test("with nothing cached, the widget's + waits for the load, then makes one note", async ({ page }) => {
+  const w = (fn: string) => page.evaluate(fn);
+  await w('window.__nzLoaded(false)');
+  await w("window.__nzTap({ action: 'new' })");
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('note-item')).toHaveCount(0);
+  await w('window.__nzLoaded(true)');
+  await expect(page.getByTestId('note-item')).toHaveCount(1);
+  await expect(page.getByTestId('exit-fullscreen')).toHaveCount(1);
+});
+
 test.describe('notes merge field by field', () => {
   type M = typeof import('../src/lib/noteMerge');
   const run = <T>(page: Page, fn: (m: M) => T) =>

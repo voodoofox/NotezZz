@@ -235,7 +235,12 @@
       pendingAct = null;
       store.activeId = act.id;
     } else {
-      if (!notesLoaded) return; // a new note belongs in the real list
+      // A fresh note goes in as soon as there is a list to put it in: the
+      // cached notes, when this device has them (the Drive load then merges
+      // around it, as around any unlanded write). Only a device with no
+      // cache waits for the load. It used to wait every time, and the +
+      // on the widget opened the app to several seconds of nothing.
+      if (!notesLoaded && !store.notes.length) return;
       pendingAct = null;
       const note = store.create();
       if (act.action === 'voice' || act.action === 'draw') {
@@ -366,6 +371,11 @@
       (w as unknown as { __nzTap: (a: WidgetAction) => void }).__nzTap = (a) => {
         pendingAct = a;
         runWidgetAction();
+      };
+      // The moment before the Drive load has finished, with whatever the cache painted.
+      (w as unknown as { __nzLoaded: (on: boolean) => void }).__nzLoaded = (on) => {
+        notesLoaded = on;
+        if (on) runWidgetAction();
       };
       // Sync progress, which ?local never shows on its own.
       (w as unknown as { __nzPulling: (on: boolean) => void }).__nzPulling = (on) => (store.pulling = on);
