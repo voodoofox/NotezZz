@@ -26,3 +26,6 @@ vite.config.ts.timestamp-*
 
 # agent worktrees
 /.claude/
+
+# Google Play service account key path (the key itself lives outside the repo)
+/play.env
