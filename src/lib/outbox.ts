@@ -87,7 +87,7 @@ export class Outbox {
   /** True while any op is queued or executing (failed-and-waiting doesn't count:
    *  a refresh must still run while the app is offline). */
   get busy(): boolean {
-    return this.#queued.size > 0 || this.#running.size > 0;
+    return this.#queued.size > 0 || this.#active.size > 0;
   }
 
   get failedCount(): number {
@@ -210,22 +210,28 @@ export class Outbox {
         const prior = this.#failed.get(id)?.attempts ?? 0;
         this.#active.set(id, op);
         this.#persist();
+        let ok = true;
+        let err: unknown;
         try {
           await this.#perform(op);
           this.#failed.delete(id);
-          this.#onSettle(true);
         } catch (e) {
+          ok = false;
+          err = e;
           const attempts = prior + 1;
           const wait = BACKOFF_MS[Math.min(attempts - 1, BACKOFF_MS.length - 1)];
           // Only remember the failure if nothing newer replaced it meanwhile.
           if (!this.#queued.has(id)) {
             this.#failed.set(id, { op, attempts, nextAt: Date.now() + wait });
           }
-          this.#onSettle(false, e);
-        } finally {
-          this.#active.delete(id);
         }
+        this.#active.delete(id);
         this.#persist();
+        // Told once the op is off the books: a listener asking whether
+        // anything is still unlanded gets the answer for AFTER this one. It
+        // used to be told with the op still counted, so the store's status
+        // stayed at "saving" until the next poll said otherwise.
+        this.#onSettle(ok, err);
       }
     })();
     this.#running.set(id, run);
