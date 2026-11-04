@@ -46,6 +46,12 @@ export interface Note {
    */
   remindAt?: number;
   /**
+   * Checklist items stay where they are when ticked. Off (the default), a
+   * ticked item sinks to the end of its list and an unticked one comes
+   * back up among the unticked.
+   */
+  keepTicked?: boolean;
+  /**
    * When each field last changed (epoch ms, by field name): copies merge
    * field by field, so an old copy can't undo a newer change to something
    * else (noteMerge.ts). Missing on notes saved before it existed.

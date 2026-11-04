@@ -579,6 +579,18 @@
               <button class="mi" role="menuitem" data-testid="sticky-color" onclick={() => (pop = 'color')}>
                 <Icon name="palette" /><span>Note color</span>
               </button>
+              <button
+                class="mi"
+                role="menuitemcheckbox"
+                aria-checked={!note.keepTicked}
+                data-testid="sticky-ticked"
+                onclick={() => {
+                  pop = null;
+                  if (noteId) store.update(noteId, { keepTicked: !note.keepTicked });
+                }}
+              >
+                <Icon name="checklist" /><span>Ticked items sink</span><span class="mv">{note.keepTicked ? 'Off' : 'On'}</span>
+              </button>
               <button class="mi" role="menuitem" data-testid="sticky-opacity" onclick={() => (pop = 'opacity')}>
                 <Icon name="opacity" /><span>Transparency</span><span class="mv">{Math.round(note.opacity * 100)}%</span>
               </button>
@@ -627,6 +639,7 @@
           bind:this={edit}
           html={note.contentHtml}
           baseSize={note.fontSize}
+          keepTicked={note.keepTicked}
           onChange={(html) => noteId && store.update(noteId, { contentHtml: html })}
         />
       {/key}

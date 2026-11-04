@@ -8,6 +8,7 @@
   import { TextStyle } from '@tiptap/extension-text-style';
   import { Image } from '@tiptap/extension-image';
   import { TaskList, TaskItem } from '@tiptap/extension-list';
+  import { ChecklistSink } from '$lib/editor/checklistSink';
   import { FontSize } from '../editor/fontSize';
   import { AudioNote } from '../editor/audio';
   import { AtomDelete } from '../editor/atomDelete';
@@ -26,9 +27,11 @@
     baseSize?: number;
     /** The note shown, so a tool requested for it (store.requestedTool) opens here. */
     noteId?: string;
+    /** Checklist items stay put when ticked (Note.keepTicked); off, they sink. */
+    keepTicked?: boolean;
   }
 
-  let { html, onChange, baseSize = BASE_FONT_PX, noteId }: Props = $props();
+  let { html, onChange, baseSize = BASE_FONT_PX, noteId, keepTicked = false }: Props = $props();
 
   let element: HTMLDivElement;
   let editor = $state<Editor | null>(null);
@@ -158,6 +161,7 @@
         Image.configure({ allowBase64: true }),
         TaskList,
         TaskItem.configure({ nested: true }),
+        ChecklistSink.configure({ enabled: () => !keepTicked }),
       ],
       content: html || '<p></p>',
       editorProps: {

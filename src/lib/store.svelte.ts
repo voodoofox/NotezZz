@@ -140,7 +140,7 @@ class AppStore {
   /** Notes whose stored copy lacks a change made here (see #merge). */
   #owedBack = new Set<string>();
   /** Note fields that change in one click, so their saves don't wait. */
-  static #SWITCHES = new Set(['tucked', 'paletteId', 'archived', 'remindAt', 'tilt']);
+  static #SWITCHES = new Set(['tucked', 'paletteId', 'archived', 'remindAt', 'tilt', 'keepTicked']);
   #autoTimer: ReturnType<typeof setInterval> | undefined;
   /** Refresh backoff after failed polls, so a rate limit isn't hammered. */
   #pollFailures = 0;

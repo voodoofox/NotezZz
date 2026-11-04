@@ -398,6 +398,19 @@
                 <Icon name="alarm" /><span>{note.remindAt ? 'Reminder' : 'Remind me'}</span>
                 {#if note.remindAt}<span class="mv">{fmtWhen(note.remindAt)}</span>{/if}
               </button>
+              <!-- Ticked checklist items sink to the end of their list, unless this note keeps its order. -->
+              <button
+                class="mi"
+                role="menuitemcheckbox"
+                aria-checked={!note.keepTicked}
+                data-testid="menu-ticked"
+                onclick={() => {
+                  openPop = null;
+                  store.update(note!.id, { keepTicked: !note!.keepTicked });
+                }}
+              >
+                <Icon name="checklist" /><span>Ticked items sink</span><span class="mv">{note.keepTicked ? 'Off' : 'On'}</span>
+              </button>
               {#if desktop && note.pinned}
                 <button class="mi" role="menuitem" data-testid="menu-opacity" onclick={() => fromMenu('opacity')}>
                   <Icon name="opacity" /><span>Transparency</span>
@@ -433,6 +446,7 @@
           html={note.contentHtml}
           baseSize={note.fontSize}
           noteId={note.id}
+          keepTicked={note.keepTicked}
           onChange={(html) => store.update(note!.id, { contentHtml: html })}
         />
       {/key}

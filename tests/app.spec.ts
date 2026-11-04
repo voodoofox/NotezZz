@@ -1298,13 +1298,85 @@ test('checklists: toggle from the toolbar, tick an item, and it survives a reloa
   await page.keyboard.type('bread');
   const items = page.locator('.ProseMirror ul[data-type="taskList"] > li');
   await expect(items).toHaveCount(2);
-  await items.first().locator('input[type="checkbox"]').check();
-  await expect(items.first()).toHaveAttribute('data-checked', 'true');
+  // A click, not check(): the ticked item sinks under bread, and check()
+  // would find the new first item unticked and click it too.
+  await items.first().locator('input[type="checkbox"]').click();
+  await expect(items.last()).toHaveAttribute('data-checked', 'true');
+  await expect(items.last()).toContainText('milk');
   await page.waitForTimeout(600); // the note's save debounce (400ms) has no observable hook
   await page.reload();
   await page.getByTestId('note-pick').first().click();
-  await expect(page.locator('.ProseMirror ul[data-type="taskList"] > li').first()).toHaveAttribute('data-checked', 'true');
-  await expect(page.locator('.ProseMirror ul[data-type="taskList"] > li').nth(1)).toHaveAttribute('data-checked', 'false');
+  await expect(page.locator('.ProseMirror ul[data-type="taskList"] > li').first()).toHaveAttribute('data-checked', 'false');
+  await expect(page.locator('.ProseMirror ul[data-type="taskList"] > li').nth(1)).toHaveAttribute('data-checked', 'true');
+});
+
+test.describe('checklists: ticked items sink', () => {
+  const items = (page: Page) => page.locator('.ProseMirror ul[data-type="taskList"] > li');
+  const texts = (page: Page) => items(page).locator('> div').allInnerTexts();
+  // A click, as a finger does it. Playwright's check() re-finds the element
+  // afterwards, and with the item gone to the end it would tick the next.
+  const tick = (page: Page, n: number) => items(page).nth(n).locator('input[type="checkbox"]').click();
+  async function shoppingList(page: Page) {
+    await createNote(page);
+    await page.locator('.ProseMirror').click();
+    await page.getByTestId('fmt-checklist').click();
+    await page.keyboard.type('milk');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('bread');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('eggs');
+    await expect(items(page)).toHaveCount(3);
+  }
+
+  test('a ticked item goes to the end of its list, an unticked one comes back up, and the order is saved', async ({ page }) => {
+    await shoppingList(page);
+    await tick(page, 0);
+    await expect.poll(() => texts(page)).toEqual(['bread', 'eggs', 'milk']);
+    await expect(items(page).last()).toHaveAttribute('data-checked', 'true');
+    // A second ticked one goes to the very end, under the first.
+    await tick(page, 0);
+    await expect.poll(() => texts(page)).toEqual(['eggs', 'milk', 'bread']);
+    // Unticked, milk comes back up: last of the unticked, above the ticked.
+    await tick(page, 1);
+    await expect.poll(() => texts(page)).toEqual(['eggs', 'milk', 'bread']);
+    await expect(items(page).nth(1)).toHaveAttribute('data-checked', 'false');
+    await page.waitForTimeout(600); // the next tick is its own undo step
+    // The caret goes along with the item that moved: typing continues there.
+    await items(page).first().locator('div').click();
+    await page.keyboard.press('End');
+    await tick(page, 0);
+    await page.waitForTimeout(600); // its own undo step, not grouped with the tick
+    await page.keyboard.type('!');
+    await expect.poll(() => texts(page)).toEqual(['milk', 'bread', 'eggs!']);
+    // One undo takes back the tick and the move together.
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('Control+z');
+    await expect.poll(() => texts(page)).toEqual(['eggs', 'milk', 'bread']);
+    await expect(items(page).first()).toHaveAttribute('data-checked', 'false');
+    // The order is what the note stores, so every device shows it.
+    await page.waitForTimeout(600);
+    await page.reload();
+    await page.getByTestId('note-pick').first().click();
+    await expect.poll(() => texts(page)).toEqual(['eggs', 'milk', 'bread']);
+  });
+
+  test("a note that keeps its order (⋯ menu) ticks items where they are", async ({ page }) => {
+    await shoppingList(page);
+    await page.getByTestId('note-more').click();
+    await expect(page.getByTestId('menu-ticked')).toHaveAttribute('aria-checked', 'true');
+    await page.getByTestId('menu-ticked').click();
+    await tick(page, 0);
+    await page.waitForTimeout(300);
+    await expect.poll(() => texts(page)).toEqual(['milk', 'bread', 'eggs']);
+    await expect(items(page).first()).toHaveAttribute('data-checked', 'true');
+    // The setting is the note's, kept with it.
+    await page.waitForTimeout(600);
+    await page.reload();
+    await page.getByTestId('note-pick').first().click();
+    await page.getByTestId('note-more').click();
+    await expect(page.getByTestId('menu-ticked')).toHaveAttribute('aria-checked', 'false');
+    await expect(page.getByTestId('menu-ticked')).toContainText('Off');
+  });
 });
 
 test('archive: a note leaves the list, waits in the archive, and comes back', async ({ page }) => {
