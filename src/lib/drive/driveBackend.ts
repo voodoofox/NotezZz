@@ -25,6 +25,12 @@ const FOLDER_MIME = 'application/vnd.google-apps.folder';
  *  first byte, and at 20s such notes failed on every try. */
 const BIG = 120_000;
 
+/** How often a poll lists the folder in full instead of reading the feed:
+ *  a check that nothing the feed skipped is left stale or kept. */
+const FULL_LIST_EVERY = 5 * 60_000;
+
+type FileMeta = { id: string; name: string; modifiedTime: string };
+
 async function authFetch(url: string, opts: RequestInit = {}, timeoutMs = 20_000): Promise<Response> {
   const tok = await token();
   const withAuth = (t: string): RequestInit => ({
@@ -239,35 +245,36 @@ export class DriveBackend implements StorageBackend {
   }
 
   /**
-   * Per-file cache keyed by Drive fileId. A poll lists the folder (one call)
-   * and downloads only files whose modifiedTime changed. Before this, every
-   * poll — every 6s, from every window — re-downloaded every note in full,
+   * Per-file cache keyed by Drive fileId. A poll asks Drive's changes feed
+   * what moved since the last poll (one small call) and downloads only
+   * those files, by their modifiedTime. Before the feed, every poll listed
+   * the whole folder; and before that, re-downloaded every note in full,
    * base64 images and voice memos included: about a megabyte per poll per
    * window on a sixteen-note account.
    */
   #files = new Map<string, { modifiedTime: string; note: Note }>();
 
+  /**
+   * Where this device last looked in the changes feed. Unset until a full
+   * listing has filled the cache, and dropped when Drive will no longer
+   * resume from it (too old), so the next poll lists in full again.
+   */
+  #changeToken: string | null = null;
+  /** When the folder was last listed in full. */
+  #listedAt = 0;
+
   async listNotes(): Promise<Note[]> {
     const folderId = await this.#notesFolder();
-    const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
-    type Meta = { id: string; name: string; modifiedTime: string };
-    const listed: Meta[] = [];
-    let pageToken: string | undefined;
-    do {
-      const page = pageToken ? `&pageToken=${pageToken}` : '';
-      const res = await authFetch(
-        `${API}/files?q=${q}&fields=nextPageToken,files(id,name,modifiedTime)&pageSize=1000${page}`
-      );
-      const body = (await res.json()) as { files?: Meta[]; nextPageToken?: string };
-      listed.push(...(body.files ?? []).filter((f) => String(f.name).endsWith('.json')));
-      pageToken = body.nextPageToken;
-    } while (pageToken);
-
-    // Forget files that are no longer there, then fetch what changed.
-    const liveIds = new Set(listed.map((f) => f.id));
-    for (const id of this.#files.keys()) if (!liveIds.has(id)) this.#files.delete(id);
-
-    const changed = listed.filter((f) => this.#files.get(f.id)?.modifiedTime !== f.modifiedTime);
+    // The feed is prompt where the folder listing is not: a listing comes
+    // from Drive's search index, and a file made on another device could
+    // take half a minute or more to appear in it (the phone showed a note
+    // the PC had made some 40 s later). The listing stays as the check:
+    // at the start, every few minutes, and whenever the feed won't resume.
+    let changed: FileMeta[] | null = null;
+    if (this.#changeToken && Date.now() - this.#listedAt < FULL_LIST_EVERY) {
+      changed = await this.#readChanges(folderId);
+    }
+    if (!changed) changed = await this.#listFolder(folderId);
     // A few at a time: all at once split a phone's bandwidth until the big
     // ones couldn't finish.
     const results: Array<'ok' | 'failed' | 'failed-net' | 'corrupt'> = [];
@@ -281,6 +288,9 @@ export class DriveBackend implements StorageBackend {
     // Retryable either way (the store retries quietly before saying so);
     // all-network failures say so, in the store's words.
     if (failed) {
+      // The feed has moved past these files: the next poll lists in full,
+      // where they still differ from the cache and are tried again.
+      this.#changeToken = null;
       const err = new Error(`Couldn't download ${failed} note(s) — will retry`);
       err.name = results.every((r) => r !== 'failed') ? 'NetworkError' : 'RetryableError';
       throw err;
@@ -312,6 +322,99 @@ export class DriveBackend implements StorageBackend {
       if (!note.deleted) notes.push(note);
     }
     return notes.sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  /**
+   * List the folder in full and settle the cache on it: files gone from the
+   * listing are forgotten. Returns the files to download. The feed's
+   * starting point is taken BEFORE the listing, so a change landing between
+   * the two is reported again (and found unchanged) rather than missed.
+   */
+  async #listFolder(folderId: string): Promise<FileMeta[]> {
+    let start: string | null = null;
+    try {
+      const res = await authFetch(`${API}/changes/startPageToken`);
+      start = ((await res.json()) as { startPageToken?: string }).startPageToken ?? null;
+    } catch (e) {
+      // Without a starting point every poll lists in full, as it used to;
+      // the listing below says whether Drive is reachable at all.
+      console.warn('[NotezZz] changes feed unavailable, listing instead', e);
+    }
+    const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
+    const listed: FileMeta[] = [];
+    let pageToken: string | undefined;
+    do {
+      const page = pageToken ? `&pageToken=${pageToken}` : '';
+      const res = await authFetch(
+        `${API}/files?q=${q}&fields=nextPageToken,files(id,name,modifiedTime)&pageSize=1000${page}`
+      );
+      const body = (await res.json()) as { files?: FileMeta[]; nextPageToken?: string };
+      listed.push(...(body.files ?? []).filter((f) => String(f.name).endsWith('.json')));
+      pageToken = body.nextPageToken;
+    } while (pageToken);
+
+    const liveIds = new Set(listed.map((f) => f.id));
+    for (const id of [...this.#files.keys()]) if (!liveIds.has(id)) this.#forgetFile(id);
+    this.#changeToken = start;
+    this.#listedAt = Date.now();
+    return listed.filter((f) => this.#files.get(f.id)?.modifiedTime !== f.modifiedTime);
+  }
+
+  /**
+   * What moved since the last poll, from Drive's changes feed: the notes
+   * to download, with files trashed, deleted or moved out of the folder
+   * forgotten on the way. Null when Drive no longer honours the token: the
+   * caller lists in full instead. Other failures (the network, Drive
+   * itself) are the caller's, as a listing's would be.
+   */
+  async #readChanges(folderId: string): Promise<FileMeta[] | null> {
+    type Change = {
+      fileId: string;
+      removed?: boolean;
+      file?: { id: string; name: string; modifiedTime: string; parents?: string[]; trashed?: boolean };
+    };
+    // A file changed more than once since last time is in the feed more
+    // than once: only where it ended up counts.
+    const seen = new Map<string, FileMeta>();
+    let token = this.#changeToken!;
+    for (;;) {
+      let body: { changes?: Change[]; nextPageToken?: string; newStartPageToken?: string };
+      try {
+        const res = await authFetch(
+          `${API}/changes?pageToken=${token}&pageSize=1000&includeRemoved=true` +
+            `&fields=nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,modifiedTime,parents,trashed))`
+        );
+        body = await res.json();
+      } catch (e) {
+        if (!/Drive API (400|404|410)/.test(String(e))) throw e;
+        this.#changeToken = null;
+        return null;
+      }
+      for (const c of body.changes ?? []) {
+        const f = c.file;
+        const ours =
+          !c.removed && f && !f.trashed && (f.parents ?? []).includes(folderId) && String(f.name).endsWith('.json');
+        if (ours) seen.set(f.id, { id: f.id, name: f.name, modifiedTime: f.modifiedTime });
+        else {
+          seen.delete(c.fileId);
+          this.#forgetFile(c.fileId);
+        }
+      }
+      if (!body.nextPageToken) {
+        this.#changeToken = body.newStartPageToken ?? token;
+        break;
+      }
+      token = body.nextPageToken;
+    }
+    // Held already at that modified time (this device's own writes among
+    // them) means nothing to fetch.
+    return [...seen.values()].filter((f) => this.#files.get(f.id)?.modifiedTime !== f.modifiedTime);
+  }
+
+  /** A file that is gone, trashed or no longer a note: out of the cache. */
+  #forgetFile(fileId: string) {
+    this.#files.delete(fileId);
+    for (const [noteId, id] of this.#ids) if (id === fileId) this.#ids.delete(noteId);
   }
 
   /** Fetch one file into the cache. Retries once; a corrupt file is skipped. */

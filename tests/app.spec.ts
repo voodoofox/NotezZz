@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { test, expect, type Page } from '@playwright/test';
+import { FakeDrive, openWithDrive } from './fakeDrive';
 
 // Start each test on a clean slate: local mode + empty storage.
 test.beforeEach(async ({ page }) => {
@@ -2913,6 +2914,113 @@ test.describe('sync between devices', () => {
     expect(html.split('shared link').length - 1).toBe(1);
     expect(html.split('second link').length - 1).toBe(1);
     expect(await ed.innerText()).toMatch(/^Links\s+shared link\s+second link$/);
+  });
+});
+
+test.describe("Drive: a poll reads the changes feed", () => {
+  // The folder listing comes from Drive's search index, and a note made on
+  // another device could take half a minute or more to show up in it. The
+  // feed reports it at once; the listing stays as the occasional check.
+  const note = (id: string, title: string, updatedAt: number) => ({
+    id,
+    title,
+    contentHtml: `<p>${title}</p>`,
+    paletteId: 'paper',
+    fontSize: 18,
+    pinned: false,
+    opacity: 1,
+    win: null,
+    createdAt: 1,
+    updatedAt,
+  });
+  const only = (drive: FakeDrive, call: string) => drive.calls.filter((c) => c === call).length;
+
+  test("a note made on another device arrives through the feed, not a fresh listing", async ({ page }) => {
+    const drive = new FakeDrive();
+    drive.putNote(note('n1', 'First', 1));
+    await openWithDrive(page, drive);
+    await expect(page.getByTestId('note-item')).toHaveCount(1);
+    // The load listed the folder once, having taken the feed's starting point.
+    expect(only(drive, 'list')).toBe(1);
+    expect(drive.calls.indexOf('startPageToken')).toBeLessThan(drive.calls.indexOf('list'));
+
+    drive.calls.length = 0;
+    drive.putNote(note('n2', 'From the PC', 2));
+    await syncAndSettle(page);
+    await expect(page.getByTestId('note-item')).toHaveCount(2);
+    expect(only(drive, 'changes')).toBe(1);
+    expect(only(drive, 'list')).toBe(0);
+    expect(only(drive, 'download')).toBe(1);
+
+    // Its edit comes the same way, and nothing else is fetched again.
+    drive.calls.length = 0;
+    drive.putNote(note('n2', 'From the PC, edited', 3));
+    await syncAndSettle(page);
+    await expect(page.getByTestId('note-item').filter({ hasText: 'From the PC, edited' })).toHaveCount(1);
+    expect(only(drive, 'download')).toBe(1);
+
+    // A poll with nothing new fetches nothing.
+    drive.calls.length = 0;
+    await syncAndSettle(page);
+    expect(only(drive, 'changes')).toBe(1);
+    expect(only(drive, 'download')).toBe(0);
+  });
+
+  test("this device's own writes come back through the feed as nothing to fetch", async ({ page }) => {
+    const drive = new FakeDrive();
+    drive.putNote(note('n1', 'Already there', 1)); // not an empty account: no welcome notes
+    await openWithDrive(page, drive);
+    await createNote(page);
+    await page.getByTestId('title-input').fill('Mine');
+    const landed = () => [...drive.files.values()].some((f) => f.name.endsWith('.json') && f.body.includes('"Mine"'));
+    await expect.poll(landed).toBe(true);
+    await expect(page.getByTestId('sync-arrows')).toHaveCount(0); // the write has been answered
+
+    drive.calls.length = 0;
+    await syncAndSettle(page);
+    expect(only(drive, 'changes')).toBe(1);
+    expect(only(drive, 'download')).toBe(0);
+    await expect(page.getByTestId('title-input')).toHaveValue('Mine');
+  });
+
+  test('a note binned on another device leaves the list on the next poll', async ({ page }) => {
+    const drive = new FakeDrive();
+    drive.putNote(note('n1', 'Stays', 1));
+    drive.putNote(note('n2', 'Goes', 2));
+    await openWithDrive(page, drive);
+    await expect(page.getByTestId('note-item')).toHaveCount(2);
+
+    drive.calls.length = 0;
+    drive.trashNote('n2');
+    await syncAndSettle(page);
+    await expect(page.getByTestId('note-item')).toHaveCount(1);
+    await expect(page.getByTestId('note-item')).toContainText('Stays');
+    expect(only(drive, 'list')).toBe(0);
+  });
+
+  test('a feed token Drive no longer honours falls back to a full listing, then resumes', async ({ page }) => {
+    const drive = new FakeDrive();
+    drive.putNote(note('n1', 'First', 1));
+    await openWithDrive(page, drive);
+    await expect(page.getByTestId('note-item')).toHaveCount(1);
+
+    // Drive refuses the token (too old): the note is found by listing instead.
+    drive.expireTokens = true;
+    drive.calls.length = 0;
+    drive.putNote(note('n2', 'Second', 2));
+    await syncAndSettle(page);
+    await expect(page.getByTestId('note-item')).toHaveCount(2);
+    expect(drive.calls.indexOf('changes')).toBeLessThan(drive.calls.indexOf('list'));
+    expect(only(drive, 'download')).toBe(1);
+
+    // With a fresh starting point from that listing, the feed is read again.
+    drive.expireTokens = false;
+    drive.calls.length = 0;
+    drive.putNote(note('n3', 'Third', 3));
+    await syncAndSettle(page);
+    await expect(page.getByTestId('note-item')).toHaveCount(3);
+    expect(only(drive, 'changes')).toBe(1);
+    expect(only(drive, 'list')).toBe(0);
   });
 });
 
