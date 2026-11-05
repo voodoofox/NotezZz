@@ -1328,7 +1328,7 @@ test.describe('checklists: ticked items sink', () => {
     await expect(items(page)).toHaveCount(3);
   }
 
-  test('a ticked item goes to the end of its list, an unticked one comes back up, and the order is saved', async ({ page }) => {
+  test('a ticked item goes to the end of its list, an unticked one goes back where it was, and the order is saved', async ({ page }) => {
     await shoppingList(page);
     await tick(page, 0);
     await expect.poll(() => texts(page)).toEqual(['bread', 'eggs', 'milk']);
@@ -1336,28 +1336,38 @@ test.describe('checklists: ticked items sink', () => {
     // A second ticked one goes to the very end, under the first.
     await tick(page, 0);
     await expect.poll(() => texts(page)).toEqual(['eggs', 'milk', 'bread']);
-    // Unticked, milk comes back up: last of the unticked, above the ticked.
-    await tick(page, 1);
-    await expect.poll(() => texts(page)).toEqual(['eggs', 'milk', 'bread']);
-    await expect(items(page).nth(1)).toHaveAttribute('data-checked', 'false');
+    // Unticked, milk goes back to the top, where it was.
     await page.waitForTimeout(600); // the next tick is its own undo step
+    await tick(page, 1);
+    await expect.poll(() => texts(page)).toEqual(['milk', 'eggs', 'bread']);
+    await expect(items(page).first()).toHaveAttribute('data-checked', 'false');
+    // Bread was second: back to second.
+    await page.waitForTimeout(600);
+    await tick(page, 2);
+    await expect.poll(() => texts(page)).toEqual(['milk', 'bread', 'eggs']);
+    await page.waitForTimeout(600);
     // The caret goes along with the item that moved: typing continues there.
     await items(page).first().locator('div').click();
     await page.keyboard.press('End');
     await tick(page, 0);
     await page.waitForTimeout(600); // its own undo step, not grouped with the tick
     await page.keyboard.type('!');
-    await expect.poll(() => texts(page)).toEqual(['milk', 'bread', 'eggs!']);
+    await expect.poll(() => texts(page)).toEqual(['bread', 'eggs', 'milk!']);
     // One undo takes back the tick and the move together.
     await page.keyboard.press('Control+z');
     await page.keyboard.press('Control+z');
-    await expect.poll(() => texts(page)).toEqual(['eggs', 'milk', 'bread']);
+    await expect.poll(() => texts(page)).toEqual(['milk', 'bread', 'eggs']);
     await expect(items(page).first()).toHaveAttribute('data-checked', 'false');
-    // The order is what the note stores, so every device shows it.
+    // The order is what the note stores, so every device shows it — and
+    // where a ticked item came from goes with it.
+    await tick(page, 1);
+    await expect.poll(() => texts(page)).toEqual(['milk', 'eggs', 'bread']);
     await page.waitForTimeout(600);
     await page.reload();
     await page.getByTestId('note-pick').first().click();
-    await expect.poll(() => texts(page)).toEqual(['eggs', 'milk', 'bread']);
+    await expect.poll(() => texts(page)).toEqual(['milk', 'eggs', 'bread']);
+    await tick(page, 2);
+    await expect.poll(() => texts(page)).toEqual(['milk', 'bread', 'eggs']);
   });
 
   test("a note that keeps its order (⋯ menu) ticks items where they are", async ({ page }) => {
