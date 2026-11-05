@@ -7,6 +7,13 @@
 //! floating on top. So we watch the foreground window ourselves: when it
 //! covers its whole monitor and isn't ours or the desktop shell, stickies go
 //! away; when it stops, they come back.
+//!
+//! A maximized window is not a fullscreen one, even when it covers the
+//! monitor: with the taskbar set to auto-hide, the work area is the whole
+//! screen, and every maximized app then reaches the screen's edges. Stickies
+//! hid behind a maximized browser on such a PC, for as long as it was in
+//! front. And the shell's own transient surfaces (Alt+Tab, Task View, the
+//! Start menu) cover the monitor for a moment; stickies blinked at each.
 
 use std::thread;
 use std::time::Duration;
@@ -19,7 +26,7 @@ fn foreground_is_fullscreen() -> bool {
         GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetClassNameW, GetForegroundWindow, GetWindowRect,
+        GetClassNameW, GetForegroundWindow, GetWindowRect, IsZoomed,
     };
 
     unsafe {
@@ -27,11 +34,26 @@ fn foreground_is_fullscreen() -> bool {
         if hwnd.is_null() {
             return false;
         }
-        // The desktop and the taskbar are monitor-sized too; they aren't apps.
+        // Maximized is not fullscreen (see above).
+        if IsZoomed(hwnd) != 0 {
+            return false;
+        }
+        // The desktop, the taskbars and the shell's overlays are monitor-sized
+        // too; they aren't apps.
         let mut class = [0u16; 64];
         let n = GetClassNameW(hwnd, class.as_mut_ptr(), class.len() as i32);
         let class = String::from_utf16_lossy(&class[..n.max(0) as usize]);
-        if matches!(class.as_str(), "Progman" | "WorkerW" | "Shell_TrayWnd") {
+        if matches!(
+            class.as_str(),
+            "Progman"
+                | "WorkerW"
+                | "Shell_TrayWnd"
+                | "Shell_SecondaryTrayWnd"
+                | "XamlExplorerHostIslandWindow"
+                | "MultitaskingViewFrame"
+                | "ForegroundStaging"
+                | "Windows.UI.Core.CoreWindow"
+        ) {
             return false;
         }
         let mut rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
@@ -76,13 +98,18 @@ fn foreground_is_ours(_app: &AppHandle) -> bool {
 pub fn watch(app: AppHandle) {
     thread::spawn(move || {
         let mut hidden = false;
+        // Ticks in a row the foreground has been fullscreen: a moment's
+        // monitor-sized window (a window being made, a switcher) is let pass.
+        let mut streak = 0u32;
         loop {
             thread::sleep(Duration::from_millis(700));
             let fullscreen = !foreground_is_ours(&app) && foreground_is_fullscreen();
-            if fullscreen == hidden {
+            streak = if fullscreen { streak + 1 } else { 0 };
+            let hide = streak >= 2;
+            if hide == hidden {
                 continue;
             }
-            hidden = fullscreen;
+            hidden = hide;
             for (label, win) in app.webview_windows() {
                 if !label.starts_with("sticky-") {
                     continue;
