@@ -31,6 +31,21 @@ const FULL_LIST_EVERY = 5 * 60_000;
 
 type FileMeta = { id: string; name: string; modifiedTime: string };
 
+/** The Drive file id of each note this device has seen, shared by its
+ *  windows and kept across launches. A window that opens for a note made a
+ *  moment ago (the sticky of a fresh note) has no listing to learn the file
+ *  from: a listing is a search, and a new file takes a while to be indexed.
+ *  With the id it asks for the file itself. */
+const IDS_KEY = 'notezzz:drive:ids';
+
+function loadIds(): Map<string, string> {
+  try {
+    return new Map(JSON.parse(localStorage.getItem(IDS_KEY) ?? '[]') as [string, string][]);
+  } catch {
+    return new Map();
+  }
+}
+
 async function authFetch(url: string, opts: RequestInit = {}, timeoutMs = 20_000): Promise<Response> {
   const tok = await token();
   const withAuth = (t: string): RequestInit => ({
@@ -89,7 +104,20 @@ export class DriveBackend implements StorageBackend {
   #notesFolderId: string | null = null;
   #notesFolderPromise: Promise<string> | null = null;
   #settingsId: string | null = null;
-  #ids = new Map<string, string>(); // noteId -> Drive fileId
+  #ids = loadIds(); // noteId -> Drive fileId
+
+  #know(noteId: string, fileId: string) {
+    this.#ids.set(noteId, fileId);
+    this.#rememberIds();
+  }
+
+  #rememberIds() {
+    try {
+      localStorage.setItem(IDS_KEY, JSON.stringify([...this.#ids]));
+    } catch {
+      /* private mode */
+    }
+  }
 
   // Memoize folder resolution so concurrent callers (listNotes + loadSettings
   // run in parallel at startup) can't each create a duplicate NotezZz folder.
@@ -321,6 +349,7 @@ export class DriveBackend implements StorageBackend {
       this.#ids.set(note.id, fileId);
       if (!note.deleted) notes.push(note);
     }
+    this.#rememberIds();
     return notes.sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
@@ -354,7 +383,21 @@ export class DriveBackend implements StorageBackend {
     } while (pageToken);
 
     const liveIds = new Set(listed.map((f) => f.id));
-    for (const id of [...this.#files.keys()]) if (!liveIds.has(id)) this.#forgetFile(id);
+    // A file this device knows that the listing lacks is not necessarily
+    // gone: the listing is a search, and a file made moments ago, here or
+    // on another device, is not in the index yet (for half a minute, at
+    // times for longer). Asked for by id, Drive knows it at once, and only
+    // its answer says gone. A window used to take the listing's word for
+    // it, and the sticky of a note pinned right after it was made closed
+    // itself 20 s on, the note being "deleted".
+    for (const id of new Set([...this.#files.keys(), ...this.#ids.values()])) {
+      if (liveIds.has(id)) continue;
+      const meta = await this.#fileMeta(id);
+      if (meta && !meta.trashed && meta.parents?.includes(folderId) && String(meta.name).endsWith('.json')) {
+        listed.push({ id: meta.id, name: meta.name, modifiedTime: meta.modifiedTime });
+        liveIds.add(id);
+      } else this.#forgetFile(id);
+    }
     this.#changeToken = start;
     this.#listedAt = Date.now();
     return listed.filter((f) => this.#files.get(f.id)?.modifiedTime !== f.modifiedTime);
@@ -415,6 +458,20 @@ export class DriveBackend implements StorageBackend {
   #forgetFile(fileId: string) {
     this.#files.delete(fileId);
     for (const [noteId, id] of this.#ids) if (id === fileId) this.#ids.delete(noteId);
+    this.#rememberIds();
+  }
+
+  /** One file's metadata by id; null when Drive has no such file for us. */
+  async #fileMeta(
+    id: string
+  ): Promise<{ id: string; name: string; modifiedTime: string; parents?: string[]; trashed?: boolean } | null> {
+    try {
+      const res = await authFetch(`${API}/files/${id}?fields=id,name,modifiedTime,parents,trashed`);
+      return (await res.json()) as { id: string; name: string; modifiedTime: string; parents?: string[]; trashed?: boolean };
+    } catch (e) {
+      if (/Drive API 404/.test(String(e))) return null;
+      throw e;
+    }
   }
 
   /** Fetch one file into the cache. Retries once; a corrupt file is skipped. */
@@ -451,7 +508,7 @@ export class DriveBackend implements StorageBackend {
     if (!fileId) return null;
     const res = await authFetch(`${API}/files/${fileId}?alt=media`, {}, BIG);
     const note = (await res.json()) as Note;
-    this.#ids.set(id, fileId);
+    this.#know(id, fileId);
     return note?.id ? note : null;
   }
 
@@ -465,7 +522,7 @@ export class DriveBackend implements StorageBackend {
     const folderId = await this.#notesFolder();
     const fileId = this.#ids.get(id) ?? (await this.#findByName(`${id}.json`, folderId));
     if (!fileId) return null;
-    this.#ids.set(id, fileId);
+    this.#know(id, fileId);
     const res = await authFetch(`${API}/files/${fileId}?fields=modifiedTime`);
     const { modifiedTime } = (await res.json()) as { modifiedTime: string };
     if (modifiedTime && this.#files.get(fileId)?.modifiedTime === modifiedTime) return 'seen';
@@ -485,7 +542,7 @@ export class DriveBackend implements StorageBackend {
     let modifiedTime: string;
     if (fileId) modifiedTime = await this.#update(fileId, note);
     else ({ id: fileId, modifiedTime } = await this.#create(`${note.id}.json`, folderId, note));
-    this.#ids.set(note.id, fileId);
+    this.#know(note.id, fileId);
     // Our own write must not look like a remote change on the next poll.
     this.#files.set(fileId, { modifiedTime, note });
   }
@@ -498,6 +555,7 @@ export class DriveBackend implements StorageBackend {
       this.#files.delete(fileId);
     }
     this.#ids.delete(id);
+    this.#rememberIds();
   }
 
   /** settings.json's modified time when this device last read or wrote it. */

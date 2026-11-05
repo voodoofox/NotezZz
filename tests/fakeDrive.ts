@@ -25,6 +25,10 @@ export class FakeDrive {
   calls: string[] = [];
   /** When set, every page token is refused as Drive refuses one too old. */
   expireTokens = false;
+  /** Files the folder listing and the search by name leave out, as Drive's
+   *  search index does for a while after a file is made (a fetch by id and
+   *  the changes feed still know them). */
+  unlisted = new Set<string>();
   notesFolder: string;
   #n = 0;
   #clock = Date.UTC(2026, 10, 4, 12, 0, 0);
@@ -116,6 +120,7 @@ export class FakeDrive {
       const files = [...this.files.values()].filter(
         (f) =>
           !f.trashed &&
+          !this.unlisted.has(f.id) &&
           (!name || f.name === name) &&
           (!parent || f.parents.includes(parent)) &&
           (!mime || f.mimeType === mime)

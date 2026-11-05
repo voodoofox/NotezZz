@@ -3038,6 +3038,45 @@ test.describe("Drive: a poll reads the changes feed", () => {
     expect(only(drive, 'download')).toBe(0);
   });
 
+  test("a note the listing hasn't caught up with stays, in a window that got it from the cache", async ({ page, context }) => {
+    // A sticky window opens the moment a note is pinned, paints the note from
+    // this device's cache and lists the folder — where a file made moments
+    // ago is not yet. The note is not gone; it is not indexed. The window
+    // took the listing's word for it after 20 s and closed itself.
+    const drive = new FakeDrive();
+    drive.putNote(note('n1', 'Already there', 1));
+    await openWithDrive(page, drive);
+    await createNote(page);
+    await page.getByTestId('title-input').fill('Fresh');
+    const landed = () => [...drive.files.values()].find((f) => f.name.endsWith('.json') && f.body.includes('"Fresh"'));
+    await expect.poll(landed).toBeTruthy();
+    await expect(page.getByTestId('sync-arrows')).toHaveCount(0);
+    drive.unlisted.add(landed()!.id);
+
+    const other = await context.newPage();
+    await openWithDrive(other, drive);
+    await expect(other.getByTestId('note-item')).toHaveCount(2);
+    await other.clock.install();
+    await other.clock.fastForward(25_000); // past the grace a local copy gets
+    await syncAndSettle(other);
+    await expect(other.getByTestId('note-item')).toHaveCount(2);
+    await expect(other.getByTestId('note-item').filter({ hasText: 'Fresh' })).toHaveCount(1);
+
+    // The window that made it, listing in full (the feed's token refused):
+    // the same.
+    drive.expireTokens = true;
+    await page.clock.install();
+    await page.clock.fastForward(25_000);
+    await syncAndSettle(page);
+    await expect(page.getByTestId('note-item')).toHaveCount(2);
+
+    // Only Drive's own answer says gone: the file deleted outright, the
+    // next listing asks after it, is told, and the note leaves.
+    drive.files.delete(landed()!.id);
+    await syncAndSettle(page);
+    await expect(page.getByTestId('note-item')).toHaveCount(1);
+  });
+
   test("this device's own writes come back through the feed as nothing to fetch", async ({ page }) => {
     const drive = new FakeDrive();
     drive.putNote(note('n1', 'Already there', 1)); // not an empty account: no welcome notes
