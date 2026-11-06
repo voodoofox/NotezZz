@@ -787,6 +787,11 @@ class AppStore {
     // write has landed (closing it mid-request would abort the request).
     void hideSticky(note.id);
     await this.#save($state.snapshot(note));
+    // Pinned again while the write was out: the pin showed this same hidden
+    // window again, and it stays. (The wait above runs until the note's
+    // queue is empty, so it also covered the pin's own write; closing here
+    // took the sticky away from a note still pinned.)
+    if (this.notes.find((n) => n.id === note.id)?.pinned) return;
     await closeSticky(note.id);
   }
 
