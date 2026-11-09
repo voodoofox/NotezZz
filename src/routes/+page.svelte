@@ -247,7 +247,7 @@
         store.requestedTool = { id: note.id, tool: act.action };
       }
     }
-    if ((page.state as { fs?: boolean }).fs !== true) pushState('', { fs: true });
+    if ((page.state as { fs?: boolean }).fs !== true) pushState('', { ...page.state, fs: true });
   }
 
   async function boot() {

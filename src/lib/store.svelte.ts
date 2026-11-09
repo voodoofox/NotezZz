@@ -10,7 +10,7 @@
 
 import { isDriveAccessError } from './drive/driveAccess';
 import { UNKNOWN_ACCOUNT } from './drive/account';
-import { BASE_FONT_PX, DEFAULT_NOTE_PX, DEFAULT_SETTINGS, cryptoId, newNote, rollTilt, type Note, type Settings } from './types';
+import { BASE_FONT_PX, DEFAULT_NOTE_PX, DEFAULT_SETTINGS, cryptoId, newNote, rollTilt, type Folder, type Note, type Settings } from './types';
 import { welcomeNotes } from './welcome';
 import { Outbox, type OutboxOp } from './outbox';
 import { mergeNotes, newerIn, noteRev, patchNote, withShare } from './noteMerge';
@@ -121,6 +121,8 @@ class AppStore {
 
   /** Phone layout: true while the note is expanded fullscreen (over the 40/60 split). */
   mobileOpen = $state(false);
+  /** The folder the list is showing (null: the main list). A new note goes in it. */
+  openFolder = $state<string | null>(null);
   /**
    * A tool the next editor for this note should open by itself: the voice and
    * draw buttons on the Android quick-add widget. The Editor showing note
@@ -140,7 +142,7 @@ class AppStore {
   /** Notes whose stored copy lacks a change made here (see #merge). */
   #owedBack = new Set<string>();
   /** Note fields that change in one click, so their saves don't wait. */
-  static #SWITCHES = new Set(['tucked', 'paletteId', 'archived', 'remindAt', 'tilt', 'keepTicked']);
+  static #SWITCHES = new Set(['tucked', 'paletteId', 'archived', 'remindAt', 'tilt', 'keepTicked', 'folder']);
   #autoTimer: ReturnType<typeof setInterval> | undefined;
   /** Refresh backoff after failed polls, so a rate limit isn't hammered. */
   #pollFailures = 0;
@@ -697,10 +699,13 @@ class AppStore {
     }
   }
 
-  create(): Note {
+  /** A new note, in `folder` when one is given (the list's + inside a folder). */
+  create(inFolder: string | null = null): Note {
+    const folder = this.folderById(inFolder)?.id;
     const note = newNote({
       paletteId: this.settings.defaultPaletteId,
       fontSize: this.settings.defaultFontSize,
+      ...(folder ? { folder } : {}),
     });
     this.notes = [note, ...this.notes];
     this.activeId = note.id;
@@ -891,6 +896,61 @@ class AppStore {
       this.activeId = this.notes.find((n) => !n.archived && n.id !== id)?.id ?? null;
       this.mobileOpen = false;
     }
+  }
+
+  // ---- folders ---------------------------------------------------------
+  // One level of folders. The list of them is a setting (it syncs like the
+  // note order); which folder a note is in is a field of the note, merged
+  // like its colour. A note whose folder is gone is in the main list.
+
+  /** The folders, A to Z (numbers in order: "Week 2" before "Week 10"). */
+  get folders(): Folder[] {
+    return [...(this.settings.folders ?? [])].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+    );
+  }
+
+  folderById(id: string | null | undefined): Folder | null {
+    if (!id) return null;
+    return (this.settings.folders ?? []).find((f) => f.id === id) ?? null;
+  }
+
+  /** The folder a note is in, if that folder still exists. */
+  folderOf(note: Note): Folder | null {
+    return this.folderById(note.folder);
+  }
+
+  /** A new folder by this name (or the one already called that). */
+  createFolder(name: string): Folder | null {
+    const clean = name.trim().slice(0, 60);
+    if (!clean) return null;
+    const all = this.settings.folders ?? [];
+    const same = all.find((f) => f.name.toLowerCase() === clean.toLowerCase());
+    if (same) return same;
+    const folder = { id: cryptoId(), name: clean };
+    void this.saveSettings({ folders: [...all, folder] });
+    return folder;
+  }
+
+  renameFolder(id: string, name: string) {
+    const clean = name.trim().slice(0, 60);
+    const all = this.settings.folders ?? [];
+    if (!clean || !all.some((f) => f.id === id)) return;
+    void this.saveSettings({ folders: all.map((f) => (f.id === id ? { ...f, name: clean } : f)) });
+  }
+
+  /** The folder goes; its notes stay, back in the main list. */
+  deleteFolder(id: string) {
+    for (const n of this.notes) if (n.folder === id) this.update(n.id, { folder: null });
+    void this.saveSettings({ folders: (this.settings.folders ?? []).filter((f) => f.id !== id) });
+    if (this.openFolder === id) this.openFolder = null;
+  }
+
+  /** Into a folder, or out of any (null). */
+  moveToFolder(noteId: string, folderId: string | null) {
+    const note = this.notes.find((n) => n.id === noteId);
+    if (!note || (note.folder ?? null) === folderId) return;
+    this.update(noteId, { folder: folderId });
   }
 
   /** The note just archived, while its Undo is on offer (UndoToast). */

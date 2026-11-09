@@ -52,6 +52,13 @@ export interface Note {
    */
   keepTicked?: boolean;
   /**
+   * The folder the note sits in (a Folder's id from Settings.folders); null
+   * or missing, or a folder that no longer exists: the main list. Apps from
+   * before folders carry it along untouched (notes merge over every field
+   * they find) and show the note in their one list.
+   */
+  folder?: string | null;
+  /**
    * When each field last changed (epoch ms, by field name): copies merge
    * field by field, so an old copy can't undo a newer change to something
    * else (noteMerge.ts). Missing on notes saved before it existed.
@@ -62,6 +69,12 @@ export interface Note {
 }
 
 import type { ThemeDef } from './theme';
+
+/** A folder of notes: one level, no nesting. Notes point to it by id. */
+export interface Folder {
+  id: string;
+  name: string;
+}
 
 export interface Settings {
   /** The active theme (theme.ts): a built-in id, or 'custom:…' from `themes`. */
@@ -91,6 +104,8 @@ export interface Settings {
   paletteEdits?: Record<string, import('./patterns.svelte').CustomPattern>;
   /** Note ids in the order the user arranged them; unlisted notes lead. */
   noteOrder?: string[];
+  /** The user's folders (shown by name, A to Z). */
+  folders?: Folder[];
   /** First-run welcome notes have been written; never write them again. */
   seeded?: boolean;
   /** When each setting last changed (epoch ms, by name): copies merge

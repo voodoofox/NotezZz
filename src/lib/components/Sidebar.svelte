@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { pushState, replaceState } from '$app/navigation';
+  import { page } from '$app/state';
   import { store } from '$lib/store.svelte';
   import { getPalette } from '$lib/palettes';
   import { filterNotes, noteLabel } from '$lib/text';
@@ -6,6 +8,7 @@
   import Settings from './Settings.svelte';
   import Icon from './Icon.svelte';
   import Lockup from './Lockup.svelte';
+  import FolderPicker from './FolderPicker.svelte';
   import { fade } from 'svelte/transition';
   import { updates } from '$lib/update.svelte';
   import { installUpdate } from '$lib/updater';
@@ -26,11 +29,51 @@
     if (showArchive && archivedCount === 0) showArchive = false;
   });
 
+  // ---- folders -----------------------------------------------------------
+  // The open folder is history state, as the phone's fullscreen note is: the
+  // back gesture leaves the folder instead of the app.
+  let stateFolder = $derived((page.state as { folder?: string }).folder ?? null);
+  $effect(() => {
+    store.openFolder = stateFolder;
+  });
+  /** The folder on screen (one deleted meanwhile, here or elsewhere, closes). */
+  let openFolder = $derived(showArchive ? null : store.folderById(store.openFolder));
+  let searchingNow = $derived(searching && !!query.trim());
+
+  function openFolderView(id: string) {
+    showArchive = false;
+    if (searching) toggleSearch();
+    pushState('', { ...page.state, folder: id });
+  }
+  function closeFolderView() {
+    if (!stateFolder) return;
+    history.back();
+    // The entry got lost (a reload inside the folder): clear it in place.
+    setTimeout(() => {
+      if ((page.state as { folder?: string }).folder) {
+        const { folder: _f, ...rest } = page.state as Record<string, unknown>;
+        replaceState('', rest);
+      }
+    }, 250);
+  }
+
+  /** Notes in each folder, archived ones aside. */
+  let folderCounts = $derived.by(() => {
+    const c = new Map<string, number>();
+    for (const n of store.notes) if (!n.archived && n.folder) c.set(n.folder, (c.get(n.folder) ?? 0) + 1);
+    return c;
+  });
+  /** The folders, under the main list's notes (not in a folder, the archive or a search). */
+  let shownFolders = $derived(openFolder || showArchive || searchingNow ? [] : store.folders);
+
   let visibleNotes = $derived.by(() => {
     if (dragOrder) return dragOrder;
-    // Search reaches everything, archived notes included.
-    if (searching && query.trim()) return filterNotes(store.notes, query);
-    return store.notes.filter((n) => !!n.archived === showArchive);
+    // Search reaches everything, archived notes and every folder included.
+    if (searchingNow) return filterNotes(store.notes, query);
+    if (showArchive) return store.notes.filter((n) => n.archived);
+    // The main list: the notes in no folder (or in one that is gone).
+    const here = openFolder?.id ?? null;
+    return store.notes.filter((n) => !n.archived && (store.folderOf(n)?.id ?? null) === here);
   });
 
   function toggleSearch() {
@@ -47,6 +90,9 @@
   // live let a background poll (which replaces the list) reorder the rows
   // under the pointer mid-drag.
   let dragOrder = $state<Note[] | null>(null);
+  // Dragged over a folder: dropped there, the note goes into it ('none': the
+  // open folder's own header, out of the folder) and the order stays as it was.
+  let dropFolder = $state<string | null>(null);
 
   /** The tuck button acts on the PC's sticky from anywhere; say so off the PC. */
   const tuckTitle = (on: boolean | undefined) =>
@@ -71,11 +117,13 @@
     const rows = [...listEl.querySelectorAll<HTMLElement>('[data-testid="note-item"]')];
     const from = dragOrder.findIndex((n) => n.id === dragId);
     if (from === -1) return;
+    const hit = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    const folder = hit?.closest<HTMLElement>('[data-folder-drop]');
+    dropFolder = folder?.dataset.folderDrop ?? null;
+    if (folder) return;
     // Drop on the row under the pointer (works for the multi-column grid);
     // between rows, fall back to "above the midpoint" as before.
-    const under = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>(
-      '[data-testid="note-item"]'
-    );
+    const under = hit?.closest<HTMLElement>('[data-testid="note-item"]');
     let to = under ? rows.indexOf(under) : -1;
     if (to === -1) {
       to = rows.findIndex((r) => {
@@ -95,9 +143,13 @@
 
   function endDrag() {
     if (!dragId) return;
+    const id = dragId;
     dragId = null;
     const order = dragOrder;
     dragOrder = null;
+    const into = dropFolder;
+    dropFolder = null;
+    if (into) return store.moveToFolder(id, into === 'none' ? null : into);
     if (!order) return;
     // Notes that arrived during the drag are not in the snapshot; they lead,
     // the same way #applyOrder treats unlisted notes.
@@ -195,8 +247,43 @@
 
   // Right-click (or long-press) on a row: what the row's buttons do, plus
   // archive, without opening the note first.
-  let rowMenu = $state<{ id: string; x: number; y: number } | null>(null);
+  let rowMenu = $state<{ id: string; x: number; y: number; folders?: boolean } | null>(null);
   let rowMenuNote = $derived(rowMenu ? store.notes.find((n) => n.id === rowMenu!.id) ?? null : null);
+  /** The row menu turns into the folder list (taller: kept on screen). */
+  function rowMenuFolders() {
+    if (!rowMenu) return;
+    rowMenu = { ...rowMenu, folders: true, y: Math.max(6, Math.min(rowMenu.y, window.innerHeight - 340)) };
+  }
+
+  // A folder's menu: right-click (or long-press) on it, or the header's ⋯.
+  let folderMenu = $state<{ id: string; x: number; y: number; renaming?: boolean } | null>(null);
+  let folderMenuFolder = $derived(folderMenu ? store.folderById(folderMenu.id) : null);
+  let renameValue = $state('');
+  let renameInput = $state<HTMLInputElement | null>(null);
+  $effect(() => {
+    if (folderMenu?.renaming) renameInput?.select();
+  });
+  function openFolderMenu(e: MouseEvent, id: string) {
+    e.preventDefault();
+    const w = 220;
+    const h = 140;
+    folderMenu = {
+      id,
+      x: Math.max(6, Math.min(e.clientX, window.innerWidth - w - 6)),
+      y: Math.max(6, Math.min(e.clientY, window.innerHeight - h - 6)),
+    };
+  }
+  function renameFolder() {
+    if (folderMenu) store.renameFolder(folderMenu.id, renameValue);
+    folderMenu = null;
+  }
+  function deleteFolder() {
+    const id = folderMenu?.id;
+    folderMenu = null;
+    if (!id) return;
+    if (openFolder?.id === id) closeFolderView();
+    store.deleteFolder(id);
+  }
   function openRowMenu(e: MouseEvent, note: Note) {
     e.preventDefault();
     const w = 220;
@@ -256,6 +343,7 @@
   // Row height, re-read when rows appear (the observer only sees the list box).
   $effect(() => {
     void visibleNotes.length;
+    void shownFolders.length;
     void columns;
     const row = listEl?.querySelector<HTMLElement>('[data-testid="note-item"]');
     if (row && row.offsetHeight) rowH = row.offsetHeight;
@@ -268,7 +356,7 @@
     if (set !== 'auto') return set;
     const fit = Math.max(1, Math.floor(Math.max(listH, listMaxH) / (rowH || 40)));
     const byWidth = Math.max(1, Math.floor(listW / MIN_COL_PX));
-    return Math.min(3, byWidth, Math.max(1, Math.ceil(visibleNotes.length / fit)));
+    return Math.min(3, byWidth, Math.max(1, Math.ceil((visibleNotes.length + shownFolders.length) / fit)));
   });
 
   $effect(() => {
@@ -297,9 +385,16 @@
 
 <svelte:window
   onpointerdown={(e) => {
-    if (rowMenu && !(e.target as HTMLElement).closest?.('.rowmenu')) rowMenu = null;
+    if (!(e.target as HTMLElement).closest?.('.rowmenu')) {
+      rowMenu = null;
+      folderMenu = null;
+    }
   }}
-  onkeydown={(e) => e.key === 'Escape' && (rowMenu = null)}
+  onkeydown={(e) => {
+    if (e.key !== 'Escape') return;
+    rowMenu = null;
+    folderMenu = null;
+  }}
 />
 
 <aside class="sidebar">
@@ -324,7 +419,13 @@
       <button class="ico" data-testid="open-settings" onclick={() => (showSettings = true)} title="Settings" aria-label="Settings">
         <Icon name="settings" />
       </button>
-      <button class="new" data-testid="new-note" onclick={() => store.create()} title="New note" aria-label="New note">
+      <button
+        class="new"
+        data-testid="new-note"
+        onclick={() => store.create(openFolder?.id ?? null)}
+        title={openFolder ? `New note in ${openFolder.name}` : 'New note'}
+        aria-label={openFolder ? `New note in ${openFolder.name}` : 'New note'}
+      >
         <Icon name="add" />
       </button>
     </div>
@@ -358,8 +459,30 @@
         <span class="spin"></span> Loading notes…
       </div>
     {/if}
+    {#if openFolder}
+      <div
+        class="folderhead"
+        class:drop={dropFolder === 'none'}
+        data-testid="folder-head"
+        data-folder-drop="none"
+        title={dragId ? 'Drop here to take it out of the folder' : undefined}
+      >
+        <button class="fback" data-testid="folder-back" onclick={closeFolderView} title="Back to all notes" aria-label="Back to all notes">
+          <Icon name="back" size={18} />
+        </button>
+        <span class="fname" data-testid="folder-name">{openFolder.name}</span>
+        <button
+          class="fmore"
+          data-testid="folder-more"
+          title="Rename or delete the folder"
+          aria-label="Folder options"
+          onclick={(e) => openFolderMenu(e, openFolder!.id)}
+        ><Icon name="more" /></button>
+      </div>
+    {/if}
     {#each visibleNotes as note (note.id)}
       {@const pal = getPalette(note.paletteId)}
+      {@const where = searchingNow || showArchive ? store.folderOf(note) : null}
       <!-- A pattern in exactly its own colours, as on its title bar: its
            pixels are what make it show, and lifting only its background
            (rowTone, for a dark one on the dark list) changed how it looked. -->
@@ -394,6 +517,7 @@
         ></span>
         <button class="pick" data-testid="note-pick" onclick={() => (store.activeId = note.id)}>
           <span class="title" data-testid="note-title">{noteLabel(note)}</span>
+          {#if where}<span class="where" data-testid="note-folder"><Icon name="folder" size={13} />{where.name}</span>{/if}
 
         </button>
         {#if note.remindAt}
@@ -426,13 +550,38 @@
       </div>
     {/each}
 
-    {#if store.loaded && store.notes.length === 0}
+    {#if shownFolders.length && visibleNotes.length}
+      <div class="fdiv" aria-hidden="true"></div>
+    {/if}
+    {#each shownFolders as f (f.id)}
+      <div
+        class="item folder"
+        class:drop={dropFolder === f.id}
+        data-testid="folder-item"
+        data-folder-drop={f.id}
+        role="listitem"
+        oncontextmenu={(e) => openFolderMenu(e, f.id)}
+      >
+        <button class="pick" data-testid="folder-open" onclick={() => openFolderView(f.id)}>
+          <span class="ficon"><Icon name="folder" size={18} /></span>
+          <span class="title" data-testid="folder-title">{f.name}</span>
+          <span class="count" data-testid="folder-count">{folderCounts.get(f.id) ?? 0}</span>
+        </button>
+      </div>
+    {/each}
+
+    {#if store.loaded && store.notes.length === 0 && !openFolder && !shownFolders.length}
       <p class="empty" data-testid="empty-state">No notes yet.<br />Hit + to create one.</p>
-    {:else if store.loaded && !visibleNotes.length && !showArchive && !(searching && query.trim())}
+    {:else if store.loaded && openFolder && !visibleNotes.length}
+      <p class="empty" data-testid="folder-empty">Nothing in here yet.<br />Hit + for a note in this folder,<br />or move one in from its menu.</p>
+    {:else if store.loaded && !visibleNotes.length && !shownFolders.length && !showArchive && !searchingNow}
       <p class="empty" data-testid="empty-state">Everything is archived.<br />Hit + for a fresh note.</p>
     {/if}
 
-    {#if archivedCount && !(searching && query.trim())}
+    <!-- A folder is made where a note is moved (Move to folder… → New
+         folder…): no standing line for it, which the list's height would
+         pay for on a phone. -->
+    {#if archivedCount && !openFolder && !searchingNow}
       <button class="archive-toggle" data-testid="archive-toggle" onclick={() => (showArchive = !showArchive)}>
         <Icon name={showArchive ? 'back' : 'archive'} size={16} />
         {showArchive ? 'Back to notes' : `Archive (${archivedCount})`}
@@ -478,6 +627,9 @@
 
 {#if rowMenu && rowMenuNote}
   <div class="rowmenu" role="menu" data-testid="row-menu" style="left: {rowMenu.x}px; top: {rowMenu.y}px">
+    {#if rowMenu.folders}
+      <FolderPicker noteId={rowMenuNote.id} onDone={() => (rowMenu = null)} />
+    {:else}
     <button class="mi" role="menuitem" data-testid="row-menu-pin" onclick={() => rowAction((n) => store.update(n.id, { pinned: !n.pinned }))}>
       <Icon name="pin" /><span>{rowMenuNote.pinned ? 'Unpin from the desktop' : 'Pin to the desktop'}</span>
     </button>
@@ -486,9 +638,49 @@
         <Icon name={rowMenuNote.tucked ? 'untuck' : 'tuck'} /><span>{rowMenuNote.tucked ? 'Bring it back' : 'Tuck away'}</span>
       </button>
     {/if}
+    <button class="mi" role="menuitem" data-testid="row-menu-folder" onclick={rowMenuFolders}>
+      <Icon name="moveToFolder" /><span>Move to folder…</span>
+    </button>
     <button class="mi" role="menuitem" data-testid="row-menu-archive" onclick={() => rowAction((n) => store.setArchived(n.id, !n.archived))}>
       <Icon name={rowMenuNote.archived ? 'unarchive' : 'archive'} /><span>{rowMenuNote.archived ? 'Unarchive' : 'Archive'}</span>
     </button>
+    {/if}
+  </div>
+{/if}
+
+{#if folderMenu && folderMenuFolder}
+  <div class="rowmenu" role="menu" data-testid="folder-menu" style="left: {folderMenu.x}px; top: {folderMenu.y}px">
+    {#if folderMenu.renaming}
+      <form
+        class="newfolder"
+        onsubmit={(e) => {
+          e.preventDefault();
+          renameFolder();
+        }}
+      >
+        <input
+          bind:this={renameInput}
+          bind:value={renameValue}
+          data-testid="folder-rename-input"
+          aria-label="Folder name"
+          maxlength="60"
+        />
+      </form>
+    {:else}
+      <button
+        class="mi"
+        role="menuitem"
+        data-testid="folder-menu-rename"
+        onclick={() => {
+          renameValue = folderMenuFolder!.name;
+          folderMenu = { ...folderMenu!, renaming: true };
+        }}
+      ><Icon name="draw" /><span>Rename</span></button>
+      <button class="mi danger" role="menuitem" data-testid="folder-menu-delete" onclick={deleteFolder}>
+        <Icon name="trash" /><span>Delete folder</span>
+      </button>
+      <p class="mhint">Its notes stay, back in the main list.</p>
+    {/if}
   </div>
 {/if}
 
@@ -917,6 +1109,126 @@
   }
   .archive-toggle:hover {
     color: var(--app-fg);
+  }
+  /* Renaming a folder, in its menu. */
+  .newfolder {
+    display: flex;
+  }
+  .newfolder input {
+    width: 100%;
+    font: inherit;
+    font-size: 15px;
+    padding: 6px 9px;
+    border: 1px solid var(--app-border);
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--app-fg);
+  }
+  .newfolder input:focus {
+    outline: none;
+    border-color: var(--app-fg);
+  }
+  .rowmenu .newfolder {
+    padding: 2px;
+  }
+  .rowmenu .mi.danger {
+    color: var(--app-danger);
+  }
+  .mhint {
+    margin: 2px 10px 4px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--app-muted);
+  }
+
+  /* Folders: under the notes, set apart by a line; a folder icon where a
+     note has its colour, the count where a note has its pin. */
+  .fdiv {
+    grid-column: 1 / -1;
+    margin-top: 6px;
+    border-top: 1px solid var(--app-border);
+  }
+  .ficon {
+    display: inline-flex;
+    flex: none;
+    opacity: 0.7;
+  }
+  .count {
+    flex: none;
+    width: var(--btn);
+    margin-right: var(--edge);
+    text-align: center;
+    font-size: 13px;
+    color: var(--app-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .item.drop,
+  .folderhead.drop {
+    background-color: var(--app-bg);
+    box-shadow: inset 0 0 0 2px var(--app-fg);
+  }
+  /* Inside a folder: its name on a bar over its notes, with the way back. */
+  .folderhead {
+    grid-column: 1 / -1;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: var(--bar-h);
+    background: var(--app-panel);
+    border-bottom: 1px solid var(--app-border);
+  }
+  .fback,
+  .fmore {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--btn);
+    height: var(--btn);
+    padding: 0;
+    border: none;
+    border-radius: var(--btn-radius);
+    background: transparent;
+    color: var(--app-fg);
+    cursor: pointer;
+  }
+  .fback {
+    margin-left: 4px;
+  }
+  .fmore {
+    margin-right: var(--edge);
+    opacity: 0.6;
+  }
+  .fback:hover,
+  .fmore:hover {
+    background: var(--app-bg);
+    opacity: 1;
+  }
+  .fname {
+    flex: 1;
+    min-width: 0;
+    font-size: 17px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* A search or the archive says which folder each note is in. */
+  .where {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    max-width: 40%;
+    margin-right: 8px;
+    font-size: 12px;
+    color: var(--app-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .empty {
     color: var(--app-muted);

@@ -6,6 +6,7 @@
   import { isDesktop } from '$lib/storage/backend';
   import { getPalette } from '$lib/palettes';
   import ColorPicker from './ColorPicker.svelte';
+  import FolderPicker from './FolderPicker.svelte';
   import Editor from './Editor.svelte';
   import Icon from './Icon.svelte';
 
@@ -35,7 +36,7 @@
   // Header popovers (colour, text size, transparency, reminder, the ⋯
   // menu), fixed-positioned so nothing clips them; any outside tap closes
   // them. All of them hang from the ⋯ button, right edges lined up.
-  type Pop = 'pal' | 'size' | 'opacity' | 'remind' | 'more';
+  type Pop = 'pal' | 'size' | 'opacity' | 'remind' | 'more' | 'folder';
   let openPop = $state<Pop | null>(null);
   let popStyle = $state('');
   let remindWrap = $state<HTMLElement | null>(null);
@@ -82,7 +83,7 @@
     }
   }
 
-  function fromMenu(which: 'pal' | 'size' | 'opacity' | 'remind') {
+  function fromMenu(which: 'pal' | 'size' | 'opacity' | 'remind' | 'folder') {
     openPop = null;
     togglePop(which);
   }
@@ -160,7 +161,10 @@
   function exitFullscreen() {
     history.back();
     setTimeout(() => {
-      if ((page.state as { fs?: boolean }).fs) replaceState('', {});
+      if ((page.state as { fs?: boolean }).fs) {
+        const { fs: _fs, ...rest } = page.state as Record<string, unknown>;
+        replaceState('', rest);
+      }
     }, 250);
   }
 
@@ -235,7 +239,7 @@
           data-testid="note-fullscreen"
           title="Expand note fullscreen"
           aria-label="Expand note fullscreen"
-          onclick={() => pushState('', { fs: true })}
+          onclick={() => pushState('', { ...page.state, fs: true })}
         ><Icon name="fullscreen" /></button>
       {/if}
       <input
@@ -363,6 +367,10 @@
               {/if}
               <p class="rhint">When it's time, your PC pins the note as a sticky and your phone shows a notification.</p>
             </div>
+          {:else if openPop === 'folder'}
+            <div class="pop menu" role="menu" style={popStyle}>
+              <FolderPicker noteId={note.id} onDone={() => (openPop = null)} />
+            </div>
           {:else if openPop === 'more'}
             <div class="pop menu" role="menu" style={popStyle} data-testid="note-menu">
               <!-- Undo, then Redo beneath it; the menu stays open for another step. -->
@@ -424,6 +432,10 @@
                   <span>{sharing === 'making' ? 'Making the picture…' : sharing === 'failed' ? "Couldn't share — try again" : 'Share as image'}</span>
                 </button>
               {/if}
+              <button class="mi" role="menuitem" data-testid="menu-folder" onclick={() => fromMenu('folder')}>
+                <Icon name="moveToFolder" /><span>Move to folder</span>
+                {#if store.folderOf(note)}<span class="mv clip">{store.folderOf(note)?.name}</span>{/if}
+              </button>
               <button class="mi" role="menuitem" data-testid="menu-archive" onclick={toggleArchive}>
                 <Icon name={note.archived ? 'unarchive' : 'archive'} />
                 <span>{note.archived ? 'Move back to notes' : 'Archive'}</span>
@@ -782,6 +794,12 @@
     margin-left: auto;
     font-size: 13px;
     color: var(--app-muted);
+  }
+  .mi .mv.clip {
+    max-width: 45%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .mi.danger {
     color: var(--app-danger);
