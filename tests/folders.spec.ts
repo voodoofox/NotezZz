@@ -254,19 +254,57 @@ test('an empty folder says how to fill it', async ({ page }) => {
   await expect(page.getByTestId('folder-empty')).toBeVisible();
 });
 
+const note = (id: string, title: string) => ({
+  id,
+  title,
+  contentHtml: `<p>${title}</p>`,
+  paletteId: 'paper',
+  fontSize: 18,
+  pinned: false,
+  opacity: 1,
+  win: null,
+  createdAt: 1,
+  updatedAt: 1,
+});
+
+test('a folder made while the app is still loading stays, here and on Drive', async ({ page }) => {
+  const drive = new FakeDrive();
+  drive.putNote(note('n1', 'Plan'));
+  drive.putNote(note('n2', 'Loose'));
+  await openWithDrive(page, drive);
+  await expect(page.getByTestId('note-item')).toHaveCount(2);
+  const settingsFile = () => [...drive.files.values()].find((f) => f.name === 'settings.json');
+  await expect.poll(settingsFile).toBeTruthy();
+  await expect(page.getByTestId('sync-arrows')).toHaveCount(0);
+
+  // Launched again, the settings download of the load is slow: the list is
+  // up from the cache, and a folder is made before the load has landed.
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  let held = false;
+  drive.holdDownload = (f) => {
+    if (f.name !== 'settings.json' || held) return;
+    held = true;
+    return gate;
+  };
+  await page.reload();
+  await expect(page.getByTestId('note-item')).toHaveCount(2);
+  await expect.poll(() => held).toBe(true);
+  await moveToNewFolder(page, 'Plan', 'Work');
+  await expect.poll(() => settingsFile()!.body).toContain('Work');
+
+  // The load lands, with the copy from before the folder.
+  release();
+  await expect(page.getByTestId('list-loading')).toHaveCount(0);
+  await expect(page.getByTestId('sync-arrows')).toHaveCount(0);
+  await expect(page.getByTestId('folder-title')).toHaveText(['Work']);
+  await expect(page.getByTestId('note-title')).toHaveText(['Loose']);
+  await page.evaluate(() => (window as unknown as { __nzSyncNow: () => Promise<void> }).__nzSyncNow());
+  await expect(page.getByTestId('folder-title')).toHaveText(['Work']);
+  expect(settingsFile()!.body).toContain('Work');
+});
+
 test('folders reach the other device, with their notes in them', async ({ page, browser }) => {
-  const note = (id: string, title: string) => ({
-    id,
-    title,
-    contentHtml: `<p>${title}</p>`,
-    paletteId: 'paper',
-    fontSize: 18,
-    pinned: false,
-    opacity: 1,
-    win: null,
-    createdAt: 1,
-    updatedAt: 1,
-  });
   const drive = new FakeDrive();
   drive.putNote(note('n1', 'Plan'));
   drive.putNote(note('n2', 'Loose'));

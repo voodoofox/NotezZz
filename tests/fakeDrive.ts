@@ -29,6 +29,9 @@ export class FakeDrive {
    *  search index does for a while after a file is made (a fetch by id and
    *  the changes feed still know them). */
   unlisted = new Set<string>();
+  /** A wait before a download is answered: its content is read when it is
+   *  asked for (as Drive does), and arrives after, as over a slow line. */
+  holdDownload: ((f: DriveFile) => Promise<void> | undefined) | null = null;
   notesFolder: string;
   #n = 0;
   #clock = Date.UTC(2026, 10, 4, 12, 0, 0);
@@ -168,7 +171,9 @@ export class FakeDrive {
       }
       if (url.searchParams.get('alt') === 'media') {
         this.calls.push('download');
-        return r.fulfill({ status: 200, contentType: 'application/json', body: f.body });
+        const body = f.body;
+        await this.holdDownload?.(f);
+        return r.fulfill({ status: 200, contentType: 'application/json', body });
       }
       this.calls.push('meta');
       const { body: _b, ...meta } = f;

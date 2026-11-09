@@ -180,6 +180,7 @@ class AppStore {
   }
 
   async init() {
+    this.#settingsChanged = false;
     // A returning Drive user's notes are already on this device. Paint them
     // BEFORE anything that can touch the network: choosing the backend below
     // is a chunk fetch, and on a phone with a slow radio it can take the
@@ -251,9 +252,18 @@ class AppStore {
       const [notes, settings] = await Promise.race([load, watchdog]);
       // Order lives here, so read it first. What is stored is the truth for
       // this account (what's in memory may be another account's: a sign-out
-      // re-inits here), except changes of ours the network dropped (a
-      // reorder, say): merged in, newer, and sent again.
-      if (settings) this.settings = this.#settingsOwed ? mergeSettings($state.snapshot(this.settings), settings) : settings;
+      // re-inits here), except changes of ours: ones the network dropped (a
+      // reorder, say), and ones made while this load was on its way (the
+      // list paints from the cache first, and a folder made in those seconds
+      // was wiped here, its note back in the main list; and with this
+      // device then sure it had seen the newest copy, it never came back).
+      // Merged in, newer, and sent again if the stored copy lacks them.
+      if (settings) {
+        const mine = $state.snapshot(this.settings);
+        const keep = this.#settingsOwed || this.#settingsChanged;
+        this.settings = keep ? mergeSettings(mine, settings) : settings;
+        if (keep && settingsNewerIn(mine, settings)) void this.saveSettings({});
+      }
       this.#migrateSettings();
       this.notes = this.#merge(notes);
       if (!this.activeId && this.notes.length) this.activeId = this.#defaultNote();
@@ -422,6 +432,8 @@ class AppStore {
   #retryStep = 0;
   /** A settings save the network dropped, sent again once it's back. */
   #settingsOwed = false;
+  /** A setting changed since this load began (see init). */
+  #settingsChanged = false;
 
   /**
    * Show a sync error. Network trouble on background work (polls, queued
@@ -1013,6 +1025,7 @@ class AppStore {
   }
 
   async saveSettings(patch: Partial<Settings>) {
+    this.#settingsChanged = true;
     // Each changed setting remembers when, so copies merge setting by setting.
     this.settings = patchSettings($state.snapshot(this.settings), patch);
     this.#cacheNotes();
