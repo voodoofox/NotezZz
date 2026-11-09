@@ -256,7 +256,7 @@ class AppStore {
       if (settings) this.settings = this.#settingsOwed ? mergeSettings($state.snapshot(this.settings), settings) : settings;
       this.#migrateSettings();
       this.notes = this.#merge(notes);
-      if (!this.activeId && this.notes.length) this.activeId = this.notes[0].id;
+      if (!this.activeId && this.notes.length) this.activeId = this.#defaultNote();
       if (!this.#outbox.busy) this.syncStatus = cloud ? 'synced' : 'local';
       this.#cacheNotes();
       this.#recovered();
@@ -365,7 +365,7 @@ class AppStore {
         // In the order the list settles on after the load, so the load only
         // adds and updates; it never reshuffles what is already showing.
         this.notes = dedupeById(cached).sort(orderedBy(this.settings.noteOrder ?? []));
-        if (!this.activeId) this.activeId = this.notes[0]?.id ?? null;
+        if (!this.activeId) this.activeId = this.#defaultNote();
         this.loaded = true;
       }
     } catch {
@@ -893,7 +893,7 @@ class AppStore {
     this.undoArchive = on ? { id, label: noteLabel(note), pinned: !!note.pinned } : null;
     this.update(id, patch);
     if (on && this.activeId === id) {
-      this.activeId = this.notes.find((n) => !n.archived && n.id !== id)?.id ?? null;
+      this.activeId = this.#nextBeside(note);
       this.mobileOpen = false;
     }
   }
@@ -946,11 +946,40 @@ class AppStore {
     if (this.openFolder === id) this.openFolder = null;
   }
 
-  /** Into a folder, or out of any (null). */
+  /**
+   * The note to open when none is chosen (a launch, the open one deleted
+   * elsewhere): the first in the main list, else the first in use. The list
+   * shows where the open note lives, so this decides where a launch lands.
+   */
+  #defaultNote(): string | null {
+    const live = this.notes.filter((n) => !n.archived);
+    return (live.find((n) => !this.folderOf(n)) ?? live[0])?.id ?? null;
+  }
+
+  /**
+   * After the open note leaves (archived, or deleted from the archive): the
+   * next one where it was — its folder, the main list, the archive — or
+   * none. Any note at all could be in another folder, and the list would
+   * follow it there.
+   */
+  #nextBeside(gone: Note): string | null {
+    const where = (n: Note) => (n.archived ? 'archive' : (this.folderOf(n)?.id ?? ''));
+    const at = where(gone);
+    return this.notes.find((n) => n.id !== gone.id && where(n) === at)?.id ?? null;
+  }
+
+  /**
+   * Into a folder, or out of any (null). An archived note filed in a folder
+   * comes back out of the archive: it is wanted again, and a folder lists
+   * only the notes in use (it used to stay archived, and its folder looked
+   * empty).
+   */
   moveToFolder(noteId: string, folderId: string | null) {
     const note = this.notes.find((n) => n.id === noteId);
-    if (!note || (note.folder ?? null) === folderId) return;
-    this.update(noteId, { folder: folderId });
+    if (!note) return;
+    const revive = !!folderId && !!note.archived;
+    if ((note.folder ?? null) === folderId && !revive) return;
+    this.update(noteId, revive ? { folder: folderId, archived: false } : { folder: folderId });
   }
 
   /** The note just archived, while its Undo is on offer (UndoToast). */
@@ -966,9 +995,10 @@ class AppStore {
   }
 
   async remove(id: string) {
+    const gone = this.notes.find((n) => n.id === id);
     this.notes = this.notes.filter((n) => n.id !== id);
     if (this.activeId === id) {
-      this.activeId = this.notes[0]?.id ?? null;
+      this.activeId = gone ? this.#nextBeside(gone) : this.#defaultNote();
       this.mobileOpen = false; // drop out of fullscreen after deleting on phones
     }
     // The debounce timer MUST die here. Left alive, it fired 400ms later,
@@ -1238,7 +1268,7 @@ class AppStore {
     if (sig(notes) !== sig(this.notes)) {
       this.notes = notes;
       if (this.activeId && !this.notes.some((n) => n.id === this.activeId)) {
-        this.activeId = this.notes[0]?.id ?? null;
+        this.activeId = this.#defaultNote();
       }
       this.#cacheNotes();
       // Hand what we just learned to this app's other windows. Whichever

@@ -5,7 +5,16 @@
   import { store } from '$lib/store.svelte';
   import Icon from './Icon.svelte';
 
-  let { noteId, onDone }: { noteId: string; onDone: () => void } = $props();
+  let {
+    noteId,
+    onDone,
+    beforeMove,
+  }: {
+    noteId: string;
+    onDone: () => void;
+    /** Told first, with where the note goes (the list's own menu keeps the list still). */
+    beforeMove?: (folderId: string | null) => void;
+  } = $props();
 
   let note = $derived(store.notes.find((n) => n.id === noteId) ?? null);
   let current = $derived(note ? (store.folderOf(note)?.id ?? null) : null);
@@ -18,6 +27,7 @@
   });
 
   function pick(id: string | null) {
+    beforeMove?.(id);
     store.moveToFolder(noteId, id);
     onDone();
   }
@@ -30,6 +40,9 @@
 
 <div class="picker" data-testid="folder-picker">
   <p class="head">Move to folder</p>
+  {#if note?.archived}
+    <p class="hint" data-testid="folder-pick-unarchives">It comes back out of the archive.</p>
+  {/if}
   {#each store.folders as f (f.id)}
     <button
       class="mi"
@@ -95,6 +108,12 @@
     font-size: 12px;
     letter-spacing: 0.04em;
     text-transform: uppercase;
+    color: var(--app-muted);
+  }
+  .hint {
+    margin: -2px 0 4px;
+    padding: 0 10px;
+    font-size: 12px;
     color: var(--app-muted);
   }
   .mi {

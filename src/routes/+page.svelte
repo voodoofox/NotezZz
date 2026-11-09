@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { store } from '$lib/store.svelte';
   import { isTauri, isDesktop, isMobile } from '$lib/storage/backend';
   import { restoreStickies } from '$lib/desktop';
@@ -247,7 +247,12 @@
         store.requestedTool = { id: note.id, tool: act.action };
       }
     }
-    if ((page.state as { fs?: boolean }).fs !== true) pushState('', { ...page.state, fs: true });
+    // Once the list has gone where the note lives (a folder is an entry of
+    // its own): fullscreen goes on top of it, so back leaves fullscreen into
+    // the note's folder, and back again to the main list.
+    void tick().then(() => {
+      if ((page.state as { fs?: boolean }).fs !== true) pushState('', { ...page.state, fs: true });
+    });
   }
 
   async function boot() {

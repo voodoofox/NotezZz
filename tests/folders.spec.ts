@@ -87,6 +87,10 @@ test("the note's own menu moves it too; a folder renames, and deleting it puts i
   await page.getByTestId('folder-new').click();
   await page.getByTestId('folder-new-name').fill('Wrok');
   await page.keyboard.press('Enter');
+  // Moved from its own menu: the list goes with it, into the folder.
+  await expect(page.getByTestId('folder-name')).toHaveText('Wrok');
+  await expect(page.getByTestId('note-title')).toHaveText(['Q4']);
+  await page.getByTestId('folder-back').click();
   await expect(page.getByTestId('note-item')).toHaveCount(0);
   await expect(page.getByTestId('folder-title')).toHaveText(['Wrok']);
   // Every note in a folder is no empty list.
@@ -138,6 +142,106 @@ test("a note dragged onto a folder goes in; dragged onto the folder's header, ou
   await page.getByTestId('folder-back').click();
   await expect(page.getByTestId('note-item')).toHaveCount(2);
   await expect(page.getByTestId('folder-count')).toHaveText('1');
+});
+
+test('an archived note filed in a folder comes back out of the archive, into the folder', async ({ page }) => {
+  await newNote(page, 'Stays');
+  await newNote(page, 'Brahmi');
+  await page.getByTestId('note-more').click();
+  await page.getByTestId('menu-archive').click();
+  await page.getByTestId('archive-toggle').click();
+  await row(page, 'Brahmi').click({ button: 'right' });
+  await page.getByTestId('row-menu-folder').click();
+  await expect(page.getByTestId('folder-pick-unarchives')).toBeVisible();
+  await page.getByTestId('folder-new').click();
+  await page.getByTestId('folder-new-name').fill('Health');
+  await page.keyboard.press('Enter');
+  // The archive emptied: back to the main list, the note in its folder.
+  await expect(page.getByTestId('archive-toggle')).toHaveCount(0);
+  await expect(page.getByTestId('note-title')).toHaveText(['Stays']);
+  await expect(page.getByTestId('folder-count')).toHaveText('1');
+  await page.getByTestId('folder-open').click();
+  await expect(page.getByTestId('note-title')).toHaveText(['Brahmi']);
+});
+
+test("a folder whose notes are all archived says where they are", async ({ page }) => {
+  await newNote(page, 'Old');
+  await moveToNewFolder(page, 'Old', 'Box');
+  await page.getByTestId('folder-open').click();
+  await page.getByTestId('note-pick').click();
+  await page.getByTestId('note-more').click();
+  await page.getByTestId('menu-archive').click();
+  await expect(page.getByTestId('folder-empty')).toContainText('archived note');
+});
+
+test('the list shows where the open note lives: its folder, or the archive', async ({ page }) => {
+  await newNote(page, 'Filed');
+  await newNote(page, 'Loose');
+  await moveToNewFolder(page, 'Filed', 'Work');
+  await newNote(page, 'Put away');
+  await page.getByTestId('note-more').click();
+  await page.getByTestId('menu-archive').click();
+  await expect(page.getByTestId('note-title')).toHaveText(['Loose']);
+  await expect(page.getByTestId('title-input')).toHaveValue('Loose');
+
+  // Opened from a search: the folder it is in.
+  await page.getByTestId('search-toggle').click();
+  await page.getByTestId('search-input').fill('filed');
+  await page.getByTestId('note-pick').click();
+  await page.getByTestId('search-toggle').click();
+  await expect(page.getByTestId('folder-name')).toHaveText('Work');
+  await expect(page.getByTestId('note-title')).toHaveText(['Filed']);
+
+  // An archived one: the archive, so it reads as archived.
+  await page.getByTestId('search-toggle').click();
+  await page.getByTestId('search-input').fill('put away');
+  await page.getByTestId('note-pick').click();
+  await page.getByTestId('search-toggle').click();
+  await expect(page.getByTestId('archive-toggle')).toHaveText(/Back to notes/);
+  await expect(page.getByTestId('note-title')).toHaveText(['Put away']);
+
+  // Brought back from the archive: the list follows it home.
+  await page.getByTestId('note-more').click();
+  await page.getByTestId('menu-archive').click();
+  await expect(page.getByTestId('note-title')).toHaveText(['Put away', 'Loose']);
+  await expect(page.getByTestId('folder-item')).toHaveCount(1);
+
+  // Moved from its own menu: the list goes with it.
+  await page.getByTestId('note-more').click();
+  await page.getByTestId('menu-folder').click();
+  await page.getByTestId('folder-pick').filter({ hasText: 'Work' }).click();
+  await expect(page.getByTestId('folder-name')).toHaveText('Work');
+  await expect(page.getByTestId('note-title')).toHaveText(['Put away', 'Filed']);
+
+  // A folder left by hand stays left, whatever note is showing.
+  await page.getByTestId('folder-back').click();
+  await expect(page.getByTestId('folder-name')).toHaveCount(0);
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('folder-name')).toHaveCount(0);
+});
+
+test('filing the open note from the list keeps the list where it is', async ({ page }) => {
+  await newNote(page, 'Other');
+  await newNote(page, 'Open one');
+  await moveToNewFolder(page, 'Open one', 'Box');
+  await expect(page.getByTestId('folder-name')).toHaveCount(0);
+  await expect(page.getByTestId('note-title')).toHaveText(['Other']);
+});
+
+test('archiving the open note in a folder opens the next one there, not one elsewhere', async ({ page }) => {
+  await newNote(page, 'Elsewhere');
+  await newNote(page, 'A');
+  await newNote(page, 'B');
+  await moveToNewFolder(page, 'A', 'Box');
+  await row(page, 'B').click({ button: 'right' });
+  await page.getByTestId('row-menu-folder').click();
+  await page.getByTestId('folder-pick').filter({ hasText: 'Box' }).click();
+  await page.getByTestId('folder-open').click();
+  await row(page, 'A').getByTestId('note-pick').click();
+  await page.getByTestId('note-more').click();
+  await page.getByTestId('menu-archive').click();
+  await expect(page.getByTestId('folder-name')).toHaveText('Box');
+  await expect(page.getByTestId('title-input')).toHaveValue('B');
 });
 
 test('an empty folder says how to fill it', async ({ page }) => {

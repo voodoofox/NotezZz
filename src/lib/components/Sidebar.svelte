@@ -10,6 +10,7 @@
   import Lockup from './Lockup.svelte';
   import FolderPicker from './FolderPicker.svelte';
   import { fade } from 'svelte/transition';
+  import { untrack } from 'svelte';
   import { updates } from '$lib/update.svelte';
   import { installUpdate } from '$lib/updater';
   import { isDesktop } from '$lib/storage/backend';
@@ -57,12 +58,60 @@
     }, 250);
   }
 
+  // The list shows where the open note lives: its folder, the archive, or
+  // the main list. It follows when another note opens (from a search, the
+  // quick switcher, a widget, a launch) or the open one moves; a folder or
+  // the archive opened by hand stays on screen until then. An archived note
+  // used to open over the main list, with nothing to say it was archived.
+  let shownFor = '';
+  $effect(() => {
+    const id = store.activeId;
+    const note = id ? store.notes.find((n) => n.id === id) : null;
+    if (!note) return;
+    const where = note.archived ? 'archive' : (store.folderOf(note)?.id ?? '');
+    const key = `${note.id}|${where}`;
+    if (key === shownFor) return;
+    shownFor = key;
+    untrack(() => showWhere(where));
+  });
+  /**
+   * A move made in the list (its row menu, a drag) leaves the list where it
+   * is, even for the open note: filing notes one after another shouldn't
+   * jump into each folder. The note's own menu moves it and the list follows.
+   */
+  function holdListFor(noteId: string, folderId: string | null) {
+    const note = store.notes.find((n) => n.id === noteId);
+    if (!note || noteId !== store.activeId) return;
+    const where = folderId ?? (note.archived ? 'archive' : '');
+    shownFor = `${noteId}|${where}`;
+  }
+  /** Show the main list (''), the archive, or a folder (by id). */
+  function showWhere(where: string) {
+    showArchive = where === 'archive';
+    const folder = where === 'archive' ? '' : where;
+    if ((stateFolder ?? '') === folder) return;
+    const { folder: _f, ...rest } = page.state as Record<string, unknown>;
+    try {
+      // Into a folder from the main list: an entry of its own, so back
+      // leaves it. Anything else is the same entry, changed in place (also
+      // under a fullscreen note: an entry pushed over it would take a back
+      // that changes nothing on screen).
+      const fs = (page.state as { fs?: boolean }).fs === true;
+      if (folder && !stateFolder && !fs) pushState('', { ...rest, folder });
+      else replaceState('', folder ? { ...rest, folder } : rest);
+    } catch {
+      /* the router isn't up yet (first paint): the list stays as it is */
+    }
+  }
+
   /** Notes in each folder, archived ones aside. */
   let folderCounts = $derived.by(() => {
     const c = new Map<string, number>();
     for (const n of store.notes) if (!n.archived && n.folder) c.set(n.folder, (c.get(n.folder) ?? 0) + 1);
     return c;
   });
+  /** Archived notes of the open folder: they wait in the Archive. */
+  let archivedHere = $derived(openFolder ? store.notes.filter((n) => n.archived && n.folder === openFolder!.id).length : 0);
   /** The folders, under the main list's notes (not in a folder, the archive or a search). */
   let shownFolders = $derived(openFolder || showArchive || searchingNow ? [] : store.folders);
 
@@ -149,7 +198,10 @@
     dragOrder = null;
     const into = dropFolder;
     dropFolder = null;
-    if (into) return store.moveToFolder(id, into === 'none' ? null : into);
+    if (into) {
+      holdListFor(id, into === 'none' ? null : into);
+      return store.moveToFolder(id, into === 'none' ? null : into);
+    }
     if (!order) return;
     // Notes that arrived during the drag are not in the snapshot; they lead,
     // the same way #applyOrder treats unlisted notes.
@@ -573,7 +625,14 @@
     {#if store.loaded && store.notes.length === 0 && !openFolder && !shownFolders.length}
       <p class="empty" data-testid="empty-state">No notes yet.<br />Hit + to create one.</p>
     {:else if store.loaded && openFolder && !visibleNotes.length}
-      <p class="empty" data-testid="folder-empty">Nothing in here yet.<br />Hit + for a note in this folder,<br />or move one in from its menu.</p>
+      <p class="empty" data-testid="folder-empty">
+        {#if archivedHere}
+          Nothing here but {archivedHere === 1 ? 'an archived note' : `${archivedHere} archived notes`}:<br />
+          {archivedHere === 1 ? "it's" : "they're"} in the Archive, under the main list.
+        {:else}
+          Nothing in here yet.<br />Hit + for a note in this folder,<br />or move one in from its menu.
+        {/if}
+      </p>
     {:else if store.loaded && !visibleNotes.length && !shownFolders.length && !showArchive && !searchingNow}
       <p class="empty" data-testid="empty-state">Everything is archived.<br />Hit + for a fresh note.</p>
     {/if}
@@ -628,7 +687,11 @@
 {#if rowMenu && rowMenuNote}
   <div class="rowmenu" role="menu" data-testid="row-menu" style="left: {rowMenu.x}px; top: {rowMenu.y}px">
     {#if rowMenu.folders}
-      <FolderPicker noteId={rowMenuNote.id} onDone={() => (rowMenu = null)} />
+      <FolderPicker
+        noteId={rowMenuNote.id}
+        onDone={() => (rowMenu = null)}
+        beforeMove={(f) => holdListFor(rowMenuNote!.id, f)}
+      />
     {:else}
     <button class="mi" role="menuitem" data-testid="row-menu-pin" onclick={() => rowAction((n) => store.update(n.id, { pinned: !n.pinned }))}>
       <Icon name="pin" /><span>{rowMenuNote.pinned ? 'Unpin from the desktop' : 'Pin to the desktop'}</span>
