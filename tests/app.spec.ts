@@ -3143,6 +3143,157 @@ test.describe("Drive: a poll reads the changes feed", () => {
     expect(only(drive, 'changes')).toBe(1);
     expect(only(drive, 'list')).toBe(0);
   });
+
+  test('an edit to a note another device has just deleted lands, and says nothing', async ({ page }) => {
+    const drive = new FakeDrive();
+    drive.putNote(note('n1', 'Stays', 1));
+    drive.putNote(note('n2', 'Mid-edit', 2));
+    await openWithDrive(page, drive);
+    await expect(page.getByTestId('note-item')).toHaveCount(2);
+    await expect(page.getByTestId('sync-arrows')).toHaveCount(0);
+
+    // Deleted elsewhere since this device last looked. Its edit used to
+    // fail with Drive's "File not found", again at every retry.
+    drive.removeNote('n2');
+    await page.getByTestId('note-item').filter({ hasText: 'Mid-edit' }).click();
+    await page.getByTestId('title-input').fill('Mid-edit, and on');
+    await expect.poll(() => drive.noteBody('n2')?.title).toBe('Mid-edit, and on');
+    await expect(page.getByTestId('sync-arrows')).toHaveCount(0);
+    await expect(page.getByTestId('sync-error')).toHaveCount(0);
+    // The poll that brings news of the delete finds the note written since.
+    await syncAndSettle(page);
+    await expect(page.getByTestId('note-item')).toHaveCount(2);
+    await expect(page.getByTestId('sync-error')).toHaveCount(0);
+  });
+
+  test('deleting a note another device has deleted already is done, not an error', async ({ page }) => {
+    const drive = new FakeDrive();
+    drive.putNote(note('n1', 'Stays', 1));
+    drive.putNote(note('n2', 'Goes twice', 2));
+    await openWithDrive(page, drive);
+    await expect(page.getByTestId('note-item')).toHaveCount(2);
+    await expect(page.getByTestId('sync-arrows')).toHaveCount(0);
+
+    drive.removeNote('n2');
+    type Hook = { __nzStore: { remove(id: string): Promise<void>; unsettled: string[] } };
+    await page.evaluate(() => void (window as unknown as Hook).__nzStore.remove('n2'));
+    await expect(page.getByTestId('note-item')).toHaveCount(1);
+    await expect.poll(() => page.evaluate(() => (window as unknown as Hook).__nzStore.unsettled)).toEqual([]);
+    await expect(page.getByTestId('sync-error')).toHaveCount(0);
+    expect(drive.refused.filter((r) => r.includes('DELETE'))).toHaveLength(1);
+  });
+
+  test('opened with no connection, the app catches up once there is one', async ({ page }) => {
+    const drive = new FakeDrive();
+    const line = { offline: false };
+    drive.putNote(note('n1', 'First', 1));
+    await openWithDrive(page, drive, line);
+    await expect(page.getByTestId('note-item')).toHaveCount(1);
+    await expect(page.getByTestId('sync-arrows')).toHaveCount(0);
+
+    // Launched out of reach: the list is up from this device's own copy,
+    // and the look for the Drive folder fails. (That failure was kept, and
+    // answered every later try: no sync until the app was started again.)
+    line.offline = true;
+    const failed = page.waitForEvent('requestfailed', (r) => r.url().includes('googleapis.com'));
+    await page.reload();
+    await failed;
+    await expect(page.getByTestId('note-item')).toHaveCount(1);
+
+    drive.putNote(note('n2', 'From the PC', 2));
+    line.offline = false;
+    await page.evaluate(() => void window.dispatchEvent(new Event('online')));
+    await expect(page.getByTestId('note-item')).toHaveCount(2, { timeout: 15_000 });
+    await expect(page.getByTestId('sync-error')).toHaveCount(0);
+  });
+
+  type Store = {
+    create(folder: string | null): { id: string };
+    update(id: string, patch: Record<string, unknown>): void;
+    flush(): void;
+    unsettled: string[];
+  };
+  const owed = (page: Page) => page.evaluate(() => localStorage.getItem('notezzz:outbox') ?? '');
+
+  test('a note read in a poll that then failed is not written over by the next edit to it', async ({ page }) => {
+    const drive = new FakeDrive();
+    drive.putNote(note('n1', 'Plan', 1));
+    drive.putNote(note('n2', 'Other', 2));
+    await openWithDrive(page, drive);
+    await expect(page.getByTestId('note-item')).toHaveCount(2);
+    await expect(page.getByTestId('sync-arrows')).toHaveCount(0);
+
+    // Both changed on another device. This one's poll reads the first; the
+    // second never arrives, so the poll fails and neither is taken in.
+    drive.putNote(note('n1', 'Plan, renamed elsewhere', 50));
+    const second = drive.putNote(note('n2', 'Other, too', 51));
+    drive.drop = (_method, url) => url.pathname.endsWith(`/${second.id}`) && url.searchParams.get('alt') === 'media';
+    await syncAndSettle(page);
+    await expect(page.getByTestId('note-title').filter({ hasText: 'renamed elsewhere' })).toHaveCount(0);
+
+    // The first gets a colour here. Drive's copy of it had been read, so the
+    // write took it for seen and put the note back with its old title.
+    await page.evaluate(() => {
+      const s = (window as unknown as { __nzStore: Store }).__nzStore;
+      s.update('n1', { paletteId: 'coral' });
+      s.flush();
+    });
+    await expect.poll(() => drive.noteBody('n1')?.paletteId).toBe('coral');
+    expect(drive.noteBody('n1')?.title).toBe('Plan, renamed elsewhere');
+    await expect(page.getByTestId('note-title').filter({ hasText: 'Plan, renamed elsewhere' })).toHaveCount(1);
+  });
+
+  test("a change made in a launch's first moments does not lose the writes the last one still owed", async ({ page }) => {
+    const drive = new FakeDrive();
+    const line = { offline: false };
+    drive.putNote(note('n1', 'First', 1));
+    await openWithDrive(page, drive, line);
+    await expect(page.getByTestId('note-item')).toHaveCount(1);
+    await expect(page.getByTestId('sync-arrows')).toHaveCount(0);
+
+    // A note made out of reach, and the app closed with it still owed.
+    line.offline = true;
+    const made = await page.evaluate(() => {
+      const s = (window as unknown as { __nzStore: Store }).__nzStore;
+      const n = s.create(null);
+      s.update(n.id, { title: 'Made off line' });
+      s.flush();
+      return n.id;
+    });
+    await expect.poll(() => owed(page)).toContain('Made off line');
+
+    // The next launch, in reach but slow to get going (the code that talks
+    // to Drive is still on its way): the list is up from this device's own
+    // copy, and a note gets a colour before the owed writes were picked up.
+    // Noting that change down used to wipe them: the note made off line
+    // was never sent, and left the list at the first poll.
+    let letThrough!: () => void;
+    const held = new Promise<void>((res) => (letThrough = res));
+    await page.route('**/driveBackend.ts*', async (r) => {
+      await held;
+      await r.continue();
+    });
+    try {
+      line.offline = false;
+      await page.reload();
+      await expect(page.getByTestId('note-item')).toHaveCount(2);
+      const waiting = await page.evaluate(() => {
+        const s = (window as unknown as { __nzStore: Store }).__nzStore;
+        s.update('n1', { paletteId: 'coral' });
+        s.flush();
+        return s.unsettled;
+      });
+      expect(waiting).toContain('choosing storage');
+      await expect.poll(() => owed(page)).toContain('coral');
+    } finally {
+      letThrough();
+    }
+    await expect.poll(() => drive.noteBody(made)?.title).toBe('Made off line');
+    await expect.poll(() => drive.noteBody('n1')?.paletteId).toBe('coral');
+    await syncAndSettle(page);
+    await expect(page.getByTestId('note-item')).toHaveCount(2);
+    expect(await owed(page)).toBe('');
+  });
 });
 
 test.describe("restyling the picker's own colours and patterns", () => {

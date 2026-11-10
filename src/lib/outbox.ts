@@ -68,6 +68,17 @@ export class Outbox {
   #key = KEY;
   /** Ops that threw, waiting for their retry window. */
   #failed = new Map<string, Failed>();
+  /**
+   * What the last page load left in the mirror, until restore() has queued
+   * it (null: not read yet). The list is on screen, from this device's own
+   * copy, before the app has its storage and calls restore(); a change made
+   * in those moments is mirrored at once, and the mirror used to be written
+   * from this page's ops alone. A note made with no connection, the app
+   * closed, and one tap as it next opened: the note was never sent, and left
+   * the list at the first poll.
+   */
+  #left: OutboxOp[] | null = null;
+  #restored = false;
   #perform: (op: OutboxOp) => Promise<void>;
   #onSettle: (ok: boolean, error?: unknown) => void;
 
@@ -175,12 +186,33 @@ export class Outbox {
   /** A sticky window: mirror under its own key (see #key). Call before restore(). */
   isolate(label: string): void {
     this.#key = `${KEY}:${label}`;
+    this.#left = null;
+  }
+
+  #leftBehind(): OutboxOp[] {
+    if (this.#left) return this.#left;
+    let ops: unknown = [];
+    try {
+      ops = JSON.parse(localStorage.getItem(this.#key) ?? '[]');
+    } catch {
+      /* unreadable, or private mode: nothing was left */
+    }
+    return (this.#left = Array.isArray(ops) ? (ops as OutboxOp[]) : []);
   }
 
   restore(): void {
-    const keys = [this.#key];
+    // Asked again (Reconnect starts the app over): what was stored is in
+    // the queue already; what failed gets another go.
+    if (this.#restored) {
+      this.retryAll();
+      return;
+    }
+    const ops = [...this.#leftBehind()];
+    this.#restored = true;
+    this.#left = null;
     // The main window also picks up what stickies closed mid-write left.
     if (this.#key === KEY) {
+      const keys: string[] = [];
       try {
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i);
@@ -189,17 +221,24 @@ export class Outbox {
       } catch {
         /* private mode */
       }
-    }
-    for (const key of keys) {
-      let ops: OutboxOp[] = [];
-      try {
-        ops = JSON.parse(localStorage.getItem(key) ?? '[]');
-        if (key !== this.#key) localStorage.removeItem(key);
-      } catch {
-        continue;
+      for (const key of keys) {
+        try {
+          const theirs = JSON.parse(localStorage.getItem(key) ?? '[]');
+          localStorage.removeItem(key);
+          if (Array.isArray(theirs)) ops.push(...theirs);
+        } catch {
+          continue;
+        }
       }
-      for (const op of ops) void this.push(op);
     }
+    for (const op of ops) {
+      // This page has a write of its own for it by now: that one is later
+      // (and a stored save must never take the place of a delete).
+      const id = opId(op);
+      if (this.#queued.has(id) || this.#active.has(id) || this.#failed.has(id)) continue;
+      void this.push(op);
+    }
+    this.#persist();
   }
 
   async #drain(id: string): Promise<void> {
@@ -243,8 +282,10 @@ export class Outbox {
   }
 
   #persist(): void {
-    // Latest per id wins on restore, so queued ops come after active ones.
+    // Latest per id wins on restore, so queued ops come after active ones,
+    // and both after what the last page load left (see #left).
     const byId = new Map<string, OutboxOp>();
+    if (!this.#restored) for (const op of this.#leftBehind()) byId.set(opId(op), op);
     for (const op of this.#active.values()) byId.set(opId(op), op);
     for (const f of this.#failed.values()) byId.set(opId(f.op), f.op);
     for (const op of this.#queued.values()) byId.set(opId(op), op);

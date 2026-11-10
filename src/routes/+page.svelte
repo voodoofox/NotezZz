@@ -370,6 +370,8 @@
     if (import.meta.env.DEV) {
       const w = window as unknown as { __nzSyncNow?: () => Promise<void>; __nzFireReminders?: () => void };
       w.__nzSyncNow = () => store.syncNow();
+      // The store itself, for the many-devices run (tests/syncSim.spec.ts).
+      (w as unknown as { __nzStore: typeof store }).__nzStore = store;
       // The desktop's reminder tick, callable where the desktop loop doesn't run.
       w.__nzFireReminders = () => store.fireDueReminders();
       // A widget or reminder tap, as MainActivity hands it over.

@@ -14,7 +14,7 @@ import { BASE_FONT_PX, DEFAULT_NOTE_PX, DEFAULT_SETTINGS, cryptoId, newNote, rol
 import { welcomeNotes } from './welcome';
 import { Outbox, type OutboxOp } from './outbox';
 import { mergeNotes, newerIn, noteRev, patchNote, withShare } from './noteMerge';
-import { mergeSettings, patchSettings, sameSettings, settingsNewerIn } from './settingsMerge';
+import { mergeFolders, mergeSettings, patchSettings, sameSettings, settingsNewerIn } from './settingsMerge';
 import type { StorageBackend } from './storage/backend';
 import { isTauri, isDesktop } from './storage/backend';
 import { noteLabel } from './text';
@@ -41,7 +41,11 @@ function dedupeById(notes: Note[]): Note[] {
  */
 /** Newest first: by when a note was made, never by when it was last edited
  *  (that moved notes around on every sync and every reload). */
-const newestFirst = (a: Note, b: Note) => (b.createdAt || b.updatedAt) - (a.createdAt || a.updatedAt);
+const newestFirst = (a: Note, b: Note) =>
+  (b.createdAt || b.updatedAt) - (a.createdAt || a.updatedAt) ||
+  // Made in the same moment (the welcome notes): by id, the same way round
+  // on every device. It used to be whichever happened to arrive first.
+  (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
 function orderedBy(anchor: string[]): (a: Note, b: Note) => number {
   const pos = new Map(anchor.map((id, i) => [id, i]));
@@ -170,6 +174,22 @@ class AppStore {
     return this.#backend?.kind === 'drive';
   }
 
+  /** What is on its way to storage or back, or owed to it: nothing, when
+   *  the app is at rest (the many-devices test waits for that before it
+   *  compares the devices, and names what never finished). */
+  get unsettled(): string[] {
+    const out: string[] = [];
+    if (this.#starting) out.push(this.#starting);
+    if (!this.loaded) out.push('loading');
+    if (this.#timers.size) out.push('typing');
+    if (this.#outbox.failedCount) out.push('failed writes');
+    else if (this.#outbox.busy) out.push('writes');
+    if (this.#lanes.size) out.push(`lanes ${[...this.#lanes.keys()].join(' ')}`);
+    if (this.#reloading) out.push('a reload');
+    if (this.#settingsOwed) out.push('settings owed');
+    return out;
+  }
+
   /** True while this note has a local change that hasn't landed in storage. */
   #pending(id: string): boolean {
     return this.#timers.has(id) || this.#outbox.has(id);
@@ -179,7 +199,20 @@ class AppStore {
     return this.#deleted.has(id) || this.#outbox.isDeleting(id);
   }
 
+  /** How far a launch has got, while there is one: the list can be up
+   *  (from this device's own copy) long before it is over. */
+  #starting: 'choosing storage' | 'first load' | null = null;
+
   async init() {
+    this.#starting = 'choosing storage';
+    try {
+      await this.#start();
+    } finally {
+      this.#starting = null;
+    }
+  }
+
+  async #start() {
     this.#settingsChanged = false;
     // A returning Drive user's notes are already on this device. Paint them
     // BEFORE anything that can touch the network: choosing the backend below
@@ -219,6 +252,7 @@ class AppStore {
       return;
     }
     this.#clearReboot();
+    this.#starting = 'first load';
     const cloud = this.#backend.kind === 'drive';
     if (cloud && !this.#account) {
       // Who is this? (PC/Android: the stored sign-in; web: the email Drive
@@ -245,26 +279,21 @@ class AppStore {
     try {
       // Watchdog: whatever goes wrong below, "Loading…" may never be forever —
       // surface an error (with its Reconnect button) instead.
-      const load = Promise.all([this.#backend.listNotes(), this.#backend.loadSettings()]);
+      // The settings are taken in the moment they arrive, not once the
+      // notes are in as well: the backend fetches them again only when
+      // they have changed since, so from a load whose notes then failed
+      // (or took too long) this device never got them.
+      const backend = this.#backend;
+      const load = Promise.all([
+        backend.listNotes(),
+        backend.loadSettings().then((settings) => {
+          if (this.#backend === backend) this.#takeSettings(settings);
+        }),
+      ]);
       const watchdog = new Promise<never>((_, rej) =>
         setTimeout(() => rej(new Error('Loading timed out — check your connection and retry.')), 45_000)
       );
-      const [notes, settings] = await Promise.race([load, watchdog]);
-      // Order lives here, so read it first. What is stored is the truth for
-      // this account (what's in memory may be another account's: a sign-out
-      // re-inits here), except changes of ours: ones the network dropped (a
-      // reorder, say), and ones made while this load was on its way (the
-      // list paints from the cache first, and a folder made in those seconds
-      // was wiped here, its note back in the main list; and with this
-      // device then sure it had seen the newest copy, it never came back).
-      // Merged in, newer, and sent again if the stored copy lacks them.
-      if (settings) {
-        const mine = $state.snapshot(this.settings);
-        const keep = this.#settingsOwed || this.#settingsChanged;
-        this.settings = keep ? mergeSettings(mine, settings) : settings;
-        if (keep && settingsNewerIn(mine, settings)) void this.saveSettings({});
-      }
-      this.#migrateSettings();
+      const [notes] = await Promise.race([load, watchdog]);
       this.notes = this.#merge(notes);
       if (!this.activeId && this.notes.length) this.activeId = this.#defaultNote();
       if (!this.#outbox.busy) this.syncStatus = cloud ? 'synced' : 'local';
@@ -275,6 +304,37 @@ class AppStore {
     }
     this.loaded = true;
     this.#markReady();
+  }
+
+  /**
+   * The stored settings, as a launch finds them (null: none stored yet).
+   * What is stored is the truth for this account (what's in memory may be
+   * another account's: a sign-out re-inits here), except changes of ours:
+   * ones the network dropped (a reorder, say), and ones made while this
+   * load was on its way (the list paints from the cache first, and a folder
+   * made in those seconds was wiped here, its note back in the main list;
+   * and with this device then sure it had seen the newest copy, it never
+   * came back). Merged in, newer, and sent again if the stored copy lacks
+   * them. The same for this account's settings as this device last had
+   * them (its cache): a folder made, and the app closed or the connection
+   * gone before it was sent, was in the cache and nowhere else, and the
+   * next launch dropped it for the stored copy.
+   */
+  #takeSettings(settings: Settings | null) {
+    const known = !!this.#account && this.#settingsOf === this.#account;
+    if (settings) {
+      const mine = $state.snapshot(this.settings);
+      const changed = this.#settingsOwed || this.#settingsChanged;
+      this.settings = changed ? mergeSettings(mine, settings) : known ? mergeSettings(settings, mine) : settings;
+      if ((changed || known) && settingsNewerIn(mine, settings)) void this.saveSettings({});
+    }
+    this.#settingsOf = this.#account;
+    this.#migrateSettings();
+    // The order lives here. The notes are sorted by it when they arrive;
+    // the ones on screen till then (or for good, if they don't) are now.
+    const sorted = [...this.notes].sort(orderedBy(this.settings.noteOrder ?? []));
+    if (sorted.some((n, i) => n.id !== this.notes[i].id)) this.notes = sorted;
+    if (known) this.#cacheNotes();
   }
 
   /**
@@ -369,7 +429,10 @@ class AppStore {
       }
       // Settings first: the order lives there.
       const cachedSettings = localStorage.getItem(SETTINGS_CACHE_KEY);
-      if (cachedSettings) this.settings = { ...this.settings, ...JSON.parse(cachedSettings) };
+      if (cachedSettings) {
+        this.settings = { ...this.settings, ...JSON.parse(cachedSettings) };
+        this.#settingsOf = owner;
+      }
       const cached = JSON.parse(localStorage.getItem(CACHE_KEY) ?? '[]') as Note[];
       if (cached.length) {
         // In the order the list settles on after the load, so the load only
@@ -434,6 +497,9 @@ class AppStore {
   #settingsOwed = false;
   /** A setting changed since this load began (see init). */
   #settingsChanged = false;
+  /** Whose settings are in memory: the account they were cached or loaded
+   *  for (null: nobody's yet, or not a Drive account's). */
+  #settingsOf: string | null = null;
 
   /**
    * Show a sync error. Network trouble on background work (polls, queued
@@ -618,8 +684,10 @@ class AppStore {
     // its own changes without undoing theirs.
     const stored = await this.#storedCopy(op.note.id);
     const merged = stored ? mergeNotes(mine, stored) : mine;
-    await backend.saveNote(merged);
+    // Into the note on screen before the write, not after: a write that
+    // fails must not take what was read for it down with it.
     if (merged !== op.note) this.#adopt(merged);
+    await backend.saveNote(merged);
   }
 
   /**
@@ -653,10 +721,7 @@ class AppStore {
   /** What is stored for this note, when it may hold changes made elsewhere. */
   async #storedCopy(id: string): Promise<Note | null> {
     const backend = this.#backend!;
-    if (backend.storedCopy) {
-      const got = await backend.storedCopy(id);
-      return got === 'seen' ? null : got;
-    }
+    if (backend.storedCopy) return backend.storedCopy(id);
     return backend.getNote ? backend.getNote(id) : null;
   }
 
@@ -845,6 +910,10 @@ class AppStore {
 
   /** Commit a drag-and-drop rearrangement (one settings write, not N). */
   async reorder(ids: string[]) {
+    // Put down where it was picked up: nothing was reordered. (Saved as an
+    // order, it was a later one than the order another device had just
+    // made, and undid it.)
+    if (ids.join() === this.notes.map((n) => n.id).join()) return;
     const byId = new Map(this.notes.map((n) => [n.id, n]));
     this.notes = ids.map((id) => byId.get(id)).filter((n): n is Note => !!n);
     await this.saveSettings({ noteOrder: ids });
@@ -911,20 +980,31 @@ class AppStore {
   }
 
   // ---- folders ---------------------------------------------------------
-  // One level of folders. The list of them is a setting (it syncs like the
-  // note order); which folder a note is in is a field of the note, merged
-  // like its colour. A note whose folder is gone is in the main list.
+  // One level of folders. The list of them is a setting, merged folder by
+  // folder (each remembers when it changed; a deleted one stays in the
+  // stored list, marked gone, so the delete travels too). Which folder a
+  // note is in is a field of the note, merged like its colour. A note whose
+  // folder is gone is in the main list.
 
   /** The folders, A to Z (numbers in order: "Week 2" before "Week 10"). */
   get folders(): Folder[] {
-    return [...(this.settings.folders ?? [])].sort((a, b) =>
-      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
-    );
+    return (this.settings.folders ?? [])
+      .filter((f) => !f.gone)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
   }
 
   folderById(id: string | null | undefined): Folder | null {
     if (!id) return null;
-    return (this.settings.folders ?? []).find((f) => f.id === id) ?? null;
+    return (this.settings.folders ?? []).find((f) => f.id === id && !f.gone) ?? null;
+  }
+
+  /** The stored list with one folder changed (or added), stamped now. */
+  #foldersWith(folder: Folder): Folder[] {
+    const all = $state.snapshot(this.settings.folders ?? []);
+    const was = all.find((f) => f.id === folder.id);
+    const next = { ...folder, at: Math.max(Date.now(), (was?.at ?? 0) + 1) };
+    // Through the merge for its order: the same folders are the same list.
+    return mergeFolders(all, [next]);
   }
 
   /** The folder a note is in, if that folder still exists. */
@@ -936,25 +1016,25 @@ class AppStore {
   createFolder(name: string): Folder | null {
     const clean = name.trim().slice(0, 60);
     if (!clean) return null;
-    const all = this.settings.folders ?? [];
-    const same = all.find((f) => f.name.toLowerCase() === clean.toLowerCase());
+    const same = this.folders.find((f) => f.name.toLowerCase() === clean.toLowerCase());
     if (same) return same;
     const folder = { id: cryptoId(), name: clean };
-    void this.saveSettings({ folders: [...all, folder] });
+    void this.saveSettings({ folders: this.#foldersWith(folder) });
     return folder;
   }
 
   renameFolder(id: string, name: string) {
     const clean = name.trim().slice(0, 60);
-    const all = this.settings.folders ?? [];
-    if (!clean || !all.some((f) => f.id === id)) return;
-    void this.saveSettings({ folders: all.map((f) => (f.id === id ? { ...f, name: clean } : f)) });
+    if (!clean || !this.folderById(id)) return;
+    void this.saveSettings({ folders: this.#foldersWith({ id, name: clean }) });
   }
 
   /** The folder goes; its notes stay, back in the main list. */
   deleteFolder(id: string) {
+    const folder = this.folderById(id);
+    if (!folder) return;
     for (const n of this.notes) if (n.folder === id) this.update(n.id, { folder: null });
-    void this.saveSettings({ folders: (this.settings.folders ?? []).filter((f) => f.id !== id) });
+    void this.saveSettings({ folders: this.#foldersWith({ id, name: folder.name, gone: true }) });
     if (this.openFolder === id) this.openFolder = null;
   }
 
@@ -1148,8 +1228,12 @@ class AppStore {
     const stored = await this.#storedSettings();
     const mine = $state.snapshot(this.settings);
     const merged = stored ? mergeSettings(mine, stored) : mine;
-    await backend.saveSettings(merged);
+    // Taken in before the write, not after: the stored copy is read once
+    // (see storedSettings), and a write that failed left it read and kept
+    // nowhere, so the next try sent this device's settings without it: a
+    // folder made elsewhere was gone from Drive, and never showed up here.
     if (stored) this.#adoptSettings(merged);
+    await backend.saveSettings(merged);
   }
 
   async #storedSettings(): Promise<Settings | null> {

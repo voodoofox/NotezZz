@@ -74,6 +74,12 @@ import type { ThemeDef } from './theme';
 export interface Folder {
   id: string;
   name: string;
+  /** When it last changed (made, renamed, deleted): two copies of the list
+   *  merge folder by folder (settingsMerge.ts). */
+  at?: number;
+  /** Deleted. It stays in the stored list, so the delete reaches every
+   *  device: a folder a copy merely lacks is one it hasn't heard of yet. */
+  gone?: boolean;
 }
 
 export interface Settings {
@@ -104,7 +110,8 @@ export interface Settings {
   paletteEdits?: Record<string, import('./patterns.svelte').CustomPattern>;
   /** Note ids in the order the user arranged them; unlisted notes lead. */
   noteOrder?: string[];
-  /** The user's folders (shown by name, A to Z). */
+  /** The user's folders, deleted ones included (see Folder.gone); the store
+   *  hands out the live ones, by name, A to Z. */
   folders?: Folder[];
   /** First-run welcome notes have been written; never write them again. */
   seeded?: boolean;

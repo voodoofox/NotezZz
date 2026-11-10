@@ -96,6 +96,9 @@ async function authFetch(url: string, opts: RequestInit = {}, timeoutMs = 20_000
   return res;
 }
 
+/** Drive's answer for a file that isn't there (any more). */
+const isGone = (e: unknown) => /Drive API 404/.test(String(e));
+
 export class DriveBackend implements StorageBackend {
   readonly kind = 'drive' as const;
 
@@ -121,9 +124,16 @@ export class DriveBackend implements StorageBackend {
 
   // Memoize folder resolution so concurrent callers (listNotes + loadSettings
   // run in parallel at startup) can't each create a duplicate NotezZz folder.
+  // A lookup that failed is forgotten, so the next caller looks again: kept,
+  // an app opened with no connection answered every later call with that
+  // same failure, and nothing synced until it was closed and opened again.
   async #folder(): Promise<string> {
     if (this.#folderId) return this.#folderId;
-    if (!this.#folderPromise) this.#folderPromise = this.#resolveFolder();
+    if (!this.#folderPromise) {
+      const looking = this.#resolveFolder();
+      this.#folderPromise = looking;
+      looking.catch(() => this.#folderPromise === looking && (this.#folderPromise = null));
+    }
     this.#folderId = await this.#folderPromise;
     return this.#folderId;
   }
@@ -187,7 +197,11 @@ export class DriveBackend implements StorageBackend {
 
   async #notesFolder(): Promise<string> {
     if (this.#notesFolderId) return this.#notesFolderId;
-    if (!this.#notesFolderPromise) this.#notesFolderPromise = this.#resolveNotesFolder();
+    if (!this.#notesFolderPromise) {
+      const looking = this.#resolveNotesFolder();
+      this.#notesFolderPromise = looking;
+      looking.catch(() => this.#notesFolderPromise === looking && (this.#notesFolderPromise = null));
+    }
     this.#notesFolderId = await this.#notesFolderPromise;
     return this.#notesFolderId;
   }
@@ -518,14 +532,29 @@ export class DriveBackend implements StorageBackend {
    * in it; otherwise it is downloaded to merge with (a note with images can
    * be megabytes, so only then).
    */
-  async storedCopy(id: string): Promise<Note | null | 'seen'> {
+  async storedCopy(id: string): Promise<Note | null> {
     const folderId = await this.#notesFolder();
     const fileId = this.#ids.get(id) ?? (await this.#findByName(`${id}.json`, folderId));
     if (!fileId) return null;
     this.#know(id, fileId);
-    const res = await authFetch(`${API}/files/${fileId}?fields=modifiedTime`);
+    let res: Response;
+    try {
+      res = await authFetch(`${API}/files/${fileId}?fields=modifiedTime`);
+    } catch (e) {
+      // Deleted on another device since this one last looked: nothing is
+      // stored. (Thrown on, the write failed with Drive's "File not found"
+      // on screen, again at every retry until a poll had noticed.)
+      if (!isGone(e)) throw e;
+      this.#forgetFile(fileId);
+      return null;
+    }
     const { modifiedTime } = (await res.json()) as { modifiedTime: string };
-    if (modifiedTime && this.#files.get(fileId)?.modifiedTime === modifiedTime) return 'seen';
+    // Unchanged: the copy held here is the stored one. It is handed over
+    // all the same, not answered "you have seen it": a poll that failed
+    // part-way had read it without the store ever getting it, and the next
+    // edit put the note back without what another device had changed.
+    const have = this.#files.get(fileId);
+    if (modifiedTime && have?.modifiedTime === modifiedTime) return have.note;
     const got = await this.#download({ id: fileId, modifiedTime });
     if (got === 'corrupt') return null; // unreadable: ours replaces it
     if (got !== 'ok') {
@@ -539,9 +568,20 @@ export class DriveBackend implements StorageBackend {
   async saveNote(note: Note): Promise<void> {
     const folderId = await this.#notesFolder();
     let fileId = this.#ids.get(note.id) ?? (await this.#findByName(`${note.id}.json`, folderId));
-    let modifiedTime: string;
-    if (fileId) modifiedTime = await this.#update(fileId, note);
-    else ({ id: fileId, modifiedTime } = await this.#create(`${note.id}.json`, folderId, note));
+    let modifiedTime: string | null = null;
+    if (fileId) {
+      try {
+        modifiedTime = await this.#update(fileId, note);
+      } catch (e) {
+        // Its file went (deleted elsewhere) between the look and the write.
+        if (!isGone(e)) throw e;
+        this.#forgetFile(fileId);
+        fileId = null;
+      }
+    }
+    if (!fileId || modifiedTime === null) {
+      ({ id: fileId, modifiedTime } = await this.#create(`${note.id}.json`, folderId, note));
+    }
     this.#know(note.id, fileId);
     // Our own write must not look like a remote change on the next poll.
     this.#files.set(fileId, { modifiedTime, note });
@@ -551,7 +591,11 @@ export class DriveBackend implements StorageBackend {
     const folderId = await this.#notesFolder();
     const fileId = this.#ids.get(id) ?? (await this.#findByName(`${id}.json`, folderId));
     if (fileId) {
-      await authFetch(`${API}/files/${fileId}`, { method: 'DELETE' });
+      try {
+        await authFetch(`${API}/files/${fileId}`, { method: 'DELETE' });
+      } catch (e) {
+        if (!isGone(e)) throw e; // deleted already, from another device: done
+      }
       this.#files.delete(fileId);
     }
     this.#ids.delete(id);

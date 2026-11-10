@@ -16,6 +16,10 @@ export type DriveFile = {
 
 type Change = { fileId: string; removed: boolean; file?: Omit<DriveFile, 'body'> };
 
+/** One device's connection: while `offline`, its requests fail as they do
+ *  with no network, and an answer already on its way never arrives. */
+export type Line = { offline: boolean };
+
 export class FakeDrive {
   files = new Map<string, DriveFile>();
   /** Every change ever, oldest first; a page token is an index into it. */
@@ -32,6 +36,16 @@ export class FakeDrive {
   /** A wait before a download is answered: its content is read when it is
    *  asked for (as Drive does), and arrives after, as over a slow line. */
   holdDownload: ((f: DriveFile) => Promise<void> | undefined) | null = null;
+  /** A wait before each request is read and again before its answer leaves,
+   *  as over a slow line: what several devices send then crosses. */
+  lag: (() => Promise<void>) | null = null;
+  /** How many requests changed something (uploads, deletes, folders made). */
+  writes = 0;
+  /** The requests this picks are lost, as on a line that drops one request
+   *  and carries the next. */
+  drop: ((method: string, url: URL) => boolean) | null = null;
+  /** The requests answered with an error, in order. */
+  refused: string[] = [];
   notesFolder: string;
   #n = 0;
   #clock = Date.UTC(2026, 10, 4, 12, 0, 0);
@@ -79,21 +93,58 @@ export class FakeDrive {
     this.#record(f);
   }
 
+  /** Delete a note outright, as another device's delete does: its file
+   *  answers "not found" from then on. */
+  removeNote(id: string) {
+    const f = [...this.files.values()].find((x) => x.name === `${id}.json`)!;
+    this.files.delete(f.id);
+    this.#record(f, true);
+  }
+
+  /** Change the stored settings, as another device's save does. */
+  changeSettings(change: (s: Record<string, unknown>) => Record<string, unknown>) {
+    const f = [...this.files.values()].find((x) => x.name === 'settings.json')!;
+    f.body = JSON.stringify(change(JSON.parse(f.body)));
+    f.modifiedTime = this.#tick();
+    this.#record(f);
+  }
+
   noteBody(id: string): Record<string, unknown> | null {
     const f = [...this.files.values()].find((x) => x.name === `${id}.json` && !x.trashed);
     return f ? JSON.parse(f.body) : null;
   }
 
-  async install(page: Page) {
-    await page.route('**://www.googleapis.com/**', (r) => this.#handle(r));
+  async install(page: Page, line?: Line) {
+    await page.route('**://www.googleapis.com/**', async (r) => {
+      try {
+        if (line?.offline) return await r.abort('internetdisconnected');
+        const req = r.request();
+        if (this.drop?.(req.method(), new URL(req.url()))) return await r.abort('internetdisconnected');
+        await this.lag?.();
+        if (line?.offline) return await r.abort('internetdisconnected');
+        await this.#handle(r, line);
+      } catch {
+        /* the page went away (a reload, the test's end) with the request out */
+      }
+    });
   }
 
-  async #handle(r: Route) {
+  async #handle(r: Route, line?: Line) {
     const req = r.request();
     const url = new URL(req.url());
     const method = req.method();
     const path = url.pathname;
-    const json = (body: unknown, status = 200) => r.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+    if (method !== 'GET') this.writes += 1;
+    const send = async (answer: Parameters<Route['fulfill']>[0]) => {
+      await this.lag?.();
+      // Done, and the device never hears of it: it tries again later.
+      if (line?.offline) return r.abort('internetdisconnected');
+      return r.fulfill(answer);
+    };
+    const json = (body: unknown, status = 200) => {
+      if (status >= 400) this.refused.push(`${status} ${method} ${path}${url.search}`);
+      return send({ status, contentType: 'application/json', body: JSON.stringify(body) });
+    };
 
     if (path === '/drive/v3/about') {
       this.calls.push('about');
@@ -152,7 +203,7 @@ export class FakeDrive {
         this.calls.push('delete');
         this.files.delete(f.id);
         this.#record(f, true);
-        return r.fulfill({ status: 204, body: '' });
+        return send({ status: 204, body: '' });
       }
       if (method === 'PATCH' && path.startsWith('/upload/')) {
         this.calls.push('upload');
@@ -173,7 +224,7 @@ export class FakeDrive {
         this.calls.push('download');
         const body = f.body;
         await this.holdDownload?.(f);
-        return r.fulfill({ status: 200, contentType: 'application/json', body });
+        return send({ status: 200, contentType: 'application/json', body });
       }
       this.calls.push('meta');
       const { body: _b, ...meta } = f;
@@ -184,17 +235,20 @@ export class FakeDrive {
   }
 }
 
-/** Open the app as a signed-in Drive user whose token is good for an hour,
- *  with Google Identity Services stubbed so nothing leaves the test. */
-export async function openWithDrive(page: Page, drive: FakeDrive) {
+/** Open the app as a signed-in Drive user whose token stays good, with
+ *  Google Identity Services stubbed so nothing leaves the test. (The token's
+ *  end is a fixed date, not "an hour from now": asking the time here, before
+ *  Playwright's clock has heard of every jump the test made, set the clock
+ *  of a reloaded page wrong, further ahead at each reload.) */
+export async function openWithDrive(page: Page, drive: FakeDrive, line?: Line) {
   await page.addInitScript(() => {
     localStorage.setItem('notezzz:hasAuthed', '1');
-    localStorage.setItem('notezzz:tok', JSON.stringify({ t: 'test-token', e: Date.now() + 3_600_000 }));
+    localStorage.setItem('notezzz:tok', JSON.stringify({ t: 'test-token', e: 4_102_444_800_000 }));
     localStorage.setItem('notezzz:acct', 'me@example.com');
     (window as unknown as { google: unknown }).google = {
       accounts: { oauth2: { initTokenClient: () => ({ requestAccessToken: () => {} }) } },
     };
   });
-  await drive.install(page);
+  await drive.install(page, line);
   await page.goto('/');
 }

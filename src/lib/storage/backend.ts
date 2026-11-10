@@ -14,14 +14,14 @@ export interface StorageBackend {
   /** One note, fresh from storage. Backends without a cheap single read may omit it. */
   getNote?(id: string): Promise<Note | null>;
   /**
-   * Before a write: the stored copy if it may hold changes this device hasn't
-   * seen, 'seen' if it can't (nobody wrote it since we last read or wrote
-   * it), null if there is none. Backends without it use getNote.
+   * Before a write: the stored copy, to merge with (it may hold changes made
+   * elsewhere), null if there is none. Backends without it use getNote.
    */
-  storedCopy?(id: string): Promise<Note | null | 'seen'>;
-  /** The same for settings: the stored copy if it may have changed since this
-   *  device last read or wrote it, else 'seen'. Backends without it use
-   *  loadSettings. */
+  storedCopy?(id: string): Promise<Note | null>;
+  /** The stored settings if they may have changed since this device last
+   *  read or wrote them, else 'seen'. Read once, they are not handed over
+   *  again: the caller takes them in there and then. Backends without it
+   *  use loadSettings. */
   storedSettings?(): Promise<Settings | null | 'seen'>;
   saveNote(note: Note): Promise<void>;
   deleteNote(id: string): Promise<void>;
