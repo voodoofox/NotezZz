@@ -501,14 +501,27 @@ test.describe('mobile layout', () => {
     await expect(page.getByTestId('new-note')).toBeVisible(); // split back
   });
 
-  test('selection shows the floating format bubble; bold works from it', async ({ page }) => {
+  test('selected text brings up the size row over the toolbar; a step sizes it', async ({ page }) => {
     await page.getByTestId('new-note').click();
-    await typeInEditor(page, 'bubble me');
-    await expect(page.getByTestId('format-bubble')).toBeHidden();
+    await typeInEditor(page, 'size me');
+    const row = page.getByTestId('format-row');
+    await expect(row).toBeHidden();
     await page.locator('.ProseMirror').press('ControlOrMeta+a');
-    await expect(page.getByTestId('format-bubble')).toBeVisible();
-    await page.getByTestId('format-bubble').getByRole('button', { name: 'Bold' }).click();
-    await expect(page.locator('.ProseMirror strong')).toHaveText('bubble me');
+    await expect(row).toBeVisible();
+    // The note's own size to start from, and the next one up from there.
+    await expect(page.getByTestId('format-row-size')).toHaveText('22');
+    await row.getByRole('button', { name: 'Larger text' }).click();
+    await expect(page.getByTestId('format-row-size')).toHaveText('24');
+    await expect(page.locator('.ProseMirror span[style*="font-size"]')).toHaveText('size me');
+    await row.getByRole('button', { name: 'Smaller text' }).click();
+    await row.getByRole('button', { name: 'Smaller text' }).click();
+    await expect(page.getByTestId('format-row-size')).toHaveText('18');
+    // Bold and the rest are on the toolbar under it, and act on the selection.
+    await page.getByTestId('fmt-bold').click();
+    await expect(page.locator('.ProseMirror strong')).toHaveText('size me');
+    // No selection, no row.
+    await page.locator('.ProseMirror').press('ArrowRight');
+    await expect(row).toBeHidden();
   });
 
   test('topbar buttons stay inside the pane (no overflow)', async ({ page }) => {
@@ -2042,28 +2055,50 @@ test('a dropped connection is retried quietly; only lasting trouble is said, in 
   await expect(page.getByTestId('sync-error')).toHaveCount(0, { timeout: 12_000 });
 });
 
-test.describe('phone: the selection balloon', () => {
+test.describe('phone: the row for selected text', () => {
   test.use({ viewport: { width: 412, height: 915 } });
 
-  test('stays whole on screen, buttons like every other', async ({ page }) => {
+  test('a strip of the note, right on the toolbar, buttons like every other', async ({ page }) => {
     await createNote(page);
     const pm = page.locator('.ProseMirror');
     await pm.click();
     await page.keyboard.type('amplify this word');
-    // Select the first word, at the far left of the line.
     await page.keyboard.press('Home');
     await page.keyboard.press('Shift+ControlOrMeta+ArrowRight');
-    const bubble = page.getByTestId('format-bubble');
-    await expect(bubble).toBeVisible();
-    const b = (await bubble.boundingBox())!;
-    expect(b.x).toBeGreaterThanOrEqual(5);
-    expect(b.x + b.width).toBeLessThanOrEqual(412 - 5);
-    const [btn, bar] = await Promise.all([
-      bubble.locator('button').first().boundingBox(),
-      page.getByTestId('fmt-bold').boundingBox(),
+    const row = page.getByTestId('format-row');
+    await expect(row).toBeVisible();
+    const [r, bar, pane] = await Promise.all([
+      row.boundingBox(),
+      page.locator('.toolbar').boundingBox(),
+      page.getByTestId('note-pane').boundingBox(),
     ]);
-    expect(Math.round(btn!.width)).toBe(Math.round(bar!.width));
-    expect(Math.round(btn!.height)).toBe(Math.round(bar!.height));
+    // It stays put: the note's width, on top of the toolbar, wherever the
+    // selection is.
+    expect(Math.round(r!.x)).toBe(Math.round(bar!.x));
+    expect(Math.round(r!.width)).toBe(Math.round(bar!.width));
+    expect(Math.round(r!.y + r!.height)).toBe(Math.round(bar!.y));
+    expect(r!.x).toBeGreaterThanOrEqual(pane!.x);
+    const [btn, bold] = await Promise.all([row.locator('button').first().boundingBox(), page.getByTestId('fmt-bold').boundingBox()]);
+    expect(Math.round(btn!.width)).toBe(Math.round(bold!.width));
+    expect(Math.round(btn!.height)).toBe(Math.round(bold!.height));
+    expect(Math.round(btn!.x)).toBe(Math.round(bold!.x));
+  });
+
+  test('text selected at the foot of a long note is not left under the row', async ({ page }) => {
+    await createNote(page);
+    const pm = page.locator('.ProseMirror');
+    await pm.click();
+    for (let i = 0; i < 40; i++) await page.keyboard.type(`line ${i}\n`);
+    await page.keyboard.type('the last words');
+    await page.keyboard.press('Shift+ControlOrMeta+ArrowLeft');
+    const row = page.getByTestId('format-row');
+    await expect(row).toBeVisible();
+    await expect
+      .poll(async () => {
+        const end = await page.evaluate(() => getSelection()!.getRangeAt(0).getBoundingClientRect().bottom);
+        return end <= (await row.boundingBox())!.y;
+      })
+      .toBe(true);
   });
 
   test('settings fill the screen', async ({ page }) => {
@@ -2691,36 +2726,25 @@ test('patterns animate even when the system asks for reduced motion; Settings ca
 });
 
 
-test.describe('a tilted desktop sticky: the format balloon stays whole', () => {
+test.describe('a desktop sticky: the row for selected text', () => {
   test.use({ viewport: { width: 420, height: 460 } });
-  test('not cut off at the note edge, and its buttons work', async ({ page }) => {
+  test('comes up inside the note, over its toolbar, and its buttons work', async ({ page }) => {
     await createNote(page);
     await page.waitForTimeout(500); // per-note save debounce
-    const id = await page.evaluate(() => {
-      const key = Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!;
-      const note = JSON.parse(localStorage.getItem(key)!);
-      localStorage.setItem(key, JSON.stringify({ ...note, tilt: 3 }));
-      const s = JSON.parse(localStorage.getItem('notezzz:settings') ?? '{}');
-      localStorage.setItem('notezzz:settings', JSON.stringify({ ...s, stickyTilt: true }));
-      return key.slice('notezzz:note:'.length);
-    });
+    const id = await page.evaluate(
+      () => Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!.slice('notezzz:note:'.length)
+    );
     await page.goto(`/sticky?id=${id}`);
-    await expect(page.locator('.sticky.tilted')).toBeVisible();
     await page.locator('.ProseMirror').click();
     await page.keyboard.type('Do we use generated sounds? MUSIC YES');
     await page.keyboard.press('Shift+Control+ArrowLeft');
-    const bubble = page.getByTestId('format-bubble');
-    await expect(bubble).toBeVisible();
-    const box = await bubble.evaluate((el) => {
-      const r = el.getBoundingClientRect();
-      // Fixed to the window, not to the rotated note (which clips).
-      return { left: r.left, right: r.right, inBody: el.parentElement === document.body, vw: innerWidth };
-    });
-    expect(box.inBody).toBe(true);
-    expect(box.left).toBeGreaterThanOrEqual(0);
-    expect(box.right).toBeLessThanOrEqual(box.vw);
-    await bubble.getByRole('button', { name: 'Bold' }).click();
-    await expect(page.locator('.ProseMirror strong')).toHaveText('YES');
+    const row = page.getByTestId('format-row');
+    await expect(row).toBeVisible();
+    const [r, bar] = await Promise.all([row.boundingBox(), page.locator('.toolbar').boundingBox()]);
+    expect(Math.round(r!.y + r!.height)).toBe(Math.round(bar!.y));
+    expect(Math.round(r!.width)).toBe(Math.round(bar!.width));
+    await row.getByRole('button', { name: 'Larger text' }).click();
+    await expect(page.locator('.ProseMirror span[style*="font-size"]')).toHaveText('YES');
   });
 });
 

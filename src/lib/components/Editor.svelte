@@ -1,7 +1,7 @@
 <script lang="ts">
   // TipTap lifecycle + the html sync effect + onChange. The toolbar and the
-  // phone format bubble are their own components (EditorToolbar,
-  // FormatBubble); this file owns everything with a lifetime.
+  // row over it while text is selected are their own components
+  // (EditorToolbar, FormatRow); this file owns everything with a lifetime.
   import { onMount, onDestroy } from 'svelte';
   import { Editor } from '@tiptap/core';
   import StarterKit from '@tiptap/starter-kit';
@@ -17,7 +17,7 @@
   import { BASE_FONT_PX } from '$lib/types';
   import DrawPad from './DrawPad.svelte';
   import EditorToolbar from './EditorToolbar.svelte';
-  import FormatBubble from './FormatBubble.svelte';
+  import FormatRow from './FormatRow.svelte';
   import { store } from '$lib/store.svelte';
 
   interface Props {
@@ -105,47 +105,34 @@
   // freezing ALL reactivity on the page.
   let syncedHtml = '';
 
-  // Floating format bubble position (phones); null = hidden.
-  let bubble = $state<{ x: number; y: number } | null>(null);
+  // Text is selected, on a phone or a sticky: the size row is up (FormatRow).
+  let selRow = $state(false);
 
-  function setBubble(next: { x: number; y: number } | null) {
-    // Only reassign on a real change: this runs on every transaction, and a
-    // fresh object each time re-rendered the bubble on every keystroke.
-    if (next === null ? bubble === null : bubble && bubble.x === next.x && bubble.y === next.y) return;
-    bubble = next;
-  }
-
-  function updateBubble() {
-    if (!editor || editor.isDestroyed || window.innerWidth > 700) return setBubble(null);
+  function updateRow() {
+    if (!editor || editor.isDestroyed || window.innerWidth > 700) return void (selRow = false);
     const sel = editor.state.selection;
-    const { from, to, empty } = sel;
     // Only for selected TEXT. Selecting a block — tapping the audio player or
-    // an image — is a node selection, where formatting buttons mean nothing.
-    if (empty || 'node' in sel) return setBubble(null);
-    try {
-      const a = editor.view.coordsAtPos(from);
-      const b = editor.view.coordsAtPos(to);
-      // Under pinch-zoom the visual viewport is a window onto the layout
-      // viewport; position:fixed coordinates are layout-relative, so the
-      // visible box starts at the viewport's offset, not at 0.
-      const vv = window.visualViewport;
-      const ox = vv?.offsetLeft ?? 0;
-      const oy = vv?.offsetTop ?? 0;
-      const vw = vv?.width ?? window.innerWidth;
-      const vh = vv?.height ?? window.innerHeight;
-      const x = Math.min(Math.max((a.left + b.left) / 2, ox + 110), ox + vw - 110);
-      // BELOW the selection: Android's own Translate/Cut/Copy menu owns the
-      // space above it and would cover us. +30 clears the selection handles.
-      const below = Math.max(a.bottom, b.bottom) + 30;
-      const y =
-        below + 44 <= oy + vh - 8
-          ? below
-          : Math.max(oy + 8, Math.min(a.top, b.top) - 110); // no room: go high above the OS menu
-      setBubble({ x: Math.round(x), y: Math.round(y) });
-    } catch {
-      setBubble(null);
-    }
+    // an image — is a node selection, where a text size means nothing.
+    selRow = !sel.empty && !('node' in sel);
   }
+
+  // The row takes its height off the bottom of the text. Where the selection
+  // ends under it, the text moves up by as much, so what was just selected
+  // is not the thing it covers.
+  $effect(() => {
+    if (!selRow || !editor || editor.isDestroyed) return;
+    const view = editor.view;
+    const frame = requestAnimationFrame(() => {
+      if (view.isDestroyed) return;
+      try {
+        const over = view.coordsAtPos(view.state.selection.to).bottom - element.getBoundingClientRect().bottom;
+        if (over > 0) element.scrollTop += over + 8;
+      } catch {
+        /* the selection is gone again */
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  });
 
   onMount(() => {
     syncedHtml = html;
@@ -186,7 +173,7 @@
       },
       onTransaction: () => {
         tick += 1;
-        updateBubble();
+        updateRow();
       },
       onUpdate: ({ editor }) => {
         const out = editor.getHTML();
@@ -200,9 +187,6 @@
   // when a note switch landed inside its 60ms window.
   let scrollTimer: ReturnType<typeof setTimeout> | undefined;
 
-  // The keyboard opens AFTER a selection is made (focus), resizing the
-  // viewport and invalidating the bubble's position — it then overlapped
-  // Android's own selection menu. Re-anchor on every viewport change.
   onMount(() => {
     const vv = window.visualViewport;
     let lastHeight = vv?.height ?? 0;
@@ -212,7 +196,6 @@
     // pinch step made zooming and scrolling a note you were typing in
     // impossible (it jumped straight back to the cursor).
     const keepInView = () => {
-      updateBubble();
       if (!vv) return;
       const keyboardOpened = vv.height < lastHeight - 60 && vv.scale <= 1.01;
       lastHeight = vv.height;
@@ -225,12 +208,11 @@
       }
     };
     vv?.addEventListener('resize', keepInView);
-    vv?.addEventListener('scroll', updateBubble);
-    window.addEventListener('resize', updateBubble);
+    // A window dragged across the phone width gains or loses the row.
+    window.addEventListener('resize', updateRow);
     return () => {
       vv?.removeEventListener('resize', keepInView);
-      vv?.removeEventListener('scroll', updateBubble);
-      window.removeEventListener('resize', updateBubble);
+      window.removeEventListener('resize', updateRow);
     };
   });
 
@@ -263,13 +245,12 @@
 </script>
 
 <div class="editor">
+  {#if selRow}
+    <FormatRow {editor} {tick} {baseSize} />
+  {/if}
   <EditorToolbar {editor} {tick} {recorder} onRecord={toggleRecord} onDraw={openDraw} />
   <div class="content" style="font-size: {baseSize}px" bind:this={element}></div>
 </div>
-
-{#if bubble && !showDraw}
-  <FormatBubble {editor} {tick} x={bubble.x} y={bubble.y} {baseSize} />
-{/if}
 
 {#if showDraw}
   <DrawPad onDone={drawDone} bg={drawBg} ink={drawInk} />
@@ -493,9 +474,8 @@
     outline: 2px solid var(--note-fg);
   }
 
-  /* Phones: the toolbar moves to the bottom (see EditorToolbar); extra top
-     padding keeps the bubble for the first line over empty space instead of
-     the palette row. */
+  /* Phones: the text sits over the toolbar (see EditorToolbar), with some
+     air between its first line and the palette row. */
   @media (max-width: 700px) {
     .content {
       order: 1;

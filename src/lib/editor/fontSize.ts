@@ -4,7 +4,7 @@
 import { Extension } from '@tiptap/core';
 import { BASE_FONT_PX } from '../types';
 
-/** The size menu / A-,A+ steps. One list for the toolbar and the bubble. */
+/** The size menu / A-,A+ steps. One list for the toolbar and the selection's row. */
 export const FONT_SIZES = [12, 14, 16, 18, 20, 24, 28, 32, 40, 48];
 
 declare module '@tiptap/core' {

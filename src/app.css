@@ -170,12 +170,12 @@ textarea {
   background: var(--app-fg) !important;
   color: var(--app-panel) !important;
 }
-:root[data-ui='mono'] :is(.new, .ico, .pin, .mi, .rowmenu .mi, .bubble button, .sz, .op, .later):active {
+:root[data-ui='mono'] :is(.new, .ico, .pin, .mi, .rowmenu .mi, .sz, .op, .later):active {
   background: var(--app-fg) !important;
   color: var(--app-panel) !important;
 }
 @media (hover: hover) {
-  :root[data-ui='mono'] :is(.new, .ico, .mi, .rowmenu .mi, .bubble button, .sz, .op):hover {
+  :root[data-ui='mono'] :is(.new, .ico, .mi, .rowmenu .mi, .sz, .op):hover {
     background: var(--app-fg) !important;
     color: var(--app-panel) !important;
   }
@@ -203,7 +203,7 @@ textarea {
 :root[data-ui='mono'] :is(.backdrop, .overlay) {
   background: transparent !important;
 }
-:root[data-ui='mono'] :is(.panel, .card, .toast, .pop, .smenu, .rowmenu, .bubble, .sizemenu) {
+:root[data-ui='mono'] :is(.panel, .card, .toast, .pop, .smenu, .rowmenu, .sizemenu) {
   border: none !important;
   box-shadow: none !important;
 }
