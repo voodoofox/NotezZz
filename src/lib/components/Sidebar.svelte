@@ -416,12 +416,15 @@
   });
 
   // The arrows beside the logo while anything syncs. They wait 300ms before
-  // showing, so a quick background poll (every few seconds on the PC) never
-  // blinks them, and once up they stay 700ms so a short sync reads as one turn.
+  // showing, so a quick background poll never blinks them, and once up they
+  // stay 700ms so a short sync reads as one turn. Not in the PC app: it
+  // looks every three seconds and at every return to its window, and the
+  // arrows were up more often than not, saying nothing.
+  const quiet = isDesktop();
   let syncShown = $state(false);
   let shownAt = 0;
   $effect(() => {
-    const on = store.syncing;
+    const on = !quiet && store.syncing;
     let t: ReturnType<typeof setTimeout> | undefined;
     if (on && !syncShown) {
       t = setTimeout(() => {
