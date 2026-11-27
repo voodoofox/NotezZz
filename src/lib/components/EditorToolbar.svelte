@@ -115,10 +115,9 @@
 
   function toggleSizes() {
     if (!showSizes && sizeWrap && barEl) {
-      // Two buttons like the bar's, spaced and edged like the bar.
-      const cs = getComputedStyle(barEl);
+      // One button wide, like the bar's, and edged like the bar.
       const btn = sizeWrap.getBoundingClientRect().width;
-      const width = 2 * btn + (parseFloat(cs.columnGap) || 0) + 2 * (parseFloat(cs.paddingLeft) || 0) + 2;
+      const width = btn + 2 * (parseFloat(getComputedStyle(barEl).paddingLeft) || 0) + 2;
       sizeMenuStyle = popoverStyle(sizeWrap, Math.ceil(width), 'center', barEl);
     }
     showSizes = !showSizes;
@@ -185,19 +184,11 @@
 
 <svelte:window onpointerdown={onGlobalPointerDown} />
 
-<!-- One step smaller, one step larger. It stays up, so a few taps go a few
-     sizes; a tap anywhere else puts it away. -->
+<!-- One step larger, and under it one step smaller: the two stand on the
+     size button. They stay up, so a few taps go a few sizes; a tap anywhere
+     else puts them away. -->
 {#snippet sizes(inline: boolean)}
   <div class="sizemenu" class:inline style={inline ? '' : sizeMenuStyle} data-testid="size-menu">
-    <button
-      class="step"
-      data-testid="size-down"
-      title="Smaller text"
-      aria-label="Smaller text"
-      disabled={!canStep(-1)}
-      onmousedown={keepFocus}
-      onclick={() => stepSize(-1)}
-    ><Icon name="minus" /></button>
     <button
       class="step"
       data-testid="size-up"
@@ -207,6 +198,15 @@
       onmousedown={keepFocus}
       onclick={() => stepSize(1)}
     ><Icon name="add" /></button>
+    <button
+      class="step"
+      data-testid="size-down"
+      title="Smaller text"
+      aria-label="Smaller text"
+      disabled={!canStep(-1)}
+      onmousedown={keepFocus}
+      onclick={() => stepSize(-1)}
+    ><Icon name="minus" /></button>
   </div>
 {/snippet}
 
@@ -364,6 +364,7 @@
     /* position:fixed via inline popoverStyle — the toolbar's overflow
        clipping made absolutely-positioned menus invisible. */
     display: flex;
+    flex-direction: column;
     gap: var(--btn-gap);
     padding: var(--edge);
     background: var(--app-panel);
@@ -374,15 +375,13 @@
   /* The same two as a page of the ⋯ menu: no second balloon. */
   .sizemenu.inline {
     position: static;
-    justify-content: center;
     border: none;
     box-shadow: none;
     padding: 0;
   }
-  /* There the two share the menu's width, half each. */
+  /* There each is a row of the menu, as wide as it. */
   .sizemenu.inline .step {
-    flex: 1;
-    width: auto;
+    width: 100%;
   }
   /* The bar's buttons, in the panel's colours. */
   .toolbar .step {

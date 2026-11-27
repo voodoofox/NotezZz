@@ -2102,7 +2102,7 @@ test('a dropped connection is retried quietly; only lasting trouble is said, in 
 test.describe('phone: the text size steps', () => {
   test.use({ viewport: { width: 412, height: 915 } });
 
-  test('two buttons like the toolbar\'s, over the size button', async ({ page }) => {
+  test('two buttons like the toolbar\'s, plus over minus, over the size button', async ({ page }) => {
     await createNote(page);
     const pm = page.locator('.ProseMirror');
     await pm.click();
@@ -2124,14 +2124,16 @@ test.describe('phone: the text size steps', () => {
     expect(m!.x).toBeGreaterThanOrEqual(0);
     expect(m!.x + m!.width).toBeLessThanOrEqual(412);
     expect(Math.abs(m!.x + m!.width / 2 - (tt!.x + tt!.width / 2))).toBeLessThanOrEqual(1);
-    // Minus on the left, plus on the right, each a toolbar button, with
-    // nothing else in the balloon.
+    // Plus on top, minus under it, in line with the size button; each a
+    // toolbar button, with nothing else in the balloon.
     for (const b of [down!, up!]) {
       expect(Math.round(b.width)).toBe(Math.round(bold!.width));
       expect(Math.round(b.height)).toBe(Math.round(bold!.height));
+      expect(Math.abs(b.x - tt!.x)).toBeLessThanOrEqual(1);
     }
-    expect(down!.x).toBeLessThan(up!.x);
-    expect(m!.width).toBeLessThan(3 * bold!.width);
+    expect(up!.y + up!.height).toBeLessThanOrEqual(down!.y);
+    expect(m!.width).toBeLessThan(2 * bold!.width);
+    expect(m!.height).toBeLessThan(3 * bold!.height);
     await page.getByTestId('size-up').click();
     await expect(page.locator('.ProseMirror span[style*="font-size"]')).toHaveText('word');
   });
