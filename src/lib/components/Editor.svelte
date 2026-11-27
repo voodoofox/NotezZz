@@ -1,7 +1,6 @@
 <script lang="ts">
-  // TipTap lifecycle + the html sync effect + onChange. The toolbar and the
-  // row over it while text is selected are their own components
-  // (EditorToolbar, FormatRow); this file owns everything with a lifetime.
+  // TipTap lifecycle + the html sync effect + onChange. The toolbar is its
+  // own component (EditorToolbar); this file owns everything with a lifetime.
   import { onMount, onDestroy } from 'svelte';
   import { Editor } from '@tiptap/core';
   import StarterKit from '@tiptap/starter-kit';
@@ -18,7 +17,6 @@
   import { BASE_FONT_PX } from '$lib/types';
   import DrawPad from './DrawPad.svelte';
   import EditorToolbar from './EditorToolbar.svelte';
-  import FormatRow from './FormatRow.svelte';
   import { store } from '$lib/store.svelte';
 
   interface Props {
@@ -106,35 +104,6 @@
   // freezing ALL reactivity on the page.
   let syncedHtml = '';
 
-  // Text is selected, on a phone or a sticky: the size row is up (FormatRow).
-  let selRow = $state(false);
-
-  function updateRow() {
-    if (!editor || editor.isDestroyed || window.innerWidth > 700) return void (selRow = false);
-    const sel = editor.state.selection;
-    // Only for selected TEXT. Selecting a block — tapping the audio player or
-    // an image — is a node selection, where a text size means nothing.
-    selRow = !sel.empty && !('node' in sel);
-  }
-
-  // The row takes its height off the bottom of the text. Where the selection
-  // ends under it, the text moves up by as much, so what was just selected
-  // is not the thing it covers.
-  $effect(() => {
-    if (!selRow || !editor || editor.isDestroyed) return;
-    const view = editor.view;
-    const frame = requestAnimationFrame(() => {
-      if (view.isDestroyed) return;
-      try {
-        const over = view.coordsAtPos(view.state.selection.to).bottom - element.getBoundingClientRect().bottom;
-        if (over > 0) element.scrollTop += over + 8;
-      } catch {
-        /* the selection is gone again */
-      }
-    });
-    return () => cancelAnimationFrame(frame);
-  });
-
   onMount(() => {
     syncedHtml = html;
     editor = new Editor({
@@ -175,7 +144,6 @@
       },
       onTransaction: () => {
         tick += 1;
-        updateRow();
       },
       onUpdate: ({ editor }) => {
         const out = editor.getHTML();
@@ -210,12 +178,7 @@
       }
     };
     vv?.addEventListener('resize', keepInView);
-    // A window dragged across the phone width gains or loses the row.
-    window.addEventListener('resize', updateRow);
-    return () => {
-      vv?.removeEventListener('resize', keepInView);
-      window.removeEventListener('resize', updateRow);
-    };
+    return () => vv?.removeEventListener('resize', keepInView);
   });
 
   onDestroy(() => {
@@ -247,9 +210,6 @@
 </script>
 
 <div class="editor">
-  {#if selRow}
-    <FormatRow {editor} {tick} {baseSize} />
-  {/if}
   <EditorToolbar {editor} {tick} {recorder} onRecord={toggleRecord} onDraw={openDraw} />
   <div class="content" style="font-size: {baseSize}px" bind:this={element}></div>
 </div>

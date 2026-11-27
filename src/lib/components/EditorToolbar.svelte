@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The formatting strip at the bottom of the note. Owns the size menu, the
+  // The formatting strip at the bottom of the note. Owns the size steps, the
   // image picker and the record button's UI; the TipTap instance and the
   // recorder are the Editor's.
   //
@@ -8,7 +8,6 @@
   // a ⋯ at the end, instead of scrolling them off the edge unseen.
   import { onMount } from 'svelte';
   import type { Editor } from '@tiptap/core';
-  import { FONT_SIZES } from '../editor/fontSize';
   import type { VoiceRecorder } from '../editor/recorder.svelte';
   import { downscaleImage } from '$lib/image';
   import { popoverStyle } from '$lib/popover';
@@ -36,7 +35,7 @@
   let showMore = $state(false);
   let moreWrap = $state<HTMLDivElement | null>(null);
   let moreStyle = $state('');
-  /** The ⋯ menu lists the folded tools, or the sizes once "Text size" is picked there. */
+  /** The ⋯ menu lists the folded tools, or the size steps once "Text size" is picked there. */
   let moreView = $state<'list' | 'size'>('list');
 
   interface Tool {
@@ -115,7 +114,13 @@
   });
 
   function toggleSizes() {
-    if (!showSizes && sizeWrap) sizeMenuStyle = popoverStyle(sizeWrap, 168, 'center', barEl);
+    if (!showSizes && sizeWrap && barEl) {
+      // Two buttons like the bar's, spaced and edged like the bar.
+      const cs = getComputedStyle(barEl);
+      const btn = sizeWrap.getBoundingClientRect().width;
+      const width = 2 * btn + (parseFloat(cs.columnGap) || 0) + 2 * (parseFloat(cs.paddingLeft) || 0) + 2;
+      sizeMenuStyle = popoverStyle(sizeWrap, Math.ceil(width), 'center', barEl);
+    }
     showSizes = !showSizes;
   }
 
@@ -132,12 +137,6 @@
     }
     showMore = false;
     t.run();
-  }
-
-  function closeSizes() {
-    showSizes = false;
-    showMore = false;
-    moreView = 'list';
   }
 
   // Tapping anywhere else (including the text) closes the menus.
@@ -159,9 +158,14 @@
     }
   }
 
-  function currentSize(): string {
+  /** Whether anything selected (or the next thing typed) has a size left to go to. */
+  function canStep(dir: 1 | -1): boolean {
     void tick;
-    return (editor?.getAttributes('textStyle').fontSize ?? '').replace('px', '');
+    return editor?.can().stepFontSize(dir) ?? false;
+  }
+
+  function stepSize(dir: 1 | -1) {
+    editor?.chain().focus().stepFontSize(dir).run();
   }
 
   function recordLabel(): string {
@@ -181,26 +185,28 @@
 
 <svelte:window onpointerdown={onGlobalPointerDown} />
 
+<!-- One step smaller, one step larger. It stays up, so a few taps go a few
+     sizes; a tap anywhere else puts it away. -->
 {#snippet sizes(inline: boolean)}
   <div class="sizemenu" class:inline style={inline ? '' : sizeMenuStyle} data-testid="size-menu">
     <button
-      class="sopt"
-      class:cur={currentSize() === ''}
-      onclick={() => {
-        editor?.chain().focus().unsetFontSize().run();
-        closeSizes();
-      }}
-    >Auto</button>
-    {#each FONT_SIZES as s}
-      <button
-        class="sopt"
-        class:cur={currentSize() === String(s)}
-        onclick={() => {
-          editor?.chain().focus().setFontSize(`${s}px`).run();
-          closeSizes();
-        }}
-      >{s}</button>
-    {/each}
+      class="step"
+      data-testid="size-down"
+      title="Smaller text"
+      aria-label="Smaller text"
+      disabled={!canStep(-1)}
+      onmousedown={keepFocus}
+      onclick={() => stepSize(-1)}
+    ><Icon name="minus" /></button>
+    <button
+      class="step"
+      data-testid="size-up"
+      title="Larger text"
+      aria-label="Larger text"
+      disabled={!canStep(1)}
+      onmousedown={keepFocus}
+      onclick={() => stepSize(1)}
+    ><Icon name="add" /></button>
   </div>
 {/snippet}
 
@@ -212,6 +218,7 @@
         <div class="sizewrap" bind:this={sizeWrap}>
           <button
             data-testid="fmt-size"
+            onmousedown={keepFocus}
             class:active={showSizes}
             aria-pressed={showSizes}
             aria-expanded={showSizes}
@@ -355,42 +362,44 @@
   }
   .sizemenu {
     /* position:fixed via inline popoverStyle — the toolbar's overflow
-       clipping made absolutely-positioned menus invisible. Two columns keep
-       it short enough to fit in small windows. */
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px;
+       clipping made absolutely-positioned menus invisible. */
+    display: flex;
+    gap: var(--btn-gap);
     padding: var(--edge);
     background: var(--app-panel);
     border: 1px solid var(--app-border);
     border-radius: var(--sticker-radius);
     box-shadow: var(--sticker-shadow);
   }
-  /* The same grid as a page of the ⋯ menu: no second balloon. */
+  /* The same two as a page of the ⋯ menu: no second balloon. */
   .sizemenu.inline {
     position: static;
+    justify-content: center;
     border: none;
     box-shadow: none;
     padding: 0;
   }
-  .sopt {
-    font: inherit;
-    font-size: 17px;
-    min-width: 0;
-    padding: 10px 6px;
-    border: none;
-    border-radius: var(--btn-radius);
-    background: transparent;
+  /* There the two share the menu's width, half each. */
+  .sizemenu.inline .step {
+    flex: 1;
+    width: auto;
+  }
+  /* The bar's buttons, in the panel's colours. */
+  .toolbar .step {
     color: var(--app-fg);
-    cursor: pointer;
-    text-align: center;
   }
-  .sopt:hover {
-    background: var(--app-bg);
+  @media (hover: hover) {
+    .toolbar .step:hover {
+      background: var(--app-bg);
+    }
   }
-  .sopt.cur {
-    background: var(--app-fg);
-    color: var(--app-panel);
+  .toolbar .step:active {
+    background: color-mix(in srgb, var(--app-fg) 16%, transparent);
+  }
+  .toolbar .step:disabled {
+    background: transparent;
+    opacity: 0.35;
+    cursor: default;
   }
   /* The ⋯ menu: the folded tools as rows, icon then name, in the app's
      panel colours like every other menu. */

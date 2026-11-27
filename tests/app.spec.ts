@@ -501,27 +501,71 @@ test.describe('mobile layout', () => {
     await expect(page.getByTestId('new-note')).toBeVisible(); // split back
   });
 
-  test('selected text brings up the size row over the toolbar; a step sizes it', async ({ page }) => {
+  test('the text size button brings up two steps; each sizes the selection a step', async ({ page }) => {
     await page.getByTestId('new-note').click();
     await typeInEditor(page, 'size me');
-    const row = page.getByTestId('format-row');
-    await expect(row).toBeHidden();
-    await page.locator('.ProseMirror').press('ControlOrMeta+a');
-    await expect(row).toBeVisible();
-    // The note's own size to start from, and the next one up from there.
-    await expect(page.getByTestId('format-row-size')).toHaveText('22');
-    await row.getByRole('button', { name: 'Larger text' }).click();
-    await expect(page.getByTestId('format-row-size')).toHaveText('24');
-    await expect(page.locator('.ProseMirror span[style*="font-size"]')).toHaveText('size me');
-    await row.getByRole('button', { name: 'Smaller text' }).click();
-    await row.getByRole('button', { name: 'Smaller text' }).click();
-    await expect(page.getByTestId('format-row-size')).toHaveText('18');
-    // Bold and the rest are on the toolbar under it, and act on the selection.
-    await page.getByTestId('fmt-bold').click();
-    await expect(page.locator('.ProseMirror strong')).toHaveText('size me');
-    // No selection, no row.
-    await page.locator('.ProseMirror').press('ArrowRight');
-    await expect(row).toBeHidden();
+    const pm = page.locator('.ProseMirror');
+    await pm.press('ControlOrMeta+a');
+    // Nothing comes up for a selection by itself any more.
+    await expect(page.getByTestId('format-row')).toHaveCount(0);
+    await page.getByTestId('fmt-size').click();
+    const menu = page.getByTestId('size-menu');
+    await expect(menu.locator('button')).toHaveCount(2);
+    const up = menu.getByRole('button', { name: 'Larger text' });
+    const down = menu.getByRole('button', { name: 'Smaller text' });
+    /** The size the text carries, as it is rendered: em of the note's own. */
+    const size = () =>
+      page.evaluate(() => document.querySelector<HTMLElement>('.ProseMirror span[style*="font-size"]')?.style.fontSize ?? 'none');
+    await up.click();
+    expect(await size()).toBe('1.1111em'); // 20 of 18
+    // It stays up for the next step, and the text keeps focus and selection.
+    await up.click();
+    expect(await size()).toBe('1.3333em'); // 24
+    await expect(pm).toBeFocused();
+    expect(await page.evaluate(() => getSelection()!.toString())).toBe('size me');
+    // Back down to the note's own size: no size left on the text at all.
+    await down.click();
+    await down.click();
+    expect(await size()).toBe('none');
+    await down.click();
+    expect(await size()).toBe('0.8889em'); // 16
+    // The end of the list: nothing smaller to go to.
+    await down.click();
+    await down.click();
+    expect(await size()).toBe('0.6667em'); // 12
+    await expect(down).toBeDisabled();
+    await expect(up).toBeEnabled();
+    // A tap in the text puts it away.
+    await pm.click();
+    await expect(menu).toBeHidden();
+  });
+
+  test('a step moves each part of the selection from its own size', async ({ page }) => {
+    await page.getByTestId('new-note').click();
+    await typeInEditor(page, 'small big');
+    const pm = page.locator('.ProseMirror');
+    await pm.press('Shift+ControlOrMeta+ArrowLeft');
+    await page.getByTestId('fmt-size').click();
+    const menu = page.getByTestId('size-menu');
+    for (let i = 0; i < 3; i++) await menu.getByRole('button', { name: 'Larger text' }).click(); // 28
+    await pm.press('ControlOrMeta+a');
+    await menu.getByRole('button', { name: 'Smaller text' }).click();
+    const sizes = () =>
+      page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>('.ProseMirror span[style*="font-size"]')].map(
+          (e) => `${e.textContent!.trim()}: ${e.style.fontSize}`
+        )
+      );
+    expect(await sizes()).toEqual(['small: 0.8889em', 'big: 1.3333em']); // 16 and 24
+  });
+
+  test('with nothing selected, a step is for what is typed next', async ({ page }) => {
+    await page.getByTestId('new-note').click();
+    await typeInEditor(page, 'plain ');
+    await page.getByTestId('fmt-size').click();
+    await page.getByTestId('size-menu').getByRole('button', { name: 'Larger text' }).click();
+    await page.locator('.ProseMirror').pressSequentially('larger');
+    await expect(page.locator('.ProseMirror span[style*="font-size"]')).toHaveText('larger');
   });
 
   test('topbar buttons stay inside the pane (no overflow)', async ({ page }) => {
@@ -2055,50 +2099,41 @@ test('a dropped connection is retried quietly; only lasting trouble is said, in 
   await expect(page.getByTestId('sync-error')).toHaveCount(0, { timeout: 12_000 });
 });
 
-test.describe('phone: the row for selected text', () => {
+test.describe('phone: the text size steps', () => {
   test.use({ viewport: { width: 412, height: 915 } });
 
-  test('a strip of the note, right on the toolbar, buttons like every other', async ({ page }) => {
+  test('two buttons like the toolbar\'s, over the size button', async ({ page }) => {
     await createNote(page);
     const pm = page.locator('.ProseMirror');
     await pm.click();
     await page.keyboard.type('amplify this word');
-    await page.keyboard.press('Home');
-    await page.keyboard.press('Shift+ControlOrMeta+ArrowRight');
-    const row = page.getByTestId('format-row');
-    await expect(row).toBeVisible();
-    const [r, bar, pane] = await Promise.all([
-      row.boundingBox(),
-      page.locator('.toolbar').boundingBox(),
-      page.getByTestId('note-pane').boundingBox(),
-    ]);
-    // It stays put: the note's width, on top of the toolbar, wherever the
-    // selection is.
-    expect(Math.round(r!.x)).toBe(Math.round(bar!.x));
-    expect(Math.round(r!.width)).toBe(Math.round(bar!.width));
-    expect(Math.round(r!.y + r!.height)).toBe(Math.round(bar!.y));
-    expect(r!.x).toBeGreaterThanOrEqual(pane!.x);
-    const [btn, bold] = await Promise.all([row.locator('button').first().boundingBox(), page.getByTestId('fmt-bold').boundingBox()]);
-    expect(Math.round(btn!.width)).toBe(Math.round(bold!.width));
-    expect(Math.round(btn!.height)).toBe(Math.round(bold!.height));
-    expect(Math.round(btn!.x)).toBe(Math.round(bold!.x));
-  });
-
-  test('text selected at the foot of a long note is not left under the row', async ({ page }) => {
-    await createNote(page);
-    const pm = page.locator('.ProseMirror');
-    await pm.click();
-    for (let i = 0; i < 40; i++) await page.keyboard.type(`line ${i}\n`);
-    await page.keyboard.type('the last words');
     await page.keyboard.press('Shift+ControlOrMeta+ArrowLeft');
-    const row = page.getByTestId('format-row');
-    await expect(row).toBeVisible();
-    await expect
-      .poll(async () => {
-        const end = await page.evaluate(() => getSelection()!.getRangeAt(0).getBoundingClientRect().bottom);
-        return end <= (await row.boundingBox())!.y;
-      })
-      .toBe(true);
+    await page.getByTestId('fmt-size').click();
+    const menu = page.getByTestId('size-menu');
+    await expect(menu).toBeVisible();
+    const [m, bar, tt, down, up, bold] = await Promise.all([
+      menu.boundingBox(),
+      page.locator('.toolbar').boundingBox(),
+      page.getByTestId('fmt-size').boundingBox(),
+      page.getByTestId('size-down').boundingBox(),
+      page.getByTestId('size-up').boundingBox(),
+      page.getByTestId('fmt-bold').boundingBox(),
+    ]);
+    // Clear of the toolbar, on the screen, centred on its button.
+    expect(m!.y + m!.height).toBeLessThanOrEqual(bar!.y);
+    expect(m!.x).toBeGreaterThanOrEqual(0);
+    expect(m!.x + m!.width).toBeLessThanOrEqual(412);
+    expect(Math.abs(m!.x + m!.width / 2 - (tt!.x + tt!.width / 2))).toBeLessThanOrEqual(1);
+    // Minus on the left, plus on the right, each a toolbar button, with
+    // nothing else in the balloon.
+    for (const b of [down!, up!]) {
+      expect(Math.round(b.width)).toBe(Math.round(bold!.width));
+      expect(Math.round(b.height)).toBe(Math.round(bold!.height));
+    }
+    expect(down!.x).toBeLessThan(up!.x);
+    expect(m!.width).toBeLessThan(3 * bold!.width);
+    await page.getByTestId('size-up').click();
+    await expect(page.locator('.ProseMirror span[style*="font-size"]')).toHaveText('word');
   });
 
   test('settings fill the screen', async ({ page }) => {
@@ -2725,28 +2760,6 @@ test('patterns animate even when the system asks for reduced motion; Settings ca
   expect(await pos()).toBe(still);
 });
 
-
-test.describe('a desktop sticky: the row for selected text', () => {
-  test.use({ viewport: { width: 420, height: 460 } });
-  test('comes up inside the note, over its toolbar, and its buttons work', async ({ page }) => {
-    await createNote(page);
-    await page.waitForTimeout(500); // per-note save debounce
-    const id = await page.evaluate(
-      () => Object.keys(localStorage).find((k) => k.startsWith('notezzz:note:'))!.slice('notezzz:note:'.length)
-    );
-    await page.goto(`/sticky?id=${id}`);
-    await page.locator('.ProseMirror').click();
-    await page.keyboard.type('Do we use generated sounds? MUSIC YES');
-    await page.keyboard.press('Shift+Control+ArrowLeft');
-    const row = page.getByTestId('format-row');
-    await expect(row).toBeVisible();
-    const [r, bar] = await Promise.all([row.boundingBox(), page.locator('.toolbar').boundingBox()]);
-    expect(Math.round(r!.y + r!.height)).toBe(Math.round(bar!.y));
-    expect(Math.round(r!.width)).toBe(Math.round(bar!.width));
-    await row.getByRole('button', { name: 'Larger text' }).click();
-    await expect(page.locator('.ProseMirror span[style*="font-size"]')).toHaveText('YES');
-  });
-});
 
 test("a sticky's ⋯ menu has undo and redo", async ({ page }) => {
   await createNote(page);
@@ -3553,8 +3566,13 @@ test('a narrow note folds the tools that do not fit into a ... at the end of the
   await expect(page.getByTestId('fmt-overflow-menu')).toHaveCount(0); // closes after a pick
   await more.click();
   await page.getByTestId('fmt-size').click();
-  await page.getByTestId('size-menu').getByText('24', { exact: true }).click();
+  // The two steps take the menu's place, and it stays for the next one.
+  await expect(page.getByTestId('size-menu').locator('button')).toHaveCount(2);
+  await page.getByTestId('size-up').click();
   await expect(page.locator('.ProseMirror span[style*="font-size:"]')).toHaveCount(1); // sizes render in em
+  await expect(page.getByTestId('size-menu')).toBeVisible();
+  await page.locator('.ProseMirror').click({ position: { x: 5, y: 5 } });
+  await expect(page.getByTestId('fmt-overflow-menu')).toHaveCount(0);
   // Wide again: everything is back on the bar and the overflow button is gone.
   await page.setViewportSize({ width: 700, height: 400 });
   await expect(more).toHaveCount(0);
@@ -3570,12 +3588,20 @@ test.describe('a new line starts in the format the last one ended in', () => {
         .map((p) => `${p.textContent}: ${p.querySelector('span[style*="font-size"]') ? 'sized' : 'plain'}`)
     );
 
+  /** Two steps on the text size button's balloon, which is then put away. */
+  async function steps(page: Page, id: 'size-up' | 'size-down') {
+    await page.getByTestId('fmt-size').click();
+    await page.getByTestId(id).click();
+    await page.getByTestId(id).click();
+    await page.getByTestId('fmt-size').click();
+    await expect(page.getByTestId('size-menu')).toBeHidden();
+  }
+
   /** A new note, a size chosen, and `text` typed in it. */
   async function sized(page: Page, text: string) {
     const pm = await createNote(page);
     await pm.click();
-    await page.getByTestId('fmt-size').click();
-    await page.getByTestId('size-menu').getByText('32', { exact: true }).click();
+    await steps(page, 'size-up');
     await pm.pressSequentially(text);
     return pm;
   }
@@ -3601,8 +3627,7 @@ test.describe('a new line starts in the format the last one ended in', () => {
   test('a format chosen on the empty line is the one it keeps', async ({ page }) => {
     const pm = await sized(page, 'one');
     await pm.press('Enter');
-    await page.getByTestId('fmt-size').click();
-    await page.getByTestId('size-menu').getByText('Auto', { exact: true }).click();
+    await steps(page, 'size-down'); // back to the note's own size
     await pm.press('ArrowUp');
     await pm.press('ArrowDown');
     await pm.pressSequentially('two');
