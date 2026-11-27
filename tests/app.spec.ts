@@ -3560,3 +3560,90 @@ test('a narrow note folds the tools that do not fit into a ... at the end of the
   await expect(more).toHaveCount(0);
   await expect(page.getByTestId('fmt-record')).toBeVisible();
 });
+
+test.describe('a new line starts in the format the last one ended in', () => {
+  /** Each line's text, and whether it carries a size of its own. */
+  const lines = (page: Page) =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('.ProseMirror p')]
+        .filter((p) => p.textContent)
+        .map((p) => `${p.textContent}: ${p.querySelector('span[style*="font-size"]') ? 'sized' : 'plain'}`)
+    );
+
+  /** A new note, a size chosen, and `text` typed in it. */
+  async function sized(page: Page, text: string) {
+    const pm = await createNote(page);
+    await pm.click();
+    await page.getByTestId('fmt-size').click();
+    await page.getByTestId('size-menu').getByText('32', { exact: true }).click();
+    await pm.pressSequentially(text);
+    return pm;
+  }
+
+  test('Enter carries the size over', async ({ page }) => {
+    const pm = await sized(page, 'one');
+    await pm.press('Enter');
+    await pm.pressSequentially('two');
+    expect(await lines(page)).toEqual(['one: sized', 'two: sized']);
+  });
+
+  test('the empty line keeps it while the cursor is elsewhere', async ({ page }) => {
+    // What Enter holds for the next letter is let go by anything in between:
+    // on a phone, the cursor being read back from the page is enough.
+    const pm = await sized(page, 'one');
+    await pm.press('Enter');
+    await pm.press('ArrowUp');
+    await pm.press('ArrowDown');
+    await pm.pressSequentially('two');
+    expect(await lines(page)).toEqual(['one: sized', 'two: sized']);
+  });
+
+  test('a format chosen on the empty line is the one it keeps', async ({ page }) => {
+    const pm = await sized(page, 'one');
+    await pm.press('Enter');
+    await page.getByTestId('fmt-size').click();
+    await page.getByTestId('size-menu').getByText('Auto', { exact: true }).click();
+    await pm.press('ArrowUp');
+    await pm.press('ArrowDown');
+    await pm.pressSequentially('two');
+    expect(await lines(page)).toEqual(['one: sized', 'two: plain']);
+  });
+
+  test.describe('on a phone', () => {
+    // As the editor sees an Android phone: it leaves Enter to the browser
+    // there, and reads what the page became.
+    test.use({
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36',
+      viewport: { width: 412, height: 915 },
+    });
+
+    test('the keyboard corrects the last word and breaks the line in one go', async ({ page }) => {
+      await sized(page, 'one teh');
+      // Both at once, as the keyboard does them: the editor finds a line
+      // that changed and split, not an Enter. The new line used to come out
+      // at the note's own size.
+      await page.evaluate(() => {
+        const sel = getSelection()!;
+        const text = sel.anchorNode as Text;
+        text.textContent = text.textContent!.replace(/teh$/, 'the');
+        sel.collapse(text, text.length);
+        document.execCommand('insertParagraph');
+      });
+      await expect(page.locator('.ProseMirror p')).toHaveCount(2);
+      await page.keyboard.insertText('two');
+      await expect.poll(() => lines(page)).toEqual(['one the: sized', 'two: sized']);
+    });
+
+    test('the line breaks while a word is still being composed', async ({ page }) => {
+      await sized(page, 'one ');
+      const ime = await page.context().newCDPSession(page);
+      await ime.send('Input.imeSetComposition', { text: 'word', selectionStart: 4, selectionEnd: 4 });
+      await page.evaluate(() => document.execCommand('insertParagraph'));
+      await expect(page.locator('.ProseMirror p')).toHaveCount(2);
+      await ime.send('Input.imeSetComposition', { text: 'tw', selectionStart: 2, selectionEnd: 2 });
+      await ime.send('Input.insertText', { text: 'two' });
+      await expect.poll(() => lines(page)).toEqual(['one word: sized', 'two: sized']);
+    });
+  });
+});

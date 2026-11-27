@@ -12,6 +12,7 @@
   import { FontSize } from '../editor/fontSize';
   import { AudioNote } from '../editor/audio';
   import { AtomDelete } from '../editor/atomDelete';
+  import { CarryMarks } from '../editor/carryMarks';
   import { VoiceRecorder } from '../editor/recorder.svelte';
   import { imageFiles, imageToDataUrl } from '../editor/pasteImage';
   import { BASE_FONT_PX } from '$lib/types';
@@ -143,6 +144,7 @@
         StarterKit.configure({ link: { openOnClick: false } }),
         TextStyle,
         FontSize,
+        CarryMarks,
         AudioNote,
         AtomDelete,
         Image.configure({ allowBase64: true }),
