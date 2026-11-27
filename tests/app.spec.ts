@@ -973,7 +973,10 @@ test('Escape closes the draw pad and returns focus to the button that opened it'
   page,
 }) => {
   await createNote(page);
-  await page.getByTestId('fmt-draw').click();
+  // Opened from the keyboard. (A click on a format button leaves the focus
+  // where it was, in the text, and that is where it goes back to.)
+  await page.getByTestId('fmt-draw').focus();
+  await page.keyboard.press('Enter');
   await expect(page.getByTestId('draw-surface')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('draw-surface')).toBeHidden();
